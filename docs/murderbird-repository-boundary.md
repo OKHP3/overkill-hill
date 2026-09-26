@@ -38,6 +38,10 @@ Do not use retained snapshots as permission to resume creative production in
 this website repository. Update public delivery copies only as a deliberate
 site change, with provenance and the existing validation gates.
 
+The first path component `assets/downloads/music-session-*` is reserved for
+private archives and is excluded from release, whether it is a directory,
+file, or symlink. Public visitor downloads must use another descriptive name.
+
 ## Story and rights
 
 The [published origin story](https://overkillhill.com/writings/murderbird/)
