@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from csp import (
     CSP_HEADER,
     CSP_REPORT_ONLY_HEADER,
+    CspPageManifestError,
     POLICY_FILE,
     ROOT,
     all_pages,
@@ -24,8 +26,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="fail if generated output is stale")
     args = parser.parse_args(argv)
-    pages = all_pages()
-    policies = build_policies()
+    try:
+        pages = all_pages()
+        policies = build_policies()
+    except CspPageManifestError as exc:
+        print(f"CSP page manifest error: {exc}", file=sys.stderr)
+        return 1
     output = json.dumps({"schema": 1, "policies": policies}, indent=2) + "\n"
     failures: list[str] = []
     headers = ROOT / "_headers"

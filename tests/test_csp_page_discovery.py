@@ -6,8 +6,10 @@ from __future__ import annotations
 import importlib.util
 import unittest
 import json
+import io
 import tempfile
 import sys
+from contextlib import redirect_stderr
 from types import SimpleNamespace
 from unittest.mock import patch
 from pathlib import Path
@@ -24,6 +26,18 @@ spec.loader.exec_module(csp)
 
 
 class CspPageDiscoveryTests(unittest.TestCase):
+    def assert_manifest_route_error(self, page: dict, expected: str) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            manifest = root / "site-src" / "pages.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(json.dumps({"pages": [page]}), encoding="utf-8")
+            with patch.object(csp, "ROOT", root), patch.object(
+                csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+            ):
+                with self.assertRaisesRegex(csp.CspPageManifestError, expected):
+                    csp.all_pages()
+
     def test_declared_untracked_route_participates_before_git_add(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -54,6 +68,49 @@ class CspPageDiscoveryTests(unittest.TestCase):
             ):
                 pages = {p.relative_to(root).as_posix() for p in csp.all_pages()}
             self.assertEqual(pages, {"index.html", "new-story.html"})
+
+    def test_invalid_manifest_route_fails_with_actionable_error(self) -> None:
+        self.assert_manifest_route_error(
+            {}, r'pages\.json: page entry 1 must contain a non-empty string "path"'
+        )
+        self.assert_manifest_route_error(
+            {"path": "new-story.txt"},
+            r'new-story\.txt.*normalized repository-relative \.html path',
+        )
+
+    def test_missing_manifest_route_fails_with_actionable_error(self) -> None:
+        self.assert_manifest_route_error(
+            {"path": "new-story.html"},
+            r"new-story\.html.*does not exist as a regular HTML file; generate the page",
+        )
+
+    def test_outside_root_manifest_route_fails_with_actionable_error(self) -> None:
+        self.assert_manifest_route_error(
+            {"path": "../outside.html"},
+            r"outside\.html.*outside or could escape the repository root",
+        )
+
+    def test_generate_csp_prints_manifest_errors_without_a_traceback(self) -> None:
+        generator_path = ROOT / "scripts" / "generate-csp.py"
+        generator_spec = importlib.util.spec_from_file_location(
+            "test_generate_csp", generator_path
+        )
+        if generator_spec is None or generator_spec.loader is None:
+            self.fail("could not load scripts/generate-csp.py")
+        generator = importlib.util.module_from_spec(generator_spec)
+        generator_spec.loader.exec_module(generator)
+        message = "site-src/pages.json: page entry 1 path 'new-story.html' is missing"
+        with patch.object(
+            generator,
+            "all_pages",
+            side_effect=generator.CspPageManifestError(message),
+        ), patch.object(generator, "build_policies") as build_policies:
+            output = io.StringIO()
+            with redirect_stderr(output):
+                result = generator.main(["--check"])
+        self.assertEqual(result, 1)
+        self.assertEqual(output.getvalue().strip(), f"CSP page manifest error: {message}")
+        build_policies.assert_not_called()
 
     def test_test_fixtures_are_not_public_csp_pages(self) -> None:
         pages = {page.relative_to(ROOT).as_posix() for page in csp.all_pages()}
