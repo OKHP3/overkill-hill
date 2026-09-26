@@ -15,6 +15,14 @@ validation workflow changes.
 
 ### Identity and scope
 
+- Owner-directed MurderBird boundary (2026-09-26): `OKHP3/murderbird-uncaged`
+  owns MurderBird creative production and the interactive application. Route
+  new music, video, lyrics, model work, source images, and production sessions
+  there. This website retains its published story, generated page shells,
+  stable delivery assets, and the image/build fixtures still required by site
+  checks. Retained source copies are compatibility snapshots, not a second
+  production workbench. See `docs/murderbird-repository-boundary.md`.
+
 - Confirmed: this is one Git repository for the OverKill Hill P³™ public static
   site and its public writings, project pages, and supporting artifacts.
 - Confirmed: the production-facing site is generated static HTML, one shared

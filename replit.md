@@ -9,6 +9,14 @@
 
 ## Project Overview
 
+MurderBird creative production and its interactive exhibit now belong to
+`OKHP3/murderbird-uncaged`. Keep this project focused on the public brand,
+portfolio, and stories. Preserve `/writings/murderbird/` and its required
+delivery assets here; send new music, video, lyrics, model work, and creative
+source iterations to the sibling project. See
+`docs/murderbird-repository-boundary.md` for retained compatibility copies,
+transfer evidence, and the separate private archive boundary.
+
 Static portfolio/documentation site for OverKill Hill P³™ (overkillhill.com). English authoring sources live under `site-src/` and are rendered into the English published HTML tree by `scripts/build-site.py`. Locale HTML is updated using exact-pair translation Agent Skills; page-sync detects freshness and `scripts/check-locale-links.py` validates structure. The runtime is HTML, CSS, and vanilla JS. Coordinated with GitHub repo `OKHP3/OverKill-Hill` (website source) and `OKHP3/first-diagram-is-a-liar` (methodology archive).
 
 ## Server
