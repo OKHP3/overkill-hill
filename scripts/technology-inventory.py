@@ -131,8 +131,6 @@ def inventory(root):
         if not re.search(r"(^|/)requirements[^/]*\.txt$", path):
             continue
         requirements_path = root / path
-        if not requirements_path.is_file():
-            continue
         for line in requirements_path.read_text(encoding="utf-8").splitlines():
             line = line.split("#", 1)[0].strip()
             if not line:
