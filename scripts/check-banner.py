@@ -22,6 +22,13 @@ OLD_BANNERS so the diff is always legible.
 import os
 import re
 import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from public_page_boundary import iter_public_html_files
 
 # ── Single source of truth ────────────────────────────────────────────────────
 FEATURED_ARTICLE_ROUTE = "/writings/first-diagram-is-a-liar/"
@@ -51,8 +58,6 @@ ALLOWED_OTHER_PATTERNS = [
     "[[SPECIALS-COPY]]",   # template placeholder token
 ]
 # ─────────────────────────────────────────────────────────────────────────────
-
-SKIP_DIRS = {"_replit", ".git", "node_modules", "dist"}
 
 # Matches whitespace-normalised content of a .site-specials-link anchor.
 # The banner text may be indented / wrapped across lines in the source.
@@ -87,11 +92,15 @@ def _normalise(text: str) -> str:
 
 
 def find_html_files(root: str):
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        for fname in sorted(filenames):
-            if fname.endswith(".html"):
-                yield os.path.join(dirpath, fname)
+    root_path = Path(root)
+    pages = set(iter_public_html_files(root_path))
+    # This source partial is the banner's authoring input and must be checked
+    # and repairable alongside generated public pages. Other source/evidence
+    # HTML stays outside this inventory.
+    source_banner = root_path / SOURCE_BANNER
+    if source_banner.is_file():
+        pages.add(source_banner)
+    yield from (str(path) for path in sorted(pages))
 
 
 def _featured_article_release(root: str, relative_path: str):

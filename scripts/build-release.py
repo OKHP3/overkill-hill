@@ -18,6 +18,12 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from public_page_boundary import is_public_page_path, iter_public_html_files
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_RELATIVE = "assets/audit/release-manifest.json"
@@ -58,6 +64,9 @@ PUBLIC_HTML_DIRECTORIES = (
     "about", "contact", "de", "en-gb", "es", "es-mx", "found-ry", "fr", "legal", "manifesto",
     "projects", "prompt-forge", "search", "universe", "vault", "writings",
 )
+# Release-specific exception: these independently authored public noindex
+# route directories are not necessarily present in the English page manifest
+# or sitemap, but are still filtered through the shared public-page boundary.
 
 
 def fail(message: str) -> None:
@@ -102,6 +111,7 @@ def checked_relative_path(value: object, label: str) -> Path:
 
 
 def load_public_pages(source: Path) -> list[Path]:
+    source = Path(source).resolve()
     manifest_path = source / "site-src/pages.json"
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -123,13 +133,22 @@ def load_public_pages(source: Path) -> list[Path]:
         fail("source sitemap has no routes")
     # Some public noindex routes (including localized pilots) are independently
     # authored and therefore absent from both the renderer manifest and sitemap.
-    # Their explicitly allowlisted route directories keep them public without
-    # treating every repository HTML file as a release candidate.
-    directory_pages: list[Path] = []
-    for directory in PUBLIC_HTML_DIRECTORIES:
-        root = source / directory
-        if root.is_dir():
-            directory_pages.extend(path.relative_to(source) for path in root.rglob("*.html"))
+    # Their explicit allowlist remains narrower than repository-wide discovery.
+    directory_pages = [
+        path.relative_to(source)
+        for path in iter_public_html_files(source)
+        if path.relative_to(source).parts[0] in PUBLIC_HTML_DIRECTORIES
+    ]
+    for label, candidates in (
+        ("page manifest", paths),
+        ("sitemap", sitemap_pages),
+    ):
+        for candidate in candidates:
+            if not is_public_page_path(source / candidate, source):
+                fail(
+                    f"{label} route is outside the shared published-page boundary: "
+                    f"{candidate.as_posix()}"
+                )
     return sorted(set(paths) | set(sitemap_pages) | set(directory_pages))
 
 

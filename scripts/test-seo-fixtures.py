@@ -574,7 +574,9 @@ class SEOFixtureTests(unittest.TestCase):
                 for fixture in (ROOT / "tests" / "fixtures" / "csp").glob("*.html"):
                     self.assertEqual(module.process_file(fixture), [])
             else:
-                self.assertIn("tests", module.SKIP_DIRS)
+                pages = module.iter_html_files()
+                self.assertTrue(set(csp_fixtures).isdisjoint(pages))
+                self.assertFalse(any("tests" in path.relative_to(ROOT).parts for path in pages))
 
     @classmethod
     def setUpClass(cls) -> None:

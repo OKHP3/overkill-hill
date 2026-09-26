@@ -19,6 +19,12 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup, NavigableString
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from public_page_boundary import is_public_page_path
+
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_STATUS = runpy.run_path(str(ROOT / "scripts/project-status.py"))
 SRC = ROOT / "site-src"
@@ -27,7 +33,6 @@ MANIFEST = SRC / "pages.json"
 SITEMAP = ROOT / "sitemap.xml"
 BANNER_CHECKER = Path(__file__).resolve().with_name("check-banner.py")
 SITE_ORIGIN = "https://overkillhill.com"
-EXCLUDED = ("assets/", ".agents/", ".local/", "node_modules/", "site-src/")
 APP_RE = re.compile(r"/assets/js/app\.js(?:\?[^\"']*)?")
 # The French pilot only covers these four routes. The shared header must not
 # grow a language switcher on any other English page.
@@ -114,13 +119,20 @@ ORGANIZATION_JSONLD = {
 
 
 def tracked_pages() -> list[Path]:
+    """Return tracked public pages that belong to the site-source bootstrap.
+
+    Embedded HTML under assets is public runtime content in some cases, but it
+    is not an editorial page for this generator, so this command keeps its
+    additional assets exclusion after applying the shared page boundary.
+    """
     result = subprocess.run(
         ["git", "ls-files", "*.html"], cwd=ROOT, check=True,
         capture_output=True, text=True,
     )
     return sorted(
         ROOT / name for name in result.stdout.splitlines()
-        if not name.startswith(EXCLUDED)
+        if not name.startswith("assets/")
+        and is_public_page_path(ROOT / name, ROOT)
     )
 
 
