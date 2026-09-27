@@ -35,7 +35,6 @@ class MurderBirdStillTests(unittest.TestCase):
             self.assertTrue(figure.figcaption.get_text(strip=True))
         self.assertEqual('p', page.select_one('#media-maker').find_next_sibling().name)
         self.assertIn('morning of the demonstration', page.select_one('#media-maker').find_next_sibling().get_text())
-        self.assertFalse(page.select('audio'))
         self.assertEqual(1, len(page.select('video')))
         figure = page.select_one('#media-first-choice')
         self.assertEqual('the-builder', figure.parent['id'])
@@ -54,6 +53,25 @@ class MurderBirdStillTests(unittest.TestCase):
         self.assertIn('silent', figure.figcaption.get_text())
         for description_id in video['aria-describedby'].split():
             self.assertTrue(page.find(id=description_id).get_text(strip=True))
+
+    def test_story_theme_song_is_reader_started(self):
+        page = BeautifulSoup((ROOT / 'writings/murderbird/index.html').read_text(encoding='utf-8'), 'html.parser')
+        players = page.select('audio')
+        self.assertEqual(1, len(players))
+        player = players[0]
+        self.assertTrue(player.has_attr('controls'))
+        self.assertFalse(player.has_attr('autoplay'))
+        self.assertFalse(player.has_attr('loop'))
+        self.assertEqual('none', player['preload'])
+        self.assertEqual('Iron Verdict, the MurderBird theme song', player['aria-label'])
+        sources = player.select('source')
+        self.assertEqual(1, len(sources))
+        self.assertEqual('audio/mpeg', sources[0]['type'])
+        self.assertEqual('https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3',
+                         sources[0]['src'])
+        lyrics = player.parent.find('a', href='https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/lyrics.txt')
+        self.assertIsNotNone(lyrics)
+        self.assertEqual('Read the lyrics', lyrics.get_text(strip=True))
 
     def test_exploratory_package_not_required(self):
         # Archived source may coexist in Git. Prove dependency independence in
