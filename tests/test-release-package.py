@@ -292,9 +292,6 @@ class ReleasePackageTests(unittest.TestCase):
             private_file = private / "work/private-session.wav"
             private_file.parent.mkdir(parents=True)
             private_file.write_bytes(b"private fixture")
-            private_link = private / "outputs/private-session-link.wav"
-            private_link.parent.mkdir(parents=True)
-            private_link.symlink_to(private_file)
 
             built = self.build(output, source)
             self.assertEqual(built.returncode, 0, built.stderr)
@@ -306,18 +303,51 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(self.verify(output, source).returncode, 0)
 
             released_archive = output / "assets/downloads/music-session-2026-09-17"
-            for name, make_entry in (
-                ("private-session.wav", lambda path: path.write_bytes(b"private fixture")),
-                ("private-session-link.wav", lambda path: path.symlink_to(public_download)),
-            ):
-                with self.subTest(entry=name):
-                    target = released_archive / "outputs" / name
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    make_entry(target)
-                    rejected = self.verify(output, source)
-                    self.assertNotEqual(rejected.returncode, 0)
-                    self.assertIn("private download archive entered release package", rejected.stderr)
-                    target.unlink()
+            target = released_archive / "outputs" / "private-session.wav"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"private fixture")
+            rejected = self.verify(output, source)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("private download archive entered release package", rejected.stderr)
+
+    def test_private_music_session_symlinks_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, output = Path(temporary) / "source", Path(temporary) / "release"
+            self.archive_fixture(source)
+            public_download = source / "assets/downloads/okh-prompt-protocol-template.md"
+            public_download.parent.mkdir(parents=True, exist_ok=True)
+            public_download.write_text("Public visitor download", encoding="utf-8")
+
+            private = source / "assets/downloads/music-session-2026-09-17"
+            private_file = private / "work/private-session.wav"
+            private_file.parent.mkdir(parents=True, exist_ok=True)
+            private_file.write_bytes(b"private fixture")
+            private_link = private / "outputs/private-session-link.wav"
+            private_link.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                private_link.symlink_to(private_file)
+            except OSError as error:
+                if os.name == "nt" and error.winerror == 1314:
+                    self.skipTest("Windows symlink privilege unavailable (WinError 1314)")
+                raise
+
+            built = self.build(output, source)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            manifest = json.loads((output / "assets/audit/release-manifest.json").read_text(encoding="utf-8"))
+            self.assertFalse(any(path.startswith("assets/downloads/music-session-")
+                                 for path in manifest["files"]))
+
+            released_link = output / "assets/downloads/music-session-2026-09-17/outputs/private-session-link.wav"
+            released_link.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                released_link.symlink_to(public_download)
+            except OSError as error:
+                if os.name == "nt" and error.winerror == 1314:
+                    self.skipTest("Windows symlink privilege unavailable (WinError 1314)")
+                raise
+            rejected = self.verify(output, source)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("private download archive entered release package", rejected.stderr)
 
     def test_archive_policy_fails_closed_for_missing_or_unsafe_entries(self) -> None:
         invalid_entries = ["../index.html", "assets/img/library/../hero.png", "assets/img/library//held.png", "assets/img/library/./held.png", "assets/img/library/held.webp", "assets/img/hero.png", "C:/held.png", "assets\\img\\library\\held.png"]
