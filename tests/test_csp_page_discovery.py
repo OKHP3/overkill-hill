@@ -96,5 +96,28 @@ class CspPageDiscoveryTests(unittest.TestCase):
                 self.assertEqual({p.relative_to(root).as_posix() for p in cache.iter_html_files(root)}, expected)
 
 
+class CspMurderbirdMediaTests(unittest.TestCase):
+    def test_song_allowance_is_limited_to_the_story_route(self) -> None:
+        self.assertEqual(csp.page_class(ROOT / "writings/murderbird/index.html"), "murderbird")
+        self.assertEqual(csp.page_class(ROOT / "writings/index.html"), "standard")
+        self.assertEqual(csp.page_class(ROOT / "fr/index.html"), "standard")
+
+    def test_only_story_policy_allows_the_exact_published_song(self) -> None:
+        policies = csp.build_policies()
+        for kind, policy in policies.items():
+            directives = dict(part.strip().split(" ", 1) for part in policy.split(";") if " " in part.strip())
+            if kind == "murderbird":
+                self.assertEqual(directives["media-src"], "'self' " + csp.MURDERBIRD_THEME_AUDIO)
+                self.assertNotIn("'unsafe-inline'", directives["style-src"])
+                self.assertNotIn("'unsafe-inline'", directives["script-src"])
+            else:
+                self.assertNotIn("media-src", directives)
+                self.assertEqual(directives["default-src"], "'self'")
+
+    def test_header_allows_the_song_without_allowing_the_whole_host(self) -> None:
+        directives = dict(part.strip().split(" ", 1) for part in csp.build_edge_policy().split(";") if " " in part.strip())
+        self.assertEqual(directives["media-src"], "'self' " + csp.MURDERBIRD_THEME_AUDIO)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

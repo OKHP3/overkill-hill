@@ -19,6 +19,7 @@ from public_page_boundary import is_public_page_path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_FILE = ROOT / "config" / "csp-policies.json"
+MURDERBIRD_THEME_AUDIO = "https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3"
 CSP_HEADER = "Content-Security-Policy"
 CSP_REPORT_ONLY_HEADER = f"{CSP_HEADER}-Report-Only"
 META_RE = re.compile(
@@ -31,6 +32,8 @@ def page_class(path: Path) -> str:
     rel = path.relative_to(ROOT).as_posix()
     if rel in {"404.html", "under-construction.html", "search/index.html", "vault/index.html"}:
         return "utility"
+    if rel == "writings/murderbird/index.html":
+        return "murderbird"
     source = path.read_text(encoding="utf-8", errors="replace")
     # Pages that host another application need an explicit frame destination.
     is_embed = 'id="tool-iframe"' in source or 'id="skillz-iframe"' in source or "<iframe" in source
@@ -108,12 +111,15 @@ def all_pages() -> list[Path]:
 
 
 def build_policies() -> dict[str, str]:
-    classes = ("standard", "embed", "utility", "diagram", "embed-diagram")
+    classes = ("standard", "embed", "utility", "diagram", "embed-diagram", "murderbird")
     hashes: dict[str, set[str]] = {kind: set() for kind in classes}
     style_hashes: dict[str, set[str]] = {kind: set() for kind in classes}
     for page in all_pages():
         scripts, styles = inline_sources(page)
         kind = page_class(page)
+        # Preserve the existing standard script allowlist when separating the story policy.
+        if kind == "murderbird":
+            hashes["standard"].update(scripts)
         hashes[kind].update(scripts)
         style_hashes[kind].update(styles)
 
@@ -151,6 +157,7 @@ def build_policies() -> dict[str, str]:
         ("utility", "", False),
         ("diagram", "", True),
         ("embed-diagram", "https://okhp3.github.io", True),
+        ("murderbird", "", False),
     )
     for kind, frame, diagram_style in class_config:
         if diagram_style:
@@ -175,6 +182,7 @@ def build_policies() -> dict[str, str]:
             + "font-src 'self' data:; "
             "img-src 'self' data: https://overkillhill.com https://*.github.io https://avatars.githubusercontent.com https://www.googletagmanager.com; "
             "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://okhp3.github.io; "
+            + (f"media-src 'self' {MURDERBIRD_THEME_AUDIO}; " if kind == "murderbird" else "")
             + (f"frame-src 'self' {frame}; " if frame else "")
             + "object-src 'none'; base-uri 'self'; form-action 'self'; "
             "manifest-src 'self'; upgrade-insecure-requests"
@@ -213,6 +221,7 @@ def build_edge_policy() -> str:
         "img-src 'self' data: https://overkillhill.com https://*.github.io https://avatars.githubusercontent.com https://www.googletagmanager.com; "
         "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com "
         "https://www.googletagmanager.com https://okhp3.github.io; "
+        f"media-src 'self' {MURDERBIRD_THEME_AUDIO}; "
         "frame-src 'self' https://okhp3.github.io; frame-ancestors 'self'; "
         "object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; "
         "upgrade-insecure-requests; report-uri /__csp-report"
