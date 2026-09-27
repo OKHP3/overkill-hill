@@ -1,4 +1,0 @@
-FFmpeg final render, after measuring this exact premaster:
-loudnorm=I=-15:TP=-1.5:LRA=10:measured_I=-18.14:measured_TP=-1.54:measured_LRA=9.00:measured_thresh=-28.65:offset=-0.95:linear=false
-44.1 kHz PCM 24-bit WAV; MP3 encoded with libmp3lame at 320 kbps.
-Re-measure loudness if any composition, mix, synthesis or gain is changed.

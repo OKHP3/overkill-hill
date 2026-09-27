@@ -25,6 +25,14 @@ overwrite the edit.
 
 The repo also serves as the public artifact archive for OverKill Hill P³ writings, projects, and the surrounding ecosystem (AskJamie™, Glee-fully Personalizable Tools™, Mermaid Theme Builder, Prompt Forge).
 
+MurderBird creative production and its interactive exhibit have a dedicated
+home in [murderbird-uncaged](https://github.com/OKHP3/murderbird-uncaged).
+This site keeps the published origin story and the assets required by its
+pages. New music, video, lyrics, models, and creative source iterations belong
+in that sibling repository. See the
+[repository boundary](docs/murderbird-repository-boundary.md) for transfer
+evidence and retained website compatibility copies.
+
 ## Stack
 
 | Layer | Choice |

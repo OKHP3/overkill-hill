@@ -1,2 +1,0 @@
-# Preserve native GarageBand package bytes across platforms.
-murderbird-iron-verdict.band/** -text -diff

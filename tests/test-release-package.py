@@ -222,7 +222,8 @@ class ReleasePackageTests(unittest.TestCase):
         receipt = json.loads((ROOT / "tests/fixtures/murderbird-source-preservation.json").read_text(encoding="utf-8"))
         policy = json.loads((ROOT / ARCHIVE_POLICY).read_text(encoding="utf-8"))
         entries = {entry["path"]: entry for entry in receipt["files"]}
-        actual = {path.relative_to(ROOT).as_posix() for path in (ROOT / "assets/murderbird/v2").rglob("*") if path.is_file() and "__pycache__" not in path.parts}
+        actual = {path.relative_to(ROOT).as_posix() for path in (ROOT / "assets/murderbird/v2").rglob("*")
+                  if path.is_file() and "__pycache__" not in path.parts and path.name != ".DS_Store"}
         actual.update(policy["excludedLibraryPngs"])
         self.assertEqual(set(entries), actual)
         for relative, entry in entries.items():
@@ -238,6 +239,7 @@ class ReleasePackageTests(unittest.TestCase):
             "index.html": "<!doctype html><title>Release boundary fixture</title>",
             "sitemap.xml": '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
             "assets/data/search-index.json": "{}",
+            "assets/downloads/public-guide.md": "Public download fixture",
         }
         for name in (".nojekyll", "CNAME", "favicon.ico", "favicon.svg", "humans.txt", "llms.txt", "robots.txt", "site.webmanifest"):
             paths[name] = "fixture"
@@ -277,6 +279,45 @@ class ReleasePackageTests(unittest.TestCase):
             rejected = self.verify(output, source)
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("archived source file entered release", rejected.stderr)
+
+    def test_private_music_session_archives_are_excluded_and_public_downloads_remain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, output = Path(temporary) / "source", Path(temporary) / "release"
+            self.archive_fixture(source)
+            public_download = source / "assets/downloads/okh-prompt-protocol-template.md"
+            public_download.parent.mkdir(parents=True, exist_ok=True)
+            public_download.write_text("Public visitor download", encoding="utf-8")
+
+            private = source / "assets/downloads/music-session-2026-09-17"
+            private_file = private / "work/private-session.wav"
+            private_file.parent.mkdir(parents=True)
+            private_file.write_bytes(b"private fixture")
+            private_link = private / "outputs/private-session-link.wav"
+            private_link.parent.mkdir(parents=True)
+            private_link.symlink_to(private_file)
+
+            built = self.build(output, source)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            self.assertEqual((output / "assets/downloads/okh-prompt-protocol-template.md").read_bytes(),
+                             public_download.read_bytes())
+            manifest = json.loads((output / "assets/audit/release-manifest.json").read_text(encoding="utf-8"))
+            self.assertFalse(any(path.startswith("assets/downloads/music-session-")
+                                 for path in manifest["files"]))
+            self.assertEqual(self.verify(output, source).returncode, 0)
+
+            released_archive = output / "assets/downloads/music-session-2026-09-17"
+            for name, make_entry in (
+                ("private-session.wav", lambda path: path.write_bytes(b"private fixture")),
+                ("private-session-link.wav", lambda path: path.symlink_to(public_download)),
+            ):
+                with self.subTest(entry=name):
+                    target = released_archive / "outputs" / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    make_entry(target)
+                    rejected = self.verify(output, source)
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn("private download archive entered release package", rejected.stderr)
+                    target.unlink()
 
     def test_archive_policy_fails_closed_for_missing_or_unsafe_entries(self) -> None:
         invalid_entries = ["../index.html", "assets/img/library/../hero.png", "assets/img/library//held.png", "assets/img/library/./held.png", "assets/img/library/held.webp", "assets/img/hero.png", "C:/held.png", "assets\\img\\library\\held.png"]
