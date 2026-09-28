@@ -32,7 +32,7 @@ def page_class(path: Path) -> str:
     rel = path.relative_to(ROOT).as_posix()
     if rel in {"404.html", "under-construction.html", "search/index.html", "vault/index.html"}:
         return "utility"
-    if rel == "writings/murderbird/index.html":
+    if rel in {"writings/murderbird/index.html", "projects/murderbird-uncaged/index.html"}:
         return "murderbird"
     source = path.read_text(encoding="utf-8", errors="replace")
     # Pages that host another application need an explicit frame destination.

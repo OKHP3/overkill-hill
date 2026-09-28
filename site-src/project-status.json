@@ -363,6 +363,25 @@
         "revision": "d49ff6afbc4f53087f4bee9156ee47870985ab3e",
         "url": "https://github.com/OKHP3/skillz-shield/blob/d49ff6afbc4f53087f4bee9156ee47870985ab3e/README.md"
       }
+    },
+    {
+      "id": "murderbird-uncaged",
+      "title": "MurderBird: Uncaged",
+      "route": "/projects/murderbird-uncaged/",
+      "kind": "detail",
+      "availability": "Creative production journal",
+      "maturity": "Art, motion, and music; 3D likeness under assessment",
+      "reviewed": "2026-09-27",
+      "shelf": true,
+      "shelf_exception": null,
+      "evidence": {
+        "tier": "source-described",
+        "summary": "Owner account and preserved production records; exhibit artistic acceptance pending.",
+        "source": "site-src/pages/projects/murderbird-uncaged/index.main.html",
+        "delivery": "unknown",
+        "revision": "4b1c726f5d9bbd1ba1048f89049a5b422001c506",
+        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/4b1c726f5d9bbd1ba1048f89049a5b422001c506/README.md"
+      }
     }
   ]
 }
