@@ -100,3 +100,20 @@ copied into the website. The app repository was not edited.
 Preview: `http://127.0.0.1:5067/projects/murderbird-uncaged/` while the local
 preview server is running. Private local review screenshots are under
 `.local/murderbird-project-page/` and are not publication assets.
+
+## Publication-check follow-up
+
+The GitHub clean-checkout checks identified two integration gaps, corrected in
+this pull request: the retired local-production-path assertion also matched a
+canonical GitHub source citation; and the regional draft project catalogs lacked
+the new shelf card. The assertion now checks resolved website asset URLs, with
+coverage for relative, absolute, and protocol-relative paths. The regional
+update preserves all unrelated prose and records the exact English source delta
+and Mexican Spanish draft translation in
+`i18n/pilot/murderbird-project-route-review-2026-09-27.json`. Draft noindex and
+zero-search-entry boundaries remain intact.
+
+All active Python test entry points were exercised locally. The portability
+suite encountered ten pre-existing ignored Finder `.DS_Store` files through its
+full repository audit; it is not claimed as a local pass. The other 37 entry
+points passed. The GitHub clean-checkout result is the publication gate.
