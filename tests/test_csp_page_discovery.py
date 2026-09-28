@@ -97,12 +97,13 @@ class CspPageDiscoveryTests(unittest.TestCase):
 
 
 class CspMurderbirdMediaTests(unittest.TestCase):
-    def test_song_allowance_is_limited_to_the_story_route(self) -> None:
+    def test_song_allowance_is_limited_to_murderbird_routes(self) -> None:
         self.assertEqual(csp.page_class(ROOT / "writings/murderbird/index.html"), "murderbird")
+        self.assertEqual(csp.page_class(ROOT / "projects/murderbird-uncaged/index.html"), "murderbird")
         self.assertEqual(csp.page_class(ROOT / "writings/index.html"), "standard")
         self.assertEqual(csp.page_class(ROOT / "fr/index.html"), "standard")
 
-    def test_only_story_policy_allows_the_exact_published_song(self) -> None:
+    def test_only_murderbird_policy_allows_the_exact_published_song(self) -> None:
         policies = csp.build_policies()
         for kind, policy in policies.items():
             directives = dict(part.strip().split(" ", 1) for part in policy.split(";") if " " in part.strip())
