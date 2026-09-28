@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 178,
+  "count": 186,
   "entries": [
     {
       "url": "/",
@@ -732,6 +732,7 @@
         "BPMN for Mermaid",
         "Mac Studio Local AI Workbench",
         "Prompt Forge",
+        "MurderBird: Uncaged",
         "Glee-fully Chai Chasers",
         "Abrahamic Reference Engine",
         "The First Diagram Is Usually a Liar",
@@ -1839,6 +1840,93 @@
       "headings": [],
       "body": "Why This Exists What you get here that you don't get from prompting an LLM ✗ Prompting an LLM Generates CSS variable blobs you paste and re-prompt until something looks right. No live preview, no iteration feedback, result varies by model. No renderer awareness; you find out what breaks when you paste it. ✓ Mermaid Theme Builder Pick a color, see every diagram type update instantly. Export as a themeVariables block, a Markdown style bootstrap, or a renderer-aware prompt scaffold. The scaffold gives AI tools brand guidance before generation; check the result in your target renderer. This is a visual governance layer for the Mermaid.js ecosystem, not a commercial product, not a SaaS, not a competitor to Mermaid.ai. It runs entirely in your browser. No account. No data collected.",
       "parent": "/projects/mermaid-theme-builder/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/",
+      "title": "MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird.",
+      "headings": [
+        "One experiment kept opening the next door.",
+        "Art → motion → music → encounter",
+        "The same character. A more demanding brief.",
+        "A convincing still has nowhere to hide when it moves.",
+        "What does MurderBird sound like?",
+        "What would I build if I were that kid today?",
+        "Which tool did which job?",
+        "The useful part was learning to direct the next attempt.",
+        "The artifacts behind the progression",
+        "Revisit the image",
+        "Make it move",
+        "Give it a sound",
+        "Make it explorable",
+        "The prompt became a set of decisions.",
+        "Listen to Iron Verdict"
+      ],
+      "body": "Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown. overkillhill.com / projects / murderbird-uncaged MurderBird: Uncaged It started with better pictures. Then the bird needed to move. Art, motion, and music; 3D likeness under assessment. Delivery unverified. Status and source Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown."
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#motion",
+      "title": "A convincing still has nowhere to hide when it moves. — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "02 / Motion studies A convincing still has nowhere to hide when it moves. The new images became the starting point for video experiments in Adobe Firefly , with GPT-5.6 SOL helping drive the workflow.",
+      "headings": [],
+      "body": "02 / Motion studies A convincing still has nowhere to hide when it moves. The new images became the starting point for video experiments in Adobe Firefly , with GPT-5.6 SOL helping drive the workflow. Motion introduced a different set of problems: where the weight goes, which joint moves first, what stays fixed, and whether the action has a visible cause. The First Choice pilots made that concrete. One version moved the feet when they should have stayed planted. Another moved the entire stand when only its saddle should turn. The correction became specific: anchor the base and shaft, keep both feet planted, then let the torso shift and the head lower in response. Your browser does not support embedded video. Watch the motion study . The published eight-second silent study.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#music",
+      "title": "What does MurderBird sound like? — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "03 / Composition and sound What does MurderBird sound like? Watching the bird move led me back to the music I enjoy. I used my Apple Music favorites to assess the styles and bands I kept coming back to, then shaped that…",
+      "headings": [],
+      "body": "03 / Composition and sound What does MurderBird sound like? Watching the bird move led me back to the music I enjoy. I used my Apple Music favorites to assess the styles and bands I kept coming back to, then shaped that into a direction for MurderBird: melodic, guitar-led rock with weight, tension, and room for a deliberate arrival. From there came lyrics based on the story, composition, and the work of turning that direction into a song. The resulting theme is Iron Verdict . None of the singing is my voice. I drove the work at the keyboard, using AI and production tools to develop the material, hear the results, and keep moving it forward. Establish the musical language. Listening preferences became an original creative brief.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#science-fair",
+      "title": "What would I build if I were that kid today? — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "04 / The science-fair question What would I build if I were that kid today? Thirty-five or thirty-eight years after middle school and early high school, I started thinking about the project I would want to make with…",
+      "headings": [],
+      "body": "04 / The science-fair question What would I build if I were that kid today? Thirty-five or thirty-eight years after middle school and early high school, I started thinking about the project I would want to make with today’s tools. The images, videos, and music had already given MurderBird a presence. An interactive display could give someone else a way to investigate it. That meant moving into 3D: a body with parts, joints, and an interior. A visitor could inspect how the machine changes across three eras, open assemblies, and see different ways of moving. The science-fair idea gave the separate experiments a shared destination. Blender became the working environment for editable model studies. Named rigid assemblies and GLB exports carried that work into the browser exhibit.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#second-generation",
+      "title": "The same character. A more demanding brief. — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "01 / Image-making The same character. A more demanding brief. Many of the second-generation images were created with OpenAI’s latest image-generation tool at the time of the work .",
+      "headings": [],
+      "body": "01 / Image-making The same character. A more demanding brief. Many of the second-generation images were created with OpenAI’s latest image-generation tool at the time of the work . I directed the rework at the keyboard: what to retain, what to change, and what needed another pass. The ambition was to bring the older art forward with more convincing detail and better control over the result. That required decisions more useful than “make it more realistic.” The bird needed a consistent silhouette. The armor needed to read as fabricated metal. Old bronze, later repairs, and modern additions needed different surfaces. A character that looked right in one image still had to hold together in the next. Earlier visual identity: the CRT, industrial palette, and mechanical sentinel.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#the-progression",
+      "title": "Art → motion → music → encounter — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "The progression Art → motion → music → encounter 01 Revisit the image Repaint and rework the original art with newer generation tools and more specific direction.",
+      "headings": [],
+      "body": "The progression Art → motion → music → encounter 01 Revisit the image Repaint and rework the original art with newer generation tools and more specific direction. 02 Make it move Use the images to explore timing, weight, mechanical movement, and short video scenes. 03 Give it a sound Turn my listening preferences into a musical brief, then develop lyrics, an arrangement, and an AI-sung theme. 04 Make it explorable Bring the visual and musical work toward an interactive 3D display with a body visitors can inspect.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#tools",
+      "title": "Which tool did which job? — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "The working methods Which tool did which job? Tool or method Its place in the work OpenAI image generation Many of the second-generation images: new generations, repainting, and targeted rework.",
+      "headings": [],
+      "body": "The working methods Which tool did which job? Tool or method Its place in the work OpenAI image generation Many of the second-generation images: new generations, repainting, and targeted rework. The exact image-model version is not recorded. Reference images + revision prompts Separate visual identity from anatomy, materials, and composition; name what must survive the next edit. Adobe Firefly + GPT-5.6 SOL Video creation in Firefly, with GPT-5.6 SOL assisting the workflow. Pilot review focused on contact, timing, and mechanical cause; the exact video-model selection is not recorded. Apple Music favorites Source material for identifying my musical preferences and writing the sound brief.",
+      "parent": "/projects/murderbird-uncaged/"
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#what-carried-forward",
+      "title": "The useful part was learning to direct the next attempt. — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "What carried forward The useful part was learning to direct the next attempt. Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight.",
+      "headings": [],
+      "body": "What carried forward The useful part was learning to direct the next attempt. Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight. Music required arrangement and phrasing. A 3D display required parts that could move and still belong to the same body. The skills growing through this project are practical: writing better visual briefs, maintaining continuity, diagnosing a failed generation, composing and arranging with AI, and carrying an idea between tools without losing its identity. There is still work to do. The next measure of progress is how closely the model and its movement match the character I have been directing all along.",
+      "parent": "/projects/murderbird-uncaged/"
     },
     {
       "url": "/projects/telling-forward/",
