@@ -30,12 +30,14 @@ FEATURED_ARTICLE_GENERATED = "writings/first-diagram-is-a-liar/index.html"
 SOURCE_BANNER = "assets/partials/header.html"
 
 CANONICAL_BANNER = (
-    "v0.7 is live: Replit arrived late, but it's where I'd build a custom"
-    " Mermaid app today. Read it \u2192"
+    "v0.8 is live: same Mermaid code, different styling. Bottle a theme with"
+    " Mermaid Theme Builder. Read it \u2192"
 )
 
 # Known prior versions — used for detection only, never written.
 OLD_BANNERS = [
+    ("v0.7 is live: Replit arrived late, but it's where I'd build a custom"
+     " Mermaid app today. Read it \u2192"),
     # previous canonical version
     (
         "v0.6 is live: Notion kept the Council's memory, while the models made their"

@@ -830,7 +830,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "From AutoCAD 10 and Visio trauma',
+                    '"description": "v0.8 traces the visual consistency gap behind Mermaid Theme Builder',
                     mutated_raw,
                 )
                 self.assertEqual(
@@ -878,7 +878,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "From AutoCAD 10 and Visio trauma',
+            '"description": "v0.8 traces the visual consistency gap behind Mermaid Theme Builder',
             mutated_raw,
         )
         self.assertEqual(
@@ -948,7 +948,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "From AutoCAD 10 and Visio trauma',
+                    '"description": "v0.8 traces the visual consistency gap behind Mermaid Theme Builder',
                     mutated_raw,
                 )
                 mutated_page = copy.deepcopy(page)
@@ -984,7 +984,7 @@ class SEOFixtureTests(unittest.TestCase):
         page = self.pages_by_route[route]
         sitemap_url = page["canonical"]
         baseline = validator.load_sitemap_entries()
-        self.assertEqual(baseline[sitemap_url], "2026-05-24")
+        self.assertEqual(baseline[sitemap_url], "2026-09-28")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),
@@ -1035,7 +1035,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "From AutoCAD 10 and Visio trauma',
+            '"description": "v0.8 traces the visual consistency gap behind Mermaid Theme Builder',
             mutated_raw,
         )
         self.assertEqual(
@@ -1358,7 +1358,7 @@ class SEOFixtureTests(unittest.TestCase):
         page = self.pages_by_route[route]
         path = GENERATED_FIXTURE / "article.html.fixture"
         baseline = validator.load_sitemap_entries()
-        self.assertEqual(baseline[page["canonical"]], "2026-05-24")
+        self.assertEqual(baseline[page["canonical"]], "2026-09-28")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),
