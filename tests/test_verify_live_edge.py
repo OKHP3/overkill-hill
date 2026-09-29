@@ -43,8 +43,8 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_content_type: str | None = None,
         asset_content_types: dict[str, str] | None = None,
         asset_body: bytes | None = None,
-        sitemap_content_type: str = "application/xml",
-        search_index_content_type: str = "application/json",
+        sitemap_content_type: str | None = "application/xml",
+        search_index_content_type: str | None = "application/json",
         css_asset_kinds: tuple[str, ...] = (),
     ) -> tuple[int, dict[str, object]]:
         """Run the full verifier against deterministic synthetic edge responses."""
@@ -160,6 +160,12 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             if manifest_content_type is not None
             else {}
         )
+        sitemap_headers = {"cache-control": "max-age=600"}
+        if sitemap_content_type is not None:
+            sitemap_headers["content-type"] = sitemap_content_type
+        search_index_headers = {"cache-control": "max-age=300"}
+        if search_index_content_type is not None:
+            search_index_headers["content-type"] = search_index_content_type
         responses = {
             verify_live_edge.RELEASE_MANIFEST: {
                 "ok": True,
@@ -170,19 +176,13 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             "/sitemap.xml": {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": sitemap_content_type,
-                    "cache-control": "max-age=600",
-                },
+                "headers": sitemap_headers,
                 "body": sitemap,
             },
             "/assets/data/search-index.json": {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": search_index_content_type,
-                    "cache-control": "max-age=300",
-                },
+                "headers": search_index_headers,
                 "body": search_index,
             },
             "/": {
@@ -707,6 +707,25 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/html", content_type_check["evidence"])
         self.assertIn("application/xml", content_type_check["evidence"])
         self.assertIn("text/xml", content_type_check["evidence"])
+
+    def test_missing_data_feed_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            sitemap_content_type=None,
+            search_index_content_type=None,
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        sitemap_check = checks["generated sitemap content type"]
+        search_index_check = checks["generated search index content type"]
+        self.assertEqual(sitemap_check["status"], "FAIL")
+        self.assertIn("received ''", sitemap_check["evidence"])
+        self.assertIn("application/xml", sitemap_check["evidence"])
+        self.assertIn("text/xml", sitemap_check["evidence"])
+        self.assertEqual(search_index_check["status"], "FAIL")
+        self.assertIn("received ''", search_index_check["evidence"])
+        self.assertIn("application/json", search_index_check["evidence"])
 
     def test_wrong_search_index_content_type_fails_with_explicit_mime_evidence(self) -> None:
         return_code, report = self.run_live_edge_fixture(
