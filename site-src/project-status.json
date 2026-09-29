@@ -61,27 +61,27 @@
       }
     },
     {
-      "id": "first-diagram-is-a-liar",
-      "title": "The First Diagram Is Usually a Liar",
-      "route": "/projects/first-diagram-is-a-liar/",
+      "id": "diagram-truth",
+      "title": "Diagram Truth",
+      "route": "/projects/diagram-truth/",
       "kind": "detail",
-      "availability": "Published writing companion",
-      "maturity": "Tutorial and evidence archive",
-      "reviewed": "2026-09-07",
+      "availability": "Published project page",
+      "maturity": "Interactive tutorial and evidence archive",
+      "reviewed": "2026-09-29",
       "shelf": true,
       "shelf_exception": null,
       "evidence": {
         "tier": "source-described",
         "summary": "Source description only.",
-        "source": "site-src/pages/projects/first-diagram-is-a-liar/index.main.html",
+        "source": "site-src/pages/projects/diagram-truth/index.main.html",
         "delivery": "unknown",
-        "revision": "98922aebf71d90b2b18ecc34c8b00a041fff51c7",
-        "url": "https://github.com/OKHP3/OverKill-Hill/blob/98922aebf71d90b2b18ecc34c8b00a041fff51c7/projects/first-diagram-is-a-liar/index.html"
+        "revision": "35ab169efb7965eaf7c0662c1069f08e41a4c277",
+        "url": "https://github.com/OKHP3/overkill-hill/blob/35ab169efb7965eaf7c0662c1069f08e41a4c277/site-src/pages/projects/diagram-truth/index.main.html"
       }
     },
     {
       "id": "found-ry",
-      "title": "Found‑Rᵧ",
+      "title": "Found\u2011R\u1d67",
       "route": "/projects/found-ry/",
       "kind": "detail",
       "availability": "Published project",
@@ -119,7 +119,7 @@
     },
     {
       "id": "hometools",
-      "title": "Homestead‑R",
+      "title": "Homestead\u2011R",
       "route": "/projects/hometools/",
       "kind": "detail",
       "availability": "Noindex concept page",
@@ -195,7 +195,7 @@
     },
     {
       "id": "pathscrib-r",
-      "title": "PathScrib‑R",
+      "title": "PathScrib\u2011R",
       "route": "/projects/pathscrib-r/",
       "kind": "detail",
       "availability": "Noindex concept page",
@@ -252,7 +252,7 @@
     },
     {
       "id": "un-nocked-truth",
-      "title": "Un‑NOCKed Truth",
+      "title": "Un\u2011NOCKed Truth",
       "route": "/projects/un-nocked-truth/",
       "kind": "detail",
       "availability": "Noindex concept page",

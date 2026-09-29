@@ -1,0 +1,24 @@
+{
+  "reviewed_on": "2026-09-29",
+  "source_route": "/projects/",
+  "source_sha256_normalized": "b00f38d6ce1365f0fa92c9dc776f4077461e196b7a345b3e2d0ec15eefe80b09",
+  "scope": "Replace the retired First Diagram project card with Diagram Truth in the two noindex regional draft catalogs. Preserve the separate writing card and all other project descriptions.",
+  "status": "ai-reviewed-draft",
+  "digest_basis": "committed Git blob bytes, before platform checkout newline conversion",
+  "human_native_approved": false,
+  "release_accepted": false,
+  "targets": [
+    {
+      "locale": "en-gb",
+      "path": "en-gb/projects/index.html",
+      "sha256": "2286aaf7fd78cb54a01381a2abf08485329deedf7007a3cfa57785781c88548a"
+    },
+    {
+      "locale": "es-mx",
+      "path": "es-mx/projects/index.html",
+      "sha256": "1d63b49164be414ef9738932c55ec78b406cd58b64a400488c8ddb6bc5b93ed9",
+      "reviewed_input": "i18n/pilot/es-mx/reviewed/projects-index.html",
+      "reviewed_input_sha256": "d51ffcbb26941561bd25ca9eda0111158302cdde3c78132f51524dfe6ba8414c"
+    }
+  ]
+}

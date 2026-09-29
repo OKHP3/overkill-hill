@@ -156,7 +156,7 @@ def active_route(route: str) -> str:
                 "/projects/mac-studio-local-ai-workbench/",
                 "/projects/abrahamic-reference-engine/",
                 "/projects/glee-fully-chai-chasers/", "/projects/kierans-lifetrkr/",
-                "/projects/first-diagram-is-a-liar/",
+                "/projects/diagram-truth/",
                 "/projects/telling-forward/", "/projects/murderbird-uncaged/",
                 "/writings/", "/writings/murderbird/",
                 "/writings/first-diagram-is-a-liar/", "/manifesto/",

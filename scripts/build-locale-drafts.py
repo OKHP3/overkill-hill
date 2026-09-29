@@ -157,7 +157,7 @@ def verify_sources() -> dict:
     for route, rel in ROUTES.items():
         source_path = ROOT / rel
         actual[route] = canonical_text_hash(source_path)
-        release_hash = expected.get("normalized_routes", {}).get(route)
+        release_hash = expected.get("current_release_shell", {}).get("normalized_routes", {}).get(route)
         if not release_hash:
             raise SystemExit(f'Missing durable normalized release hash for {route}')
         if actual[route] != release_hash:
