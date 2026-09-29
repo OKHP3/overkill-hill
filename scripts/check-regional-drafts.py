@@ -38,6 +38,17 @@ def main() -> int:
     if "source_path = ROOT / rel" not in builder:
         fail("builder must open canonical en-US paths for both pairs")
     source_hashes = json.loads((ROOT / "i18n/pilot/source-hashes-murderbird-stills-2026-09-06.json").read_text(encoding="utf-8"))
+    shell_release = source_hashes.get("current_release_shell", {})
+    current_release = shell_release.get("release")
+    current_release_hashes = shell_release.get("normalized_routes", {})
+    article_source = (ROOT / "site-src/pages/writings/first-diagram-is-a-liar/index.main.html").read_text(encoding="utf-8")
+    article_release = re.search(
+        r'<div class="article-eyebrow"[^>]*>.*?Article\s+(v\d+(?:\.\d+)+)',
+        article_source,
+        re.I | re.S,
+    )
+    if not current_release or not article_release or article_release.group(1).lower() != current_release.lower():
+        fail("current release-shell record does not match the featured article")
     for name in ("index.html", "about-index.html", "projects-index.html", "contact-index.html"):
         if not (ROOT / "i18n/pilot/es-mx/reviewed" / name).exists():
             fail(f"missing reviewed es-MX source artifact: {name}")
@@ -49,9 +60,9 @@ def main() -> int:
         for route in ROUTES:
             source_rel = "index.html" if route == "/" else route.strip("/") + "/index.html"
             source_path = ROOT / source_rel
-            release_hash = source_hashes.get("normalized_routes", {}).get(route)
+            release_hash = current_release_hashes.get(route)
             if not release_hash:
-                fail(f"{route}: missing durable normalized release hash")
+                fail(f"{route}: missing current release-shell source hash")
             elif hashlib.sha256(normalized_translation_source(source_path.read_bytes())).hexdigest() != release_hash:
                 fail(f"{route}: canonical source is stale relative to the recorded release revision")
             path = ROOT / locale / ("index.html" if route == "/" else route.strip("/") + "/index.html")
@@ -92,7 +103,7 @@ def main() -> int:
                 fail(f"{path.relative_to(ROOT)}: missing canonical heading-font resource")
             if locale == "es-mx" and 'class="site-specials site-specials--okh"' not in text:
                 fail(f"{path.relative_to(ROOT)}: missing localized current forge notice")
-            if locale == "es-mx" and 'data-banner-release="v0.5"' not in text:
+            if locale == "es-mx" and f'data-banner-release="{current_release}"' not in text:
                 fail(f"{path.relative_to(ROOT)}: localized forge notice lacks its release marker")
             if locale == "es-mx" and 'property="og:locale" content="es_MX"' not in text:
                 fail(f"{path.relative_to(ROOT)}: incorrect regional Open Graph locale")

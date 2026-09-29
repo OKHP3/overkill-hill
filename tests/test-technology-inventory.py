@@ -135,7 +135,7 @@ class ReleaseTests(unittest.TestCase):
                                    "--markdown-output", str(targets[1]), "--summary-output", str(targets[2])])
             self.assertEqual(code, 1)
             rows = json.loads(targets[0].read_text())["technologies"]
-            self.assertEqual(len(rows), 125)
+            self.assertEqual(len(rows), 122)
             self.assertTrue(all(r["status"] == "UNKNOWN" and r.get("error") for r in rows))
             self.assertTrue(any(r["name"] == "Mermaid package metadata" for r in rows))
             self.assertIn("budget exhausted", targets[1].read_text())
@@ -175,7 +175,14 @@ class ReleaseTests(unittest.TestCase):
     def test_media_requirements_and_lighthouse_are_included(self):
         rows, _ = AUDIT.inventory(ROOT)
         self.assertEqual({r["name"] for r in rows if r["category"] == "Python media"},
-                         {"numpy", "scipy", "soundfile", "mido"})
+                         {"numpy"})
+        numpy = next(r for r in rows if r["name"] == "numpy")
+        self.assertEqual(numpy["current"], "unrecorded")
+        self.assertEqual(numpy["evidence"], ["scripts/render-murderbird-first-choice.py"])
+        ffmpeg = next(r for r in rows if r["name"] == "FFmpeg")
+        self.assertEqual(ffmpeg["evidence"], ["scripts/render-murderbird-first-choice.py"])
+        self.assertFalse(any(r["name"] == "GarageBand (macOS)" for r in rows))
+        self.assertFalse(any("production/audio" in evidence for row in rows for evidence in row["evidence"]))
         self.assertTrue(any(r["name"] == "lighthouse" and r["category"] == "npm direct" for r in rows))
 
     def test_offline_run_writes_reports_without_network(self):

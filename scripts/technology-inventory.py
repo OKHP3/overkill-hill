@@ -25,7 +25,6 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 STABLE = re.compile(r"v?(\d+(?:\.\d+){0,3})\Z")
-AUDIO = "assets/murderbird/production/audio/iron-verdict/source/requirements.txt"
 
 
 def version(value):
@@ -131,15 +130,15 @@ def inventory(root):
     for path in tracked:
         if not re.search(r"(^|/)requirements[^/]*\.txt$", path):
             continue
-        for line in (root / path).read_text(encoding="utf-8").splitlines():
+        requirements_path = root / path
+        for line in requirements_path.read_text(encoding="utf-8").splitlines():
             line = line.split("#", 1)[0].strip()
             if not line:
                 continue
             match = re.fullmatch(r"([\w.-]+)==([\w.+-]+)", line)
             if not match:
                 raise ValueError(f"Unrecognized requirement in {path}: {line}")
-            rows.append(row(match[1], "Python media" if path == AUDIO else "Python QA",
-                            match[2], [path], "pypi", owner="dependabot"))
+            rows.append(row(match[1], "Python QA", match[2], [path], "pypi", owner="dependabot"))
     actions = {}
     python = {}
     for path in sorted((root / ".github/workflows").glob("*.y*ml")):
@@ -172,10 +171,9 @@ def inventory(root):
     if verification.exists():
         pin = json.loads(verification.read_text())["blender_version"].split()[0]
         rows.append(row("Blender", "media tool", pin, [verification.relative_to(root).as_posix()], "blender"))
-    rows.append(row("FFmpeg", "media tool", "unrecorded", ["scripts/render-murderbird-first-choice.py",
-                    "assets/murderbird/production/audio/iron-verdict/source/mastering.txt"], "ffmpeg"))
-    rows.append(row("GarageBand (macOS)", "media tool", "unrecorded",
-                    ["assets/murderbird/production/audio/iron-verdict/production-notes.md"], "garageband"))
+    renderer = "scripts/render-murderbird-first-choice.py"
+    rows.append(row("numpy", "Python media", "unrecorded", [renderer], "pypi", owner="review"))
+    rows.append(row("FFmpeg", "media tool", "unrecorded", [renderer], "ffmpeg"))
     host_file = root / "config/technology-host-versions.json"
     if host_file.exists():
         records = json.loads(host_file.read_text(encoding="utf-8"))
@@ -282,11 +280,6 @@ def resolve(item, deadline=None):
     elif provider == "ffmpeg":
         source = "https://ffmpeg.org/releases/"
         latest = stable_max(re.findall(r'href="ffmpeg-(\d+\.\d+(?:\.\d+)?).tar', fetch(source, False, deadline=deadline)))
-    elif provider == "garageband":
-        # macOS product ID; the iOS GarageBand ID is a different application.
-        source = "https://itunes.apple.com/lookup?id=682658836&country=us"
-        data = fetch(source, deadline=deadline)
-        latest = data["results"][0]["version"]
     else:
         raise ValueError("Unknown release provider: " + provider)
     if version(latest) is None:
@@ -324,12 +317,6 @@ def upstream_inventory(rows, deadline=None):
         additions.append({**row("Mermaid package metadata", "Mermaid publisher requirements",
                                "unrecorded", [source], "npm", owner="parent dependency"),
                           "error": str(exc), "latest": None, "status": "UNKNOWN"})
-    # Unlocked media dependencies observed during the initial publisher audit.
-    # Reassess this supplemental list when the media toolchain changes. It is
-    # not a substitute for a resolved Python environment/SBOM.
-    for name, parent in [("cffi", "soundfile"), ("pycparser", "cffi"), ("packaging", "mido")]:
-        additions.append(row(name, "Python unlocked media dependencies", "unrecorded",
-                             [AUDIO, f"https://pypi.org/pypi/{parent}/json"], "pypi", owner="parent dependency"))
     enriched = enrich([r for r in additions if "error" not in r], deadline=deadline)
     enriched.extend(r for r in additions if "error" in r)
     return enriched

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ========================================
+       METADATA: Core Document & Character Set
+       ======================================== -->
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.googletagmanager.com 'sha256-2QjV4hS3vpfycuAWFdWEHoAqsQ5TxYB9g7sU/8Lt5w8=' 'sha256-3Cackdtp7Do2OrDkhZ8HQxibdFsvQhw0sUCB/9aSLkI=' 'sha256-eoZKPPj7R1opAA3EaZUGTmO56gm1hhyiyo8phdpFl9c=' 'sha256-qDWB71RYIA02Hd/sFOMLdLZJXtDS5WYQ0qQGy05T3q8=' 'sha256-vMipR6Pj+J1+uzPBaR4tLBFZWq18gxHQrsF4Yl9osVQ=' 'sha256-xh7CUIAeDEyuZ439ct3hPfIQiNb6U+VN/0//lRZ6kZg=' 'sha256-z+kbhAfYnais1UUyDCDwulWuXH8+RLiV94ugXlzKRl8='; script-src-attr 'none'; style-src 'self' 'sha256-9pO+Af21S/MdjPsREhi8gVDJzE8VjqvRJzrQEUqWmfM=' 'sha256-CKxPDFPrKIw2Ht2LdPlIQKnX2JLCPqqfLJvEfltalpY=' 'sha256-OGwbYQZgFT9rHOEb8Y2r1/eygijcTeNKD1e6mSsr/Ro=' 'sha256-cDfwo3KNNjCfI98awuagrRTzz14MtBZpvjiYS1Dnqo0=' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; style-src-attr 'unsafe-hashes' 'sha256-9pO+Af21S/MdjPsREhi8gVDJzE8VjqvRJzrQEUqWmfM=' 'sha256-CKxPDFPrKIw2Ht2LdPlIQKnX2JLCPqqfLJvEfltalpY=' 'sha256-OGwbYQZgFT9rHOEb8Y2r1/eygijcTeNKD1e6mSsr/Ro=' 'sha256-cDfwo3KNNjCfI98awuagrRTzz14MtBZpvjiYS1Dnqo0=' 'sha256-t6oewASd7J1vBg5mQtX4hl8bg8FeegYFM3scKLIhYUc='; font-src 'self' data:; img-src 'self' data: https://overkillhill.com https://*.github.io https://avatars.githubusercontent.com https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://okhp3.github.io; media-src 'self' https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" /><meta content="English" name="language"/>
+<!-- ========================================
+       METADATA: Primary Title & Description
+       ======================================== -->
+<title>MurderBird: Uncaged | Art, Motion, Music &amp; Making | OverKill Hill P³™</title>
+<meta content="From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird." name="description"/>
+<meta content="MurderBird, creative process, OpenAI, Adobe Firefly, GPT-5.6 SOL, AI art, AI music, Iron Verdict, ACE-Step, Blender, interactive exhibit" name="keywords"/>
+<meta content="OverKill Hill P³™" name="author"/>
+<meta content="OverKill Hill P³™" name="creator"/>
+<meta content="OverKill Hill P³™" name="publisher"/>
+<!-- ========================================
+       METADATA: Open Graph (Social Sharing)
+       ======================================== -->
+<meta content="MurderBird: Uncaged | Art, Motion, Music &amp; Making | OverKill Hill P³™" property="og:title"/>
+<meta content="From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird." property="og:description"/>
+<meta content="website" property="og:type"/>
+<meta content="https://overkillhill.com/projects/murderbird-uncaged/" property="og:url"/>
+<meta content="https://overkillhill.com/assets/img/og/murderbird-story-share-2026-09-06.png" property="og:image"/>
+<meta content="MurderBird reference artwork: a mechanical creature beside a workbench and CRT computer." property="og:image:alt"/>
+<meta content="1200" property="og:image:width"/>
+<meta content="630" property="og:image:height"/>
+<meta content="image/png" property="og:image:type"/>
+<meta content="OverKill Hill P³™" property="og:site_name"/>
+<meta content="en_US" property="og:locale"/>
+
+<!-- ========================================
+       METADATA: Twitter Card (X Social)
+       ======================================== -->
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="MurderBird: Uncaged | Art, Motion, Music &amp; Making | OverKill Hill P³™" name="twitter:title"/>
+<meta content="From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird." name="twitter:description"/>
+<meta content="https://overkillhill.com/assets/img/og/murderbird-story-share-2026-09-06.png" name="twitter:image"/>
+<meta content="MurderBird reference artwork: a mechanical creature beside a workbench and CRT computer." name="twitter:image:alt"/>
+<meta content="@OverKillHillP3" name="twitter:site"/>
+<meta content="@OverKillHillP3" name="twitter:creator"/>
+<!-- ========================================
+       METADATA: Search & Crawling
+       ======================================== -->
+<meta content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" name="robots"/>
+<meta content="index, follow" name="googlebot"/>
+<meta content="index, follow" name="bingbot"/>
+<meta content="7 days" name="revisit-after"/>
+<link href="/humans.txt" rel="author"/>
+<link href="https://overkillhill.com/projects/murderbird-uncaged/" rel="canonical"/>
+<link href="https://overkillhill.com/projects/murderbird-uncaged/" hreflang="en" rel="alternate"/><!-- ========================================
+       METADATA: Color Scheme & Theme
+       ======================================== -->
+<meta content="#2a2320" name="theme-color"/>
+<meta content="dark light" name="color-scheme"/>
+<!-- ========================================
+       METADATA: Web App & PWA
+       ======================================== -->
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
+<!-- ========================================
+       FAVICONS: Multi-Format Icon Support
+       ======================================== -->
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-32.png" rel="icon" sizes="32x32" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-16.png" rel="icon" sizes="16x16" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-48.png" rel="icon" sizes="48x48" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-opaque-180.png" rel="apple-touch-icon" sizes="180x180" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon.ico" rel="icon" sizes="any"/>
+<link href="/site.webmanifest" rel="manifest"/>
+<!-- ========================================
+       STYLESHEETS & FONTS
+       ======================================== -->
+<!-- AUTOGEN:SELF-HOSTED-FONTS -->
+<!-- OverKill Hill P³ fonts are loaded by the shared theme stylesheet. -->
+<link href="https://www.googletagmanager.com" rel="dns-prefetch"/>
+<script>!function(){var s=localStorage.getItem("okh-theme");document.documentElement.setAttribute("data-theme",s==="dark"||(s!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches)?"dark":"light")}();</script>
+<link href="/assets/css/theme.css?v=22800719" rel="stylesheet"/>
+<script type="speculationrules">
+    {
+      "prefetch": [
+        { "source": "document", "where": { "and": [
+          { "href_matches": "/*" },
+          { "not": { "selector_matches": "[rel~=nofollow]" } },
+          { "not": { "href_matches": "/*.{png,jpg,jpeg,webp,svg,ico,gif,pdf,zip}" } }
+        ]}, "eagerness": "moderate" }
+      ]
+    }
+    </script>
+<!-- Google tag (gtag.js) -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-VJ1BKXS27H"></script>
+<script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-VJ1BKXS27H');
+    </script><script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://overkillhill.com/#organization",
+  "name": "OverKill Hill P³™",
+  "url": "https://overkillhill.com/",
+  "logo": {
+    "@type": "ImageObject",
+    "url": "https://overkillhill.com/assets/img/favicons/murderbird-v2-icon-1024.png",
+    "width": 1024,
+    "height": 1024
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/overkillhillp3",
+    "https://facebook.com/OverKillHillP3/",
+    "https://x.com/OverKillHillP3",
+    "https://www.youtube.com/@OverKillHillP3",
+    "https://ko-fi.com/overkillhillp3",
+    "https://pro.fiverr.com/s/VYKPpoB"
+  ]
+}
+</script>
+</head>
+
+<body class="projects-main">
+  <a class="okh-skip-link" href="#main">Skip to main content</a>
+<header class="site-header" id="top">
+<div class="container">
+<div class="logo">
+<a aria-label="OverKill Hill P³ home" href="/">
+<img alt="OverKill Hill P³" height="40" loading="eager" src="/assets/img/murderbird-v2-icon-nav-96.png" width="40"/>
+<span class="sr-only">OverKill Hill P³™ Home</span>
+</a>
+</div>
+<nav aria-label="Primary" class="primary-nav" id="navigation">
+<ul>
+<li><a href="/#forge">The Forge</a></li>
+<li class="has-submenu">
+<a data-current-family="" href="/projects/">Our Projects</a>
+<ul class="submenu">
+<li><a href="/skillz-forge/">Skillz Forge</a></li>
+<li><a href="/skillz-forge/skillz-shield/">Skillz Shield</a></li>
+<li><a href="/projects/found-ry/">Found‑Rᵧ</a></li>
+<li><a href="/projects/mermaid-theme-builder/">Mermaid Theme Builder</a></li>
+<li><a href="/projects/bpmn-for-mermaid/">BPMN for Mermaid</a></li>
+<li><a href="/projects/diagram-truth/">Diagram Truth</a></li>
+<li><a href="/projects/mac-studio-local-ai-workbench/">Mac Studio Local AI Workbench</a></li>
+<li><a href="/projects/abrahamic-reference-engine/">Abrahamic Reference Engine</a></li>
+<li><a aria-current="page" href="/projects/murderbird-uncaged/">MurderBird: Uncaged</a></li>
+<li><a href="/projects/glee-fully-chai-chasers/">Glee-fully Chai Chasers</a></li>
+<li><a href="/projects/kierans-lifetrkr/">Kieran's LifeTrkr</a></li>
+<li><a href="/projects/telling-forward/">Telling Forward</a></li>
+</ul>
+</li>
+<!-- Writings cluster: Manifesto / MurderBird / Promptcraft / FDIAL -->
+<li class="has-submenu">
+<a href="/writings/">Writings</a>
+<ul class="submenu">
+<li><a href="/manifesto/">The Manifesto</a></li>
+<li><a href="/writings/murderbird/">The MurderBird</a></li>
+<li><a href="/prompt-forge/">The Prompt Forge</a></li>
+<li><a href="/writings/first-diagram-is-a-liar/">The First Diagram is a Liar</a></li>
+</ul>
+</li>
+<!-- About cluster: Universe / About / Contact / Legal -->
+<li class="has-submenu">
+<a href="/about/">About</a>
+<ul class="submenu">
+<li><a href="/universe/">OKHP³™ Universe</a></li>
+<li><a href="/about/">About OKHP³™</a></li>
+<li><a href="/contact/">Contact</a></li>
+<li><a href="/legal/">Legal</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+<button aria-controls="navigation" aria-expanded="false" class="nav-toggle">
+<span class="sr-only">Toggle navigation</span>
+<span class="bar"></span><span class="bar"></span><span class="bar"></span>
+</button>
+</div>
+<section aria-label="Forge update" class="site-specials site-specials--okh">
+<span class="site-specials-label">🔥Hot off the FORGE⚒️</span>
+<a class="site-specials-link" data-banner-release="v1.0" href="/writings/first-diagram-is-a-liar/#read-or-interact">The Final Cut is live: read the complete story or explore Diagram Truth, the interactive guide to more honest diagrams. Read or explore →</a>
+</section>
+</header>
+
+  <main id="main">
+
+<section aria-labelledby="page-title" class="project-hero forge-masthead forge-masthead--project" data-status-presentation="disclosure">
+<div aria-hidden="true" class="brand-stripes brand-stripes--okh"></div><div aria-hidden="true" class="hero-blueprint-bg"></div>
+<div class="container hero-inner">
+<nav aria-label="Breadcrumb" class="breadcrumb"><a href="/">overkillhill.com</a><span>/</span><a href="/projects/">projects</a><span>/</span><span>murderbird-uncaged</span></nav>
+<h1 id="page-title">MurderBird: Uncaged</h1>
+<p class="hero-sub">It started with better pictures. Then the bird needed to move.</p><div data-project-status-disclosure="murderbird-uncaged"><p data-project-status-brief="">Art, motion, and music; 3D likeness under assessment. Delivery unverified.</p><details><summary>Status and source</summary><!-- AUTOGEN:PROJECT-STATUS --><p data-project-status="murderbird-uncaged"><span data-project-status-text="">Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown.</span> <a href="https://github.com/OKHP3/murderbird-uncaged/blob/4b1c726f5d9bbd1ba1048f89049a5b422001c506/README.md">Source record</a> (reviewed 2026-09-27).</p><!-- /AUTOGEN:PROJECT-STATUS --></details></div>
+<div class="hero-ctas"><a class="btn btn-primary" href="#the-progression">Follow the progression</a><a class="btn btn-quiet" href="https://okhp3.github.io/murderbird-uncaged/">Enter the exhibit ↗</a><a class="btn btn-quiet" href="https://github.com/OKHP3/murderbird-uncaged">View the production archive ↗</a></div>
+</div></section>
+<section aria-labelledby="project-introduction-title" class="container content-section project-introduction">
+<div class="section-label">A creative project in motion</div>
+<h2 id="project-introduction-title">One experiment kept opening the next door.</h2>
+<p class="hero-sub">Rework the art. Give it motion. Find its sound. Build something you can explore.</p>
+<p>I started by returning to MurderBird artwork I had made more than a year earlier. The tools had moved forward. I wanted to see how much further I could take the detail, the materials, and the character itself. That became a second generation of images. Those images led to videos. The videos made me wonder what MurderBird should sound like.</p>
+<p>By the time there were moving images, lyrics, and a song, another question had arrived: if I were in middle school or early high school today, what would I want to bring to the science fair?</p>
+<p>A mechanical creature you could walk around, look inside, and interact with sounded like a good place to start.</p>
+</section>
+<div class="container"><div class="project-layout"><div>
+<section aria-labelledby="progression-title" class="content-block" data-search-index="" id="the-progression">
+<div class="section-label">The progression</div><h2 id="progression-title">Art → motion → music → encounter</h2>
+<div class="feature-grid">
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">01</div><div><h3>Revisit the image</h3><p>Repaint and rework the original art with newer generation tools and more specific direction.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">02</div><div><h3>Make it move</h3><p>Use the images to explore timing, weight, mechanical movement, and short video scenes.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">03</div><div><h3>Give it a sound</h3><p>Turn my listening preferences into a musical brief, then develop lyrics, an arrangement, and an AI-sung theme.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">04</div><div><h3>Make it explorable</h3><p>Bring the visual and musical work toward an interactive 3D display with a body visitors can inspect.</p></div></div>
+</div>
+</section>
+<section aria-labelledby="art-title" class="content-block" data-search-index="" id="second-generation">
+<div class="section-label">01 / Image-making</div><h2 id="art-title">The same character. A more demanding brief.</h2>
+<p>Many of the second-generation images were created with <strong>OpenAI’s latest image-generation tool at the time of the work</strong>. I directed the rework at the keyboard: what to retain, what to change, and what needed another pass. The ambition was to bring the older art forward with more convincing detail and better control over the result.</p>
+<p>That required decisions more useful than “make it more realistic.” The bird needed a consistent silhouette. The armor needed to read as fabricated metal. Old bronze, later repairs, and modern additions needed different surfaces. A character that looked right in one image still had to hold together in the next.</p>
+<div class="relationship-grid">
+<figure class="murderbird-img-wrap"><img alt="Earlier MurderBird brand artwork: a mechanical bird perched on a CRT beside the OverKill Hill P³ wordmark." decoding="async" height="1024" loading="lazy" src="/assets/img/library/over-kill-hill-p3-title-low-right-bird-perch-comp-square-1024.webp" width="1024"/><figcaption class="murderbird-caption">Earlier visual identity: the CRT, industrial palette, and mechanical sentinel.</figcaption></figure>
+<figure class="murderbird-img-wrap"><img alt="A later MurderBird study with a deep hooked bill, overlapping metal armor, exposed joints, and an orange eye." decoding="async" height="1024" loading="lazy" src="/assets/img/webp/murderbird-frontal-attack-2026-09-05-1024.webp" width="1024"/><figcaption class="murderbird-caption">Later published artwork: a closer study of armor, joints, surface wear, and presence.</figcaption></figure>
+</div>
+<p class="embed-note">These published images show the visual progression across the retained artwork. The archive preserves the individual studies and their source records.</p>
+<h3>The prompt became a set of decisions.</h3>
+<p>Earlier preserved image briefs separated anatomy, materials, lighting, composition, and the changes allowed in a revision. Each reference had a job. One could supply proportions while another supplied the palette, without asking the model to copy everything from both.</p>
+<details><summary>Inside an earlier image-edit prompt</summary><blockquote><p>“Change only the MurderBird's remaining modern-raptor anatomy and the mechanical action of its pose. Keep every successful environmental, material, lighting, and brand-quality element of Image 1.”</p></blockquote><p>This excerpt comes from the <a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/context/threads/murderbird-reference-master-generation-record-2026-07-30.md">July reference-master record</a>, which documents OpenAI native image generation. It shows how the revision method developed; the exact underlying image-model version is not recorded.</p></details>
+<p><strong>What I was learning:</strong> art direction through constraints, continuity across images, and how to correct one failure without throwing away the parts that worked.</p>
+</section>
+<section aria-labelledby="motion-title" class="content-block" data-search-index="" id="motion">
+<div class="section-label">02 / Motion studies</div><h2 id="motion-title">A convincing still has nowhere to hide when it moves.</h2>
+<p>The new images became the starting point for video experiments in <strong>Adobe Firefly</strong>, with <strong>GPT-5.6 SOL</strong> helping drive the workflow. Motion introduced a different set of problems: where the weight goes, which joint moves first, what stays fixed, and whether the action has a visible cause.</p>
+<p>The First Choice pilots made that concrete. One version moved the feet when they should have stayed planted. Another moved the entire stand when only its saddle should turn. The correction became specific: anchor the base and shaft, keep both feet planted, then let the torso shift and the head lower in response.</p>
+<figure class="murderbird-img-wrap"><video aria-describedby="motion-caption" aria-label="First Choice, an eight-second silent motion study" controls="" height="720" playsinline="" poster="/assets/img/murderbird-first-choice-poster.jpg" preload="none" style="width:100%;height:auto" width="1280"><source src="/assets/video/murderbird-first-choice-635f0e15.mp4" type="video/mp4"/>Your browser does not support embedded video. <a href="/assets/video/murderbird-first-choice-635f0e15.mp4">Watch the motion study</a>.</video><figcaption class="murderbird-caption" id="motion-caption">The published eight-second silent study. The saddle shifts slightly; the bird adjusts its torso and dips its head while the stand stays fixed to the floor.</figcaption></figure>
+<p><strong>What I was learning:</strong> movement direction, continuity over time, and how to turn “that looks wrong” into a correction the next attempt could actually follow.</p>
+</section>
+<section aria-labelledby="music-title" class="content-block" data-search-index="" id="music">
+<div class="section-label">03 / Composition and sound</div><h2 id="music-title">What does MurderBird sound like?</h2>
+<p>Watching the bird move led me back to the music I enjoy. I used my Apple Music favorites to assess the styles and bands I kept coming back to, then shaped that into a direction for MurderBird: melodic, guitar-led rock with weight, tension, and room for a deliberate arrival.</p>
+<p>From there came lyrics based on the story, composition, and the work of turning that direction into a song. The resulting theme is <strong>Iron Verdict</strong>.</p>
+<p><strong>None of the singing is my voice.</strong> I drove the work at the keyboard, using AI and production tools to develop the material, hear the results, and keep moving it forward.</p>
+<ol>
+<li><strong>Establish the musical language.</strong> Listening preferences became an original creative brief. The early production record describes newly written notes and locally synthesized sounds, without sampling the reference artists.</li>
+<li><strong>Build an arrangement that could be edited.</strong> The first instrumental used a D-centered minor score at 104 BPM, MIDI, and aligned audio stems. GarageBand supplied a separate instrument interpretation of the six-track MIDI arrangement.</li>
+<li><strong>Make the vocal direction explicit.</strong> Lyrics, a notated melody, MusicXML, MIDI, a pitch guide, and a rehearsal mix made phrasing and timing inspectable. Those guides were intermediate production material.</li>
+<li><strong>Generate and finish the sung version.</strong> The accepted version used ACE-Step 1.5. Demucs, local audio processing, and FFmpeg supported separation, finishing, encoding, and checks. The delivery includes a full song and a repeating exhibit mix.</li>
+</ol>
+<div class="card"><h3>Listen to Iron Verdict</h3><p>The accepted AI-sung version. Press Play to start.</p><audio aria-label="Iron Verdict, accepted AI-sung MurderBird theme" controls="" preload="none" style="width:100%"><source src="https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3" type="audio/mpeg"/>Your browser does not support audio playback. <a href="https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3">Listen to Iron Verdict</a>.</audio><p><a href="https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/lyrics.txt">Read the lyrics</a> · <a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/provenance/iron-verdict-v3-release.json">Read the song’s production record</a></p></div>
+<p><strong>What I was learning:</strong> translating taste into musical direction, arranging parts, specifying vocal phrasing, working with stems, and distinguishing a useful guide from a finished listening version.</p>
+</section>
+<section aria-labelledby="exhibit-title" class="content-block card" data-search-index="" id="science-fair">
+<div class="section-label">04 / The science-fair question</div><h2 id="exhibit-title">What would I build if I were that kid today?</h2>
+<p>Thirty-five or thirty-eight years after middle school and early high school, I started thinking about the project I would want to make with today’s tools. The images, videos, and music had already given MurderBird a presence. An interactive display could give someone else a way to investigate it.</p>
+<p>That meant moving into 3D: a body with parts, joints, and an interior. A visitor could inspect how the machine changes across three eras, open assemblies, and see different ways of moving. The science-fair idea gave the separate experiments a shared destination.</p>
+<p>Blender became the working environment for editable model studies. Named rigid assemblies and GLB exports carried that work into the browser exhibit. The materials now include surface studies and articulated versions, with comparison views to judge them against the reference art.</p>
+<p><strong>The exhibit is published for assessment.</strong> I am still refining likeness, proportions, armor, and character movement. The current 3D interpretation is a working study.</p>
+<p><a class="btn btn-primary" href="https://okhp3.github.io/murderbird-uncaged/">Explore MurderBird: Uncaged ↗</a> <a class="btn btn-quiet" href="https://okhp3.github.io/murderbird-uncaged/review/">Compare the current studies ↗</a></p>
+</section>
+<section aria-labelledby="tools-title" class="content-block" data-search-index="" id="tools">
+<div class="section-label">The working methods</div><h2 id="tools-title">Which tool did which job?</h2>
+<div aria-label="Production tools and methods" class="data-table-wrap" role="region" tabindex="0"><table class="data-table" style="min-width:0;table-layout:fixed;overflow-wrap:anywhere"><thead><tr><th scope="col" style="white-space:normal">Tool or method</th><th scope="col" style="white-space:normal">Its place in the work</th></tr></thead><tbody>
+<tr><th scope="row" style="white-space:normal">OpenAI image generation</th><td>Many of the second-generation images: new generations, repainting, and targeted rework. The exact image-model version is not recorded.</td></tr>
+<tr><th scope="row" style="white-space:normal">Reference images + revision prompts</th><td>Separate visual identity from anatomy, materials, and composition; name what must survive the next edit.</td></tr>
+<tr><th scope="row" style="white-space:normal">Adobe Firefly + GPT-5.6 SOL</th><td>Video creation in Firefly, with GPT-5.6 SOL assisting the workflow. Pilot review focused on contact, timing, and mechanical cause; the exact video-model selection is not recorded.</td></tr>
+<tr><th scope="row" style="white-space:normal">Apple Music favorites</th><td>Source material for identifying my musical preferences and writing the sound brief.</td></tr>
+<tr><th scope="row" style="white-space:normal">MIDI, synthesis + GarageBand</th><td>Original instrumental composition, editable arrangement, aligned stems, and an alternate instrument rendering.</td></tr>
+<tr><th scope="row" style="white-space:normal">ACE-Step 1.5</th><td>Generate the accepted sung theme from the project’s lyrics and musical direction.</td></tr>
+<tr><th scope="row" style="white-space:normal">Demucs + FFmpeg</th><td>Support audio separation and finishing, listening formats, loudness measurement, and repeat-loop delivery.</td></tr>
+<tr><th scope="row" style="white-space:normal">Blender + GLB</th><td>Editable 3D studies, articulated assemblies, surfaces, and exports for an interactive display.</td></tr>
+<tr><th scope="row" style="white-space:normal">GitHub</th><td>Keep prompts, source material, revisions, and production records connected as the project changes.</td></tr>
+</tbody></table></div>
+<p>The exhibit runs on Vite, Three.js, and Web Audio. Its <a href="https://github.com/OKHP3/murderbird-uncaged">repository</a> maintains the application details alongside the creative production archive.</p>
+</section>
+<section aria-labelledby="learning-title" class="content-block" data-search-index="" id="what-carried-forward">
+<div class="section-label">What carried forward</div><h2 id="learning-title">The useful part was learning to direct the next attempt.</h2>
+<p>Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight. Music required arrangement and phrasing. A 3D display required parts that could move and still belong to the same body.</p>
+<p>The skills growing through this project are practical: writing better visual briefs, maintaining continuity, diagnosing a failed generation, composing and arranging with AI, and carrying an idea between tools without losing its identity.</p>
+<p>There is still work to do. The next measure of progress is how closely the model and its movement match the character I have been directing all along.</p>
+</section>
+<section aria-labelledby="record-title" class="content-block" id="production-record">
+<div class="section-label">Follow the work</div><h2 id="record-title">The artifacts behind the progression</h2>
+<ul><li><a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/docs/media-catalog.md">Media catalog:</a> images, motion, music, and model studies.</li><li><a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/assets/murderbird/production/audio/iron-verdict/production-notes.md">Instrumental production notes:</a> arrangement, synthesis, GarageBand, and stems.</li><li><a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/docs/production-handoff.md">Model production handoff:</a> editable sources and the current studies.</li></ul>
+<p>Project account updated September 27, 2026. The <a href="/writings/murderbird/">MurderBird story</a> and <a href="/manifesto/">manifesto</a> remain the places to read the fiction and its meaning.</p>
+<p>Created and directed by Jamie Hill / OverKill Hill P³. MurderBird creative content is all rights reserved; application code is MIT-licensed. <a href="https://github.com/OKHP3/murderbird-uncaged/blob/main/NOTICE.md">Read the content and code notice.</a></p>
+</section>
+</div><aside aria-label="Project information" class="sidebar-rail">
+<div class="sidebar-meta"><div class="section-label">Creative production</div><p>Images. Motion. Music. An interactive mechanical creature.</p><div class="sidebar-links"><a class="sidebar-link" href="https://okhp3.github.io/murderbird-uncaged/">Enter the exhibit ↗</a><a class="sidebar-link" href="https://github.com/OKHP3/murderbird-uncaged">Production archive ↗</a><a class="sidebar-link" href="/writings/murderbird/">Read the story</a></div></div>
+<div class="sidebar-related"><div class="section-label">Related projects</div><ul><li><a href="/projects/glee-fully-chai-chasers/">Chai Chasers</a></li><li><a href="/projects/mac-studio-local-ai-workbench/">Local AI Workbench</a></li><li><a href="/projects/">All projects</a></li></ul></div>
+<div class="sidebar-related" id="toc-widget"><div class="section-label">On this page</div><ul class="toc-list"><li><a href="#the-progression">The progression</a></li><li><a href="#second-generation">Second-generation art</a></li><li><a href="#motion">Motion studies</a></li><li><a href="#music">Finding the sound</a></li><li><a href="#science-fair">The science-fair idea</a></li><li><a href="#tools">Tools and methods</a></li><li><a href="#what-carried-forward">Skills taking shape</a></li><li><a href="#production-record">Production records</a></li></ul></div>
+</aside></div></div>
+
+  </main>
+<footer class="site-footer">
+<div class="container footer-grid">
+<div class="footer-column">
+<h3>OverKill Hill P³™</h3>
+<p>Protocol-first AI systems design: local inference, multi-model coordination, and the governance layer the platforms forgot to build.</p>
+</div>
+<div class="footer-column">
+<h4>Navigation</h4>
+<ul>
+<li><a href="/#forge">The Forge</a></li>
+<li><a href="/universe/">P³ Universe</a></li>
+<li><a href="/manifesto/">The Manifesto</a></li>
+<li><a href="/projects/">Our Projects</a></li>
+<li><a href="/writings/">Writings</a></li>
+<li><a href="/about/">About OKH P³</a></li>
+<li><a href="/contact/">Contact OKH P³</a></li>
+<li><a href="/legal/">Legal</a></li>
+</ul>
+</div>
+<div class="footer-column">
+<h4>Connect</h4>
+<ul>
+<li><a href="mailto:contact@overkillhill.com">contact@overkillhill.com</a></li>
+<li><a href="https://ko-fi.com/overkillhillp3" rel="noopener noreferrer" target="_blank">Ko-fi</a></li>
+<li><a href="https://pro.fiverr.com/s/VYKPpoB" rel="noopener noreferrer" target="_blank">Fiverr</a></li>
+<li><a href="https://www.linkedin.com/company/overkillhillp3" rel="noopener noreferrer" target="_blank">LinkedIn</a></li>
+<li><a href="https://facebook.com/OverKillHillP3/" rel="noopener noreferrer" target="_blank">Facebook</a></li>
+<li><a href="https://x.com/OverKillHillP3" rel="noopener noreferrer" target="_blank">X (Twitter)</a></li>
+<li><a href="https://www.youtube.com/@OverKillHillP3" rel="noopener noreferrer" target="_blank">YouTube</a></li>
+</ul>
+</div>
+</div>
+<div class="footer-bottom">
+<span class="footer-built-with">Built with <a href="https://replit.com/refer/overkillhillp3/" rel="noopener noreferrer" target="_blank">Replit</a></span>
+<p class="footer-copyright">© <span id="current-year"></span> OverKill Hill P³™. All rights reserved.</p>
+<span></span>
+</div>
+</footer>
+    <script src="/assets/js/app.js?v=43f41acf"></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://overkillhill.com/projects/murderbird-uncaged/#webpage",
+      "url": "https://overkillhill.com/projects/murderbird-uncaged/",
+      "name": "MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "description": "From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird.",
+      "inLanguage": "en-US",
+      "dateModified": "2026-09-27",
+      "isPartOf": {
+        "@type": "WebSite",
+        "@id": "https://overkillhill.com/#website",
+        "url": "https://overkillhill.com/",
+        "name": "OverKill Hill P³™"
+      },
+      "about": {
+        "@type": "CreativeWork",
+        "name": "MurderBird: Uncaged",
+        "url": "https://okhp3.github.io/murderbird-uncaged/",
+        "creator": {
+          "@type": "Person",
+          "name": "Jamie Hill"
+        },
+        "genre": "Multimedia creative production",
+        "keywords": "MurderBird, creative process, OpenAI, Adobe Firefly, GPT-5.6 SOL, AI art, AI music, Iron Verdict, ACE-Step, Blender, interactive exhibit"
+      },
+      "publisher": {
+        "@id": "https://overkillhill.com/#organization"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "OverKill Hill P³™",
+          "item": "https://overkillhill.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Projects",
+          "item": "https://overkillhill.com/projects/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "MurderBird: Uncaged",
+          "item": "https://overkillhill.com/projects/murderbird-uncaged/"
+        }
+      ]
+    }
+  ]
+}
+</script>
+
+</body>
+</html>

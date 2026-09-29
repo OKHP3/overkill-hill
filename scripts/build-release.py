@@ -60,6 +60,7 @@ REQUIRED_EXCLUSIONS = (
     "assets/templates/template--homepage.html",
     "assets/murderbird/v2",
 )
+PRIVATE_DOWNLOAD_ARCHIVE_PREFIX = PurePosixPath("assets/downloads/music-session-")
 PUBLIC_HTML_DIRECTORIES = (
     "about", "contact", "de", "en-gb", "es", "es-mx", "found-ry", "fr", "legal", "manifesto",
     "projects", "prompt-forge", "search", "universe", "vault", "writings",
@@ -179,13 +180,26 @@ def copy_runtime_assets(source: Path, output: Path, archived: set[Path]) -> None
             continue
         if not original_directory.is_dir():
             fail(f"allowlisted runtime location is not a directory: {directory}")
-        for original in sorted(path for path in original_directory.rglob("*") if path.is_file()):
+        for original in sorted(original_directory.rglob("*")):
+            relative = original.relative_to(source)
+            if is_private_download_archive(relative):
+                continue
+            if original.name == ".DS_Store":
+                continue
+            if not original.is_file():
+                continue
             if extensions is not None and original.suffix.lower() not in extensions:
                 continue
-            relative = original.relative_to(source)
             if relative in archived:
                 continue
             copy_file(source, output, relative)
+
+
+def is_private_download_archive(relative: Path | PurePosixPath) -> bool:
+    """Match private session archive trees without excluding public downloads."""
+    path = PurePosixPath(relative.as_posix())
+    return (len(path.parts) >= 3 and path.parts[:2] == ("assets", "downloads")
+            and path.parts[2].startswith(PRIVATE_DOWNLOAD_ARCHIVE_PREFIX.name))
 
 
 def route_file(path: str) -> Path:
@@ -213,6 +227,10 @@ def verify_package(output: Path, pages: list[Path], archived: set[Path]) -> None
     for forbidden in sorted(archived):
         if (output / forbidden).exists():
             fail(f"archived source file entered release package: {forbidden.as_posix()}")
+    for path in output.rglob("*"):
+        relative = path.relative_to(output)
+        if is_private_download_archive(relative):
+            fail(f"private download archive entered release package: {relative.as_posix()}")
 
     try:
         sitemap = ElementTree.parse(output / "sitemap.xml")

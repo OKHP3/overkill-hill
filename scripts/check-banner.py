@@ -37,16 +37,30 @@ FEATURED_ARTICLE_GENERATED = "writings/first-diagram-is-a-liar/index.html"
 SOURCE_BANNER = "assets/partials/header.html"
 
 CANONICAL_BANNER = (
-    "v0.5 is live: the Council of AIs scored each other, every model was harder"
-    " on itself than the architect was. Read it \u2192"
+    'The Final Cut is live: read the complete story or explore Diagram Truth, the interactive guide to more honest diagrams. Read or explore →'
 )
 
 # Known prior versions — used for detection only, never written.
 OLD_BANNERS = [
+    ("v0.7 is live: Replit arrived late, but it's where I'd build a custom"
+     " Mermaid app today. Read it \u2192"),
+    # previous canonical version
+    (
+        "v0.6 is live: Notion kept the Council's memory, while the models made their"
+        " diagrams. Read it \u2192"
+    ),
+    (
+        "v0.5 is live: the Council of AIs scored each other, every model was harder"
+        " on itself than the architect was. Read it \u2192"
+    ),
     # em-dash version (original)
     (
         "v0.5 is live: the Council of AIs scored each other \u2014 every model was harder"
         " on itself than the architect was. Read it \u2192"
+    ),
+    (
+        "v0.8 is live: same Mermaid code, different styling. Bottle a theme with"
+        " Mermaid Theme Builder. Read it \u2192"
     ),
 ]
 

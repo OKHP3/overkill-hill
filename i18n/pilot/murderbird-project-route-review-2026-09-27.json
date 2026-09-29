@@ -1,0 +1,93 @@
+{
+  "date": "2026-09-27",
+  "source_revision": "172fc23e4e40a49995d0423283f8172c69bdf6f2",
+  "source_baseline": "3b2b8507f417a1dd0f707419d2aedf4b1038466b",
+  "method": "Bounded AI semantic and structural review",
+  "native_or_human": false,
+  "release_accepted": false,
+  "scope": "New MurderBird shelf card and project navigation only; retain all other regional prose and noindex publication boundaries.",
+  "canonical": [
+    {
+      "route": "/",
+      "before_normalized_sha256": "f0e941a2e45b45a5ffde4ccf92901abd3d58140421db3e112f8f18f00d82117d",
+      "after_normalized_sha256": "3fc297165c94d03ad23bbc65cba094a89d5f432a42cad6d2828811d40e87ac47",
+      "reviewed_delta": "Navigation only"
+    },
+    {
+      "route": "/about/",
+      "before_normalized_sha256": "49159fc4ebe472638c6d92bc4562b2f1e2856dfa1534b9ce3f17077271f43548",
+      "after_normalized_sha256": "dd1046d329eb85d3589ffb9f3183ccf0ba8ae7bb452358b9d71cbfb8a231833e",
+      "reviewed_delta": "Navigation only"
+    },
+    {
+      "route": "/projects/",
+      "before_normalized_sha256": "14932f867e0a8a8308ab9f224059a6b0864d76d6beda879537651c9edcb8ad32",
+      "after_normalized_sha256": "f48d60545842ecd1b52de0d465efd05c0f35ccd6dfeb1c5b283ef7a927f2f1c6",
+      "reviewed_delta": "Navigation and new card"
+    },
+    {
+      "route": "/contact/",
+      "before_normalized_sha256": "f86989ad9d4bbbc1e3e16a57d829fdc60c39667846d81b93d4cb698422b98826",
+      "after_normalized_sha256": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49",
+      "reviewed_delta": "Navigation only"
+    }
+  ],
+  "targets": [
+    {
+      "path": "en-gb/index.html",
+      "before_sha256": "6f8765c295e0d78640a627f8cde0ecb33149a0958a3ed964b5d8bd424369ecdc",
+      "after_sha256": "afc8c453fc23df4581fb4805596ee70616f9ec3c9aab8d693d82f9eb3841224c",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "en-gb/about/index.html",
+      "before_sha256": "5dc5932e88e9f74be53b9818bf8a8f6e392de6b3e326d86d1e98a4a09d74aaf1",
+      "after_sha256": "692e441d65300ad4f41ac059483f18b30261ec39a55b4335385f4c71f9c63aee",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "en-gb/projects/index.html",
+      "before_sha256": "165444773a45afb52eacc7683f0f21ba50b4ff7a8ca038bd19d930b545c9c23d",
+      "after_sha256": "499819244f5d742066683c386f4e11c2544410b878c7715e338fb32207ed8921",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "en-gb/contact/index.html",
+      "before_sha256": "9519e2abff3e2a1f383fc6f876f488fbbd12c816395ee725c7aa0c9170f34c3e",
+      "after_sha256": "a561585d6452f47989a335dafcf68b170b6cc0d050a9a7a85106329ee4f656d4",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "es-mx/index.html",
+      "before_sha256": "a42ff1b921525f6cdaadf150734ca19721bd1a410efddd2f86c99f1f42a18d79",
+      "after_sha256": "41564f047ac4c0e434b1171c36c3bc887e70a05f303449b3d334c3872932f902",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "es-mx/about/index.html",
+      "before_sha256": "a0db444d23f7ab47023cbe491feabccb0a468061dd6052451ab2f72acfe46d4d",
+      "after_sha256": "a0db444d23f7ab47023cbe491feabccb0a468061dd6052451ab2f72acfe46d4d",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "es-mx/projects/index.html",
+      "before_sha256": "b42e5872f18b104601a3891f48ae11471e1b99d2c18d750531c855c05c448ead",
+      "after_sha256": "17f35c825af9bcb9b091ba67bd9882113ad3b84d3f25e40412dc44036812525f",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "es-mx/contact/index.html",
+      "before_sha256": "a0459827fe845fc3e0073fec1fa947c16d76f442916feea1b3d63850e80ece3a",
+      "after_sha256": "a0459827fe845fc3e0073fec1fa947c16d76f442916feea1b3d63850e80ece3a",
+      "unrelated_prose": "preserved by exact insertion"
+    },
+    {
+      "path": "i18n/pilot/es-mx/reviewed/projects-index.html",
+      "before_sha256": "d2502aa6d4c14c9610a5f96e1d8554ff13f7fc7b597e2f2372bcc1c969e18b70",
+      "after_sha256": "1fe8249fcd612315fba4907e8cf689bd078af799c509d9b4eb8eaef5b1c625b0",
+      "unrelated_prose": "preserved by exact insertion"
+    }
+  ],
+  "source_unit": "<article class=\"card project-card\">\n<h3>MurderBird: Uncaged</h3>\n<p>Reworked art became motion, an original AI-sung theme, and a science-fair-inspired interactive exhibit. Follow the creative progression and the skills taking shape.</p><div data-project-status-disclosure=\"murderbird-uncaged\"><p data-project-status-brief=\"\">Art, motion, and music; 3D likeness under assessment. Delivery unverified.</p><details><summary>Status and source</summary><!-- AUTOGEN:PROJECT-STATUS --><p data-project-status=\"murderbird-uncaged\"><span data-project-status-text=\"\">Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown.</span> <a href=\"https://github.com/OKHP3/murderbird-uncaged/blob/4b1c726f5d9bbd1ba1048f89049a5b422001c506/README.md\">Source record</a> (reviewed 2026-09-27).</p><!-- /AUTOGEN:PROJECT-STATUS --></details></div>\n<p><a class=\"btn btn-primary\" href=\"/projects/murderbird-uncaged/\">Follow the Project →</a></p>\n</article>",
+  "es_mx_target_unit": "<article class=\"card project-card\">\n<h3>MurderBird: Uncaged</h3>\n<p>El arte reelaborado dio paso al movimiento, a un tema original cantado por IA y a una exhibición interactiva inspirada en una feria de ciencias. Sigue el proceso creativo y las habilidades que van tomando forma.</p><div data-project-status-disclosure=\"murderbird-uncaged\"><p data-project-status-brief=\"\">Arte, movimiento y música; semejanza del modelo 3D en evaluación. Entrega sin verificar.</p><details><summary>Estado y fuente</summary><!-- AUTOGEN:PROJECT-STATUS --><p data-project-status=\"murderbird-uncaged\"><span data-project-status-text=\"\">Disponibilidad: Diario de producción creativa. Madurez: Arte, movimiento y música; semejanza del modelo 3D en evaluación. Evidencia: Relato del creador y registros de producción conservados; aceptación artística de la exhibición pendiente. Entrega: desconocida.</span> <a href=\"https://github.com/OKHP3/murderbird-uncaged/blob/4b1c726f5d9bbd1ba1048f89049a5b422001c506/README.md\">Registro de la fuente (en inglés)</a> (fuente revisada el 2026-09-27).</p><!-- /AUTOGEN:PROJECT-STATUS --></details></div>\n<p><a class=\"btn btn-primary\" href=\"/projects/murderbird-uncaged/\">Sigue el proyecto (en inglés) →</a></p>\n</article>"
+}

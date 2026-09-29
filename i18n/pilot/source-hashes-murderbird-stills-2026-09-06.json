@@ -2,10 +2,21 @@
   "source_revision": "git:eea06d01af978d37cb59113a2aac43ad82aa6a09",
   "review_scope": "Option B presentation and compact hero adaptation; unchanged full source facts, archived copy and draft publication restrictions retained. No human/native approval.",
   "normalized_routes": {
-    "/": "f0e941a2e45b45a5ffde4ccf92901abd3d58140421db3e112f8f18f00d82117d",
-    "/about/": "49159fc4ebe472638c6d92bc4562b2f1e2856dfa1534b9ce3f17077271f43548",
-    "/projects/": "14932f867e0a8a8308ab9f224059a6b0864d76d6beda879537651c9edcb8ad32",
-    "/contact/": "f86989ad9d4bbbc1e3e16a57d829fdc60c39667846d81b93d4cb698422b98826"
+    "/": "3fc297165c94d03ad23bbc65cba094a89d5f432a42cad6d2828811d40e87ac47",
+    "/about/": "dd1046d329eb85d3589ffb9f3183ccf0ba8ae7bb452358b9d71cbfb8a231833e",
+    "/projects/": "f48d60545842ecd1b52de0d465efd05c0f35ccd6dfeb1c5b283ef7a927f2f1c6",
+    "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
+  },
+  "current_release_shell": {
+    "source_revision": "git:31f0309e+working-tree-final-cut-release",
+    "release": "v1.0",
+    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved.",
+    "normalized_routes": {
+      "/": "16aae989d2d73ceb64bad08d8327410162fe3b322466220f28df098b0c6cfbd8",
+      "/about/": "5e9f911c94fa2d7a53a31fbe2186386d268c2707f0074798824815abb33b6ce2",
+      "/projects/": "a7f7978037dda5da75ca3161dcffaf33636d5619f52a453bd831007deebcbf3f",
+      "/contact/": "8c5afdb7e3e7acb7fc36a7f02a1bc019a32133614e3c9781003d42bdfd99b66a"
+    }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",
   "content_wave_update": {
@@ -260,6 +271,19 @@
       }
     ],
     "human_native_approved": false,
+    "release_accepted": false
+  },
+  "murderbird_project_review": {
+    "reviewed_on": "2026-09-27",
+    "source_revision": "172fc23e4e40a49995d0423283f8172c69bdf6f2",
+    "prior_normalized_routes": {
+      "/": "f0e941a2e45b45a5ffde4ccf92901abd3d58140421db3e112f8f18f00d82117d",
+      "/about/": "49159fc4ebe472638c6d92bc4562b2f1e2856dfa1534b9ce3f17077271f43548",
+      "/projects/": "14932f867e0a8a8308ab9f224059a6b0864d76d6beda879537651c9edcb8ad32",
+      "/contact/": "f86989ad9d4bbbc1e3e16a57d829fdc60c39667846d81b93d4cb698422b98826"
+    },
+    "record": "i18n/pilot/murderbird-project-route-review-2026-09-27.json",
+    "native_or_human": false,
     "release_accepted": false
   }
 }

@@ -15,23 +15,7 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
-  # Changes to these reproduction pins require an isolated audio rebuild and
-  # listening review. Preserve the original delivery and record new provenance.
-  - package-ecosystem: pip
-    directory: "/assets/murderbird/production/audio/iron-verdict/source"
-    open-pull-requests-limit: 10
-    schedule:
-      interval: daily
-      time: "08:15"
-      timezone: America/Chicago
-    versioning-strategy: increase
-    cooldown:
-      default-days: 3
-    groups:
-      audio-production-compatible:
-        patterns: ["*"]
-        update-types: [minor, patch]
-
+  # Audio production moved to murderbird-uncaged as a preserved source archive.
   - package-ecosystem: npm
     directory: "/"
     open-pull-requests-limit: 10
