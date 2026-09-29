@@ -294,6 +294,21 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("missing 8-character", asset_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_missing_module_fingerprint_fails_despite_pages_limitations(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module",
+            include_asset_fingerprint=False,
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        module_check = checks["asset /assets/js/mermaid-init.js"]
+        self.assertEqual(module_check["status"], "FAIL")
+        self.assertIn("missing 8-character ?v= fingerprint", module_check["evidence"])
+        self.assertNotIn("asset /assets/js/app.js", checks)
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_changed_asset_response_fails_despite_pages_limitations(self) -> None:
         css_bytes = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
         return_code, report = self.run_live_edge_fixture(
@@ -321,6 +336,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_check = checks["asset /assets/js/app.js"]
         self.assertEqual(asset_check["status"], "FAIL")
         self.assertIn("!= live", asset_check["evidence"])
+        self.assertNotIn("asset /assets/js/mermaid-init.js", checks)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_changed_module_javascript_asset_response_fails_despite_pages_limitations(self) -> None:
@@ -336,6 +352,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_check = checks["asset /assets/js/mermaid-init.js"]
         self.assertEqual(asset_check["status"], "FAIL")
         self.assertIn("!= live", asset_check["evidence"])
+        self.assertNotIn("asset /assets/js/app.js", checks)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_mixed_assets_report_stale_css_as_named_failure(self) -> None:
