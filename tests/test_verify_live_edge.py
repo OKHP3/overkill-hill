@@ -102,14 +102,21 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "content_type": "text/css",
             },
         }
-        selected_kinds = asset_kinds or (asset_kind,)
+        selected_kinds = (asset_kind,) if asset_kinds is None else asset_kinds
         all_kinds = (*selected_kinds, *css_asset_kinds)
         if not selected_kinds or any(kind not in asset_catalog for kind in all_kinds):
             raise ValueError(f"unsupported fixture asset kinds: {selected_kinds}")
-        if stale_asset_kind is not None and stale_asset_kind not in selected_kinds:
-            raise ValueError(f"stale asset kind is not selected: {stale_asset_kind}")
         if css_asset_kinds and "css-fixture" not in selected_kinds:
             raise ValueError("CSS fixture dependencies require the css-fixture asset")
+        if stale_asset_kind is not None and stale_asset_kind not in all_kinds:
+            raise ValueError(f"stale asset kind is not rendered: {stale_asset_kind}")
+        if stale_asset_kind is not None and asset_body is None:
+            raise ValueError("stale_asset_kind requires asset_body")
+        if asset_body is not None and len(all_kinds) > 1 and stale_asset_kind is None:
+            raise ValueError(
+                "stale_asset_kind is required when asset_body is supplied for "
+                "multiple rendered assets"
+            )
         asset_content_types = asset_content_types or {}
         if any(kind not in all_kinds for kind in asset_content_types):
             raise ValueError("content type override is for an unselected asset kind")
@@ -246,6 +253,46 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             ):
                 return_code = verify_live_edge.main()
             return return_code, json.loads(report_path.read_text(encoding="utf-8"))
+
+    def test_mixed_asset_stale_body_requires_explicit_target(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale_asset_kind is required when asset_body is supplied for multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                asset_body=b"stale mixed asset",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale_asset_kind is required when asset_body is supplied for multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kind="css-fixture",
+                css_asset_kinds=("image", "font"),
+                asset_body=b"stale dependency asset",
+            )
+
+    def test_stale_asset_selection_must_match_a_rendered_asset(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"unsupported fixture asset kinds: \(\)",
+        ):
+            self.run_live_edge_fixture(asset_kinds=())
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale asset kind is not rendered: module",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                stale_asset_kind="module",
+                asset_body=b"stale asset",
+            )
+
+        with self.assertRaisesRegex(ValueError, "stale_asset_kind requires asset_body"):
+            self.run_live_edge_fixture(stale_asset_kind="css")
 
     def test_direct_github_pages_limitations_are_partial_not_failures(self) -> None:
         return_code, report = self.run_live_edge_fixture()
@@ -385,6 +432,29 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
         self.assertEqual(checks["asset /assets/js/app.js"]["status"], "FAIL")
         self.assertIn("!= live", checks["asset /assets/js/app.js"]["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
+        image_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / "assets/img/favicons/murderbird-v2-icon-browser-32.png"
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="css-fixture",
+            css_asset_kinds=("image", "font"),
+            stale_asset_kind="image",
+            asset_body=image_bytes + b"\n/* stale image fixture */\n",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png"
+        ]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("!= live", image_check["evidence"])
+        self.assertEqual(checks["asset /assets/fonts/live-edge-fixture.woff2"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/css/live-edge-fixture.css"]["status"], "BLOCKED")
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_wrong_css_content_type_fails_with_explicit_mime_evidence(self) -> None:
