@@ -210,7 +210,7 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
     for mode in ("--dry-run", "--update"):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            valid_article = "<span>Article v0.5: Council-Assisted Scoring</span>"
+            valid_article = "<span>Article v0.7: Replit, the Late Arrival</span>"
             for relative_path in (
                 check_banner.FEATURED_ARTICLE_SOURCE,
                 check_banner.FEATURED_ARTICLE_GENERATED,
