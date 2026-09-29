@@ -259,21 +259,21 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.9",
+        "found v1.0",
     )
     release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)
     check_main_case(
         "stale source partial reports featured route and expected release",
         check_banner.SOURCE_BANNER,
-        f'<a class="site-specials-link" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
+        f'<a class="site-specials-link" data-banner-release="v1.0" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
         stale_source_failure,
     )
     stale_generated_failure = release_failure + (check_banner.FEATURED_ARTICLE_GENERATED,)
     check_main_case(
         "stale generated banner reports featured route and expected release",
         check_banner.FEATURED_ARTICLE_GENERATED,
-        f'<a class="site-specials-link" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
+        f'<a class="site-specials-link" data-banner-release="v1.0" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
         stale_generated_failure,
     )
     for mode in ("--update", "--dry-run"):
