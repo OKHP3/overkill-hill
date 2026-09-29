@@ -33,6 +33,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         *,
         expected_commit: str | None = None,
         manifest_commit: str = "a" * 40,
+        manifest_content_type: str | None = "application/json",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
         include_asset_fingerprint: bool = True,
@@ -154,11 +155,16 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         html = '<!doctype html><meta name="robots" content="{robots}">' + "".join(
             asset["details"]["reference"].format(url=asset["url"]) for asset in assets
         )
+        manifest_headers = (
+            {"content-type": manifest_content_type}
+            if manifest_content_type is not None
+            else {}
+        )
         responses = {
             verify_live_edge.RELEASE_MANIFEST: {
                 "ok": True,
                 "status": 200,
-                "headers": {},
+                "headers": manifest_headers,
                 "body": manifest,
             },
             "/sitemap.xml": {
@@ -316,6 +322,36 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertGreater(report["summary"]["failures"], 0)
         checks = {item["check"]: item for item in report["checks"]}
         self.assertEqual(checks["release manifest"]["status"], "FAIL")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_wrong_release_manifest_content_type_fails_before_json_parsing(self) -> None:
+        for content_type in ("text/html; charset=utf-8", None):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    manifest_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks["release manifest content type"]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn("application/json", content_type_check["evidence"])
+                if content_type is not None:
+                    self.assertIn(content_type, content_type_check["evidence"])
+                else:
+                    self.assertIn("received ''", content_type_check["evidence"])
+                self.assertNotIn("release manifest", checks)
+
+    def test_release_manifest_accepts_parameterized_json_content_type(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            manifest_content_type="application/json; charset=utf-8",
+        )
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest content type"]["status"], "PASS")
+        self.assertEqual(checks["release manifest"]["status"], "PASS")
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_wrong_asset_fingerprint_still_fails(self) -> None:
