@@ -7,6 +7,17 @@
     "/projects/": "f48d60545842ecd1b52de0d465efd05c0f35ccd6dfeb1c5b283ef7a927f2f1c6",
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
+  "current_release_shell": {
+    "source_revision": "git:a2d2e2f7ba9f4cea20986949fd31955cbe77dc57",
+    "release": "v0.7",
+    "scope": "Shared release banner refresh only; reviewed article copy and translation status are unchanged.",
+    "normalized_routes": {
+      "/": "870e0e63deaf1b7752be8df4782c02fef19cb7bee7fdd22cc117681bdd5b182c",
+      "/about/": "7ea8359a8e858921ba59f63e91056f67664e947a36cd827fef21a36e4823063a",
+      "/projects/": "b686c8b749f6132702b90eaa5558e6540b7200759b9bc9f0b150a57ad586115a",
+      "/contact/": "c70a887491997ae3ff25bc55fc48048230cf7c2ffe0afc7db1d11a06c41d5042"
+    }
+  },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",
   "content_wave_update": {
     "source_revision": "a2f5f9196fd8e9bef6deeb039804882c40f17413",

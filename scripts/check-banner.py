@@ -30,12 +30,21 @@ FEATURED_ARTICLE_GENERATED = "writings/first-diagram-is-a-liar/index.html"
 SOURCE_BANNER = "assets/partials/header.html"
 
 CANONICAL_BANNER = (
-    "v0.5 is live: the Council of AIs scored each other, every model was harder"
-    " on itself than the architect was. Read it \u2192"
+    "v0.7 is live: Replit arrived late, but it's where I'd build a custom"
+    " Mermaid app today. Read it \u2192"
 )
 
 # Known prior versions — used for detection only, never written.
 OLD_BANNERS = [
+    # previous canonical version
+    (
+        "v0.6 is live: Notion kept the Council's memory, while the models made their"
+        " diagrams. Read it \u2192"
+    ),
+    (
+        "v0.5 is live: the Council of AIs scored each other, every model was harder"
+        " on itself than the architect was. Read it \u2192"
+    ),
     # em-dash version (original)
     (
         "v0.5 is live: the Council of AIs scored each other \u2014 every model was harder"
@@ -52,7 +61,7 @@ ALLOWED_OTHER_PATTERNS = [
 ]
 # ─────────────────────────────────────────────────────────────────────────────
 
-SKIP_DIRS = {"_replit", ".git", "node_modules", "dist"}
+SKIP_DIRS = {"_replit", ".git", ".local", "node_modules", "dist"}
 
 # Matches whitespace-normalised content of a .site-specials-link anchor.
 # The banner text may be indented / wrapped across lines in the source.

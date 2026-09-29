@@ -158,7 +158,7 @@ def check_update_is_atomic() -> None:
         source_banner.parent.mkdir(parents=True, exist_ok=True)
         source_banner.write_text(
             f'<a class="site-specials-link" href="{featured}">'
-            f"{check_banner.OLD_BANNERS[0]}</a>",
+            f"{check_banner.OLD_BANNERS[1]}</a>",
             encoding="utf-8",
         )
         later_page = root / "later.html"
@@ -207,10 +207,11 @@ def check_update_is_atomic() -> None:
 
 
 def check_update_and_dry_run_preserve_repair_behavior() -> None:
+    repair_target = "v0.6 is live: refreshed copy →"
     for mode in ("--dry-run", "--update"):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            valid_article = "<span>Article v0.5: Council-Assisted Scoring</span>"
+            valid_article = "<span>Article v0.6: Council-Assisted Scoring</span>"
             for relative_path in (
                 check_banner.FEATURED_ARTICLE_SOURCE,
                 check_banner.FEATURED_ARTICLE_GENERATED,
@@ -231,6 +232,7 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
             output = StringIO()
             with (
                 patch.object(check_banner, "__file__", str(root / "scripts/check-banner.py")),
+                patch.object(check_banner, "CANONICAL_BANNER", repair_target),
                 patch("sys.argv", ["check-banner.py", mode]),
                 redirect_stdout(output),
             ):
@@ -244,7 +246,7 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
                 if "[dry-run] would fix" not in report:
                     raise AssertionError(f"dry-run omitted repair preview: {report}")
             else:
-                if check_banner.CANONICAL_BANNER not in after:
+                if repair_target not in after:
                     raise AssertionError("update did not apply the canonical banner")
                 if check_banner.OLD_BANNERS[0] in after:
                     raise AssertionError("update left the old banner in place")
@@ -257,8 +259,9 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.5",
+        "found v0.7",
     )
+    release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)
     check_main_case(
         "stale source partial reports featured route and expected release",
@@ -282,8 +285,8 @@ def main() -> int:
                 f"{mode} preserves {label} release drift",
                 banner_path,
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[0]}</a>",
-                release_failure + (banner_path,),
+                f"{check_banner.OLD_BANNERS[1]}</a>",
+                release_drift_failure + (banner_path,),
                 mode=mode,
                 expect_files_unchanged=True,
             )

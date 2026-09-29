@@ -423,6 +423,23 @@ def build_es_mx(source: str, canonical: str, route: str, dictionary: dict) -> st
     page = re.sub(r'<link\b[^>]*https://fonts\.(?:googleapis|gstatic)\.com[^>]*>', '', page, flags=re.I)
     if '/assets/css/theme.css' not in page:
         raise SystemExit('Locale page is missing the canonical font stylesheet')
+    # The release banner is shared shell content, not part of the preserved
+    # translated article copy. Keep draft shells aligned with the current
+    # production es-MX banner without rewriting their reviewed source files.
+    locale_route = ROOT / 'es-mx' / ROUTES[route]
+    if locale_route.exists():
+        current_locale = locale_route.read_text(encoding='utf-8')
+        current_banner = re.search(
+            r'<section\b[^>]*class="site-specials site-specials--okh"[^>]*>.*?</section>',
+            current_locale,
+            flags=re.S,
+        )
+        if current_banner:
+            banner_pattern = r'<section\b[^>]*class="site-specials site-specials--okh"[^>]*>.*?</section>'
+            if re.search(banner_pattern, page, flags=re.S):
+                page = re.sub(banner_pattern, current_banner.group(0), page, count=1, flags=re.S)
+            else:
+                page = page.replace('</header>', current_banner.group(0) + '</header>', 1)
     if 'class="site-specials site-specials--okh"' not in page:
         notice = (
             '<section aria-label="Actualización de la fragua" class="site-specials site-specials--okh">'
