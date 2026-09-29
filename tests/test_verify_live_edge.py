@@ -41,7 +41,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_kinds: tuple[str, ...] | None = None,
         stale_asset_kind: str | None = None,
         asset_content_type: str | None = None,
-        asset_content_types: dict[str, str] | None = None,
+        asset_content_types: dict[str, str | None] | None = None,
         asset_body: bytes | None = None,
         sitemap_content_type: str | None = "application/xml",
         search_index_content_type: str | None = "application/json",
@@ -205,13 +205,13 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             },
         }
         for asset in all_assets:
+            asset_headers = {"cache-control": "max-age=31536000, immutable"}
+            if asset["details"]["content_type"] is not None:
+                asset_headers["content-type"] = asset["details"]["content_type"]
             responses[asset["url"]] = {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": asset["details"]["content_type"],
-                    "cache-control": "max-age=31536000, immutable",
-                },
+                "headers": asset_headers,
                 "body": (
                     asset_body
                     if asset_body is not None
@@ -622,6 +622,26 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/html", content_type_check["evidence"])
         self.assertIn("image/png", content_type_check["evidence"])
 
+    def test_missing_html_discovered_image_and_font_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("image", "font"),
+            asset_content_types={"image": None, "font": None},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png content type"
+        ]
+        font_check = checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("received ''", image_check["evidence"])
+        self.assertIn("image/png", image_check["evidence"])
+        self.assertEqual(font_check["status"], "FAIL")
+        self.assertIn("received ''", font_check["evidence"])
+        self.assertIn("font/woff2", font_check["evidence"])
+
     def test_unfingerprinted_image_still_reports_wrong_content_type(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             asset_kind="image",
@@ -671,6 +691,27 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertEqual(font_check["status"], "FAIL")
         self.assertIn("text/html", image_check["evidence"])
         self.assertIn("text/plain", font_check["evidence"])
+
+    def test_missing_css_discovered_image_and_font_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="css-fixture",
+            css_asset_kinds=("image", "font"),
+            asset_content_types={"image": None, "font": None},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png content type"
+        ]
+        font_check = checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("received ''", image_check["evidence"])
+        self.assertIn("image/png", image_check["evidence"])
+        self.assertEqual(font_check["status"], "FAIL")
+        self.assertIn("received ''", font_check["evidence"])
+        self.assertIn("font/woff2", font_check["evidence"])
 
     def test_image_and_font_content_types_with_parameters_are_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
