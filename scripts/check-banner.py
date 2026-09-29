@@ -30,8 +30,7 @@ FEATURED_ARTICLE_GENERATED = "writings/first-diagram-is-a-liar/index.html"
 SOURCE_BANNER = "assets/partials/header.html"
 
 CANONICAL_BANNER = (
-    "v0.9 is live: the BPMN renderer grew into 15 Agent Skills for capturing the"
-    " process behind the boxes. Read it \u2192"
+    'The Final Cut is live: read the complete story or explore Diagram Truth, the interactive guide to more honest diagrams. Read or explore →'
 )
 
 # Known prior versions — used for detection only, never written.
@@ -67,7 +66,8 @@ ALLOWED_OTHER_PATTERNS = [
 ]
 # ─────────────────────────────────────────────────────────────────────────────
 
-SKIP_DIRS = {"_replit", ".git", ".local", "node_modules", "dist"}
+# Translation review snapshots preserve their historical release copy.
+SKIP_DIRS = {"_replit", ".git", ".local", "node_modules", "dist", "i18n"}
 
 # Matches whitespace-normalised content of a .site-specials-link anchor.
 # The banner text may be indented / wrapped across lines in the source.

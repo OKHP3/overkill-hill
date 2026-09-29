@@ -91,66 +91,34 @@ python3 scripts/build-search-index.py --check  # verify generated search data is
 Foundation synchronization remains a separate, owner-reviewed workflow. See
 `scripts/README.md` before using `scripts/sync-foundation-files.py`.
 
-## Current Feature: Article — The First Diagram Is Usually a Liar
+## Current Feature: Article - The First Diagram Is Usually a Liar
 
 Path: `/writings/first-diagram-is-a-liar/`
 
-**Version:** v0.5 — The Council Scores the Field (2026-05-24)
-
-### Article Sections
-- `#visual-edition` — v0.3 Visual Edition overview (deck framing, scoring bracket, what v0.3 adds)
-- `#poll-schedule` — 9-row poll schedule table (Apr 21 through v0.4)
-- `#scoring-model` — 3-lane scoring grid (Audience / Architect / Council)
-- `#pivot` — From Drawing to Modeling (intro)
-- `#roy` — ROY: Return on Your Words
-- `#what-mermaid-actually-is` — What a Mermaid diagram actually is
-- `#mermaid-syntax-vs-platform` — Mermaid vs Mermaid.ai distinction
-- `#one-that-should-have-won` — Mermaid.ai premature rendering analysis
-- `#council-origin` — v0.4: Why I Built a Council of AIs (added Task #15)
-- `#council` — Council of AIs (scorecard table + roles)
-- `#why-one-model` — Why One Model Is Not Enough ← NEW in v0.4
-- `#crude-manual-process` — The Crude Manual Process (fan out / compare / adjudicate / synthesize) ← NEW in v0.4
-- `#co-opetition` — Co-opetition and What the Platforms Are Now Building ← NEW in v0.4
-- `#council-seats` — Why Each Seat Existed ← NEW in v0.4
-- `#council-synthesis` — What the Council Produced That a Single Model Could Not ← NEW in v0.4
-- `#round1` — Round 1: Copilot
-- `#round2` — Round 2: Claude
-- `#prompts` — Prompts in the Wild
-- `#v1-diagrams` — V1 First-Pass diagram gallery (7 cards, confirmed Mermaid.ai links)
-- `#v2-diagrams` — V2 Revised diagram gallery (8 cards, confirmed Mermaid.ai links)
-- `#v03-deck` — Download deck (Square + Wide, PDF + PPTX)
-- `#v03-field-guide` — Heat guide cards (links to 4 static heat guide pages)
-- `#council-scoring` — The Council Scores the Field ← NEW in v0.5
-- `#model-interviews` — The Models Interview Themselves ← NEW in v0.5
-- `#artifacts` — Launch Artifacts (LinkedIn artifact cards)
-- `#thesis` — Thesis
-
-### v0.3 Heat Guide Pages
-- `/writings/first-diagram-is-a-liar/v03/v1-heat-a/` — ChatGPT, Claude, Gemini, Perplexity (V1)
-- `/writings/first-diagram-is-a-liar/v03/v1-heat-b/` — Copilot, Notion, Replit (V1)
-- `/writings/first-diagram-is-a-liar/v03/v2-heat-a/` — ChatGPT, Copilot, Gemini, Notion (V2)
-- `/writings/first-diagram-is-a-liar/v03/v2-heat-b/` — ChatGPT Pro, Claude, Replit, Perplexity (V2)
-
-All 15 confirmed Mermaid.ai diagram links are real (no placeholders). Poll URLs are TODO placeholders (not yet published on LinkedIn). v0.4 added ~700 words of new prose across 5 sections; v0.5 adds #council-scoring and #model-interviews. Refresh the generated search index after searchable content changes and verify it with `build-search-index.py --check`.
-
-### Sidebar Widgets
-
-1. **Start Now** — CTA button linking to the live GitHub Pages tool
-2. **Project Info** — meta card: Status, Build Phase, License, Type, Cost, Maintained by, Mermaid.js compat (v11.16.0); GitHub links (View, Issues, Contribute)
-3. **Related Resources** — live app (Compose tab), GitHub repo, BPMN for Mermaid, Mermaid.js theming docs, themeVariables reference, FDIAL article, all projects
+The Final Cut is the unified long-form article. Its production source is
+`site-src/pages/writings/first-diagram-is-a-liar/index.main.html`.
+`/projects/diagram-truth/` is the companion project doorway to the interactive
+tutorial. The article preserves historical campaign anchors, original V1/V2
+galleries, four heat guides, the deck, and LinkedIn publication records in an
+explicit historical evidence appendix. Historical release labels are archive
+context; `Article v1.0` is the current banner consistency marker.
 
 ## Site-Wide Banner
-All 19 non-article pages + the article page itself have a site-wide "HOT OFF THE FORGE" banner.
-- **Non-article pages (19):** Link to `/writings/first-diagram-is-a-liar/#council-scoring`, text: "v0.5 is live: the Council of AIs scored each other, every model was harder on itself than the architect was. Read it →"
-- **Article page:** Links to `#council-scoring`, text: "v0.5 is live: the Council of AIs scored each other, every model was harder on itself than the architect was. Read it →"
 
-**Canonical text lives in one place:** `scripts/check-banner.py` (top of file, `CANONICAL_BANNER`). To change the wording, update that constant and run:
-```
-python3 scripts/check-banner.py --update   # propagates to all HTML files
-python3 scripts/check-banner.py            # verify (exits 1 on any mismatch)
-```
+The current announcement is: "The Final Cut is live: read the complete story
+or explore Diagram Truth, the interactive guide to more honest diagrams.
+Read or explore →"
 
-**Automatic enforcement:** `scripts/check-banner.py` is called by `scripts/validate-site.py` as part of the standard site audit. Any banner mismatch causes the validation run to exit non-zero, the same way other checks do.
+The canonical text is `CANONICAL_BANNER` in `scripts/check-banner.py`.
+The header partial at `assets/partials/header.html` renders the English site.
+All current announcement links target the article's `#read-or-interact`
+entry point and carry `data-banner-release="v1.0"`. Existing locale pages
+use the same English announcement with `lang="en-US"` on the link; their
+surrounding navigation, labels, indexing boundaries, and translation status
+are unchanged. Historical reviewed translation snapshots are retained.
+
+Refresh generated pages and search data through `scripts/build-search-index.py`
+after editing the authoring source. Banner checks run in the existing CI gate.
 
 ## Validation
 

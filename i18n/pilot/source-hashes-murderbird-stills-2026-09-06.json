@@ -8,14 +8,14 @@
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
   "current_release_shell": {
-    "source_revision": "git:679e58db+working-tree-diagram-truth-navigation",
-    "release": "v0.9",
-    "scope": "Shared English Projects menu adds Diagram Truth. The es-MX noindex draft catalog changes its older diagram card to the writing link. Other regional copy and publication status remain unchanged.",
+    "source_revision": "git:31f0309e+working-tree-final-cut-release",
+    "release": "v1.0",
+    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved.",
     "normalized_routes": {
-      "/": "cc4b3ec3c6ad5c8024a81df4c2cea3f72e956b5786eee3b0b72872b920c58a61",
-      "/about/": "33e87862a81c058ab5f205f2b5e626f5d20afaad301333802787943e31228bf3",
-      "/projects/": "41944ef00030358f7e871fde20df86c70462a0eb0be5d473a810298340900ae8",
-      "/contact/": "1e207c8dc9f506880a6cb3202bec23f8da1b42c3937e382e62b65a6a9bce9409"
+      "/": "16aae989d2d73ceb64bad08d8327410162fe3b322466220f28df098b0c6cfbd8",
+      "/about/": "5e9f911c94fa2d7a53a31fbe2186386d268c2707f0074798824815abb33b6ce2",
+      "/projects/": "a7f7978037dda5da75ca3161dcffaf33636d5619f52a453bd831007deebcbf3f",
+      "/contact/": "8c5afdb7e3e7acb7fc36a7f02a1bc019a32133614e3c9781003d42bdfd99b66a"
     }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",
