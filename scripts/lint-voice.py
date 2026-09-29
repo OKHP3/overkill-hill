@@ -37,9 +37,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# Locale drafts use their pair-specific editorial profile. Keep them out of
-# the English voice baseline until a release workflow explicitly promotes one.
-SKIP_DIRS = {"_replit", ".local", ".git", ".pr-head", ".ci", "node_modules", "attached_assets", "dist", "templates", ".agents", "site-src", "en-gb", "es-mx"}
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from public_page_boundary import iter_public_html_files
+
+# These maintained locale routes use pair-specific editorial profiles rather
+# than the en-US voice baseline. All other eligibility comes from the shared
+# published-page boundary.
+VOICE_EXCLUDED_LOCALES = frozenset({"en-gb", "es-mx"})
 
 
 @dataclass(frozen=True)
@@ -172,18 +179,13 @@ PASSIVE_RE = re.compile(
 PASSIVE_PER_LINE_THRESHOLD = 2  # flag a line with this many passive hits
 
 
-def find_html_files() -> list[Path]:
-    files: list[Path] = []
-    for path in ROOT.rglob("*.html"):
-        rel = path.relative_to(ROOT)
-        parts = set(rel.parts)
-        if parts & SKIP_DIRS:
-            continue
-        rel_posix = rel.as_posix()
-        if rel_posix.startswith(("assets/templates/", "assets/partials/")):
-            continue
-        files.append(path)
-    return sorted(files)
+def find_html_files(root: Path | None = None) -> list[Path]:
+    scan_root = Path(root) if root is not None else ROOT
+    return sorted(
+        path
+        for path in iter_public_html_files(scan_root)
+        if not (set(path.relative_to(scan_root).parts) & VOICE_EXCLUDED_LOCALES)
+    )
 
 
 def strip_tags(text: str) -> str:

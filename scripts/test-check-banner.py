@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -17,6 +19,14 @@ if SPEC is None or SPEC.loader is None:
     raise SystemExit("Unable to load scripts/check-banner.py")
 check_banner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(check_banner)
+
+BUILD_SITE_SPEC = importlib.util.spec_from_file_location(
+    "build_site", ROOT / "scripts" / "build-site.py"
+)
+if BUILD_SITE_SPEC is None or BUILD_SITE_SPEC.loader is None:
+    raise SystemExit("Unable to load scripts/build-site.py")
+build_site = importlib.util.module_from_spec(BUILD_SITE_SPEC)
+BUILD_SITE_SPEC.loader.exec_module(build_site)
 
 
 def check_case(
@@ -252,6 +262,61 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
                     raise AssertionError("update left the old banner in place")
 
 
+def check_generated_build_blocks_release_disagreement() -> None:
+    for check in (False, True):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / check_banner.FEATURED_ARTICLE_SOURCE
+            source_path.parent.mkdir(parents=True, exist_ok=True)
+            source_content = "<span>Article v0.6: Source release</span>"
+            source_path.write_text(source_content, encoding="utf-8")
+
+            generated_path = root / check_banner.FEATURED_ARTICLE_GENERATED
+            generated_path.parent.mkdir(parents=True, exist_ok=True)
+            previous_output = "<span>Article v0.5: Previously generated release</span>"
+            generated_path.write_text(previous_output, encoding="utf-8")
+            manifest = root / "site-src" / "pages.json"
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(
+                json.dumps({"pages": [{"path": check_banner.FEATURED_ARTICLE_GENERATED}]}),
+                encoding="utf-8",
+            )
+
+            namespace = build_site.build.__globals__
+            with (
+                patch.dict(
+                    namespace,
+                    {
+                        "ROOT": root,
+                        "MANIFEST": manifest,
+                        "SITEMAP": root / "sitemap.xml",
+                        "policies": lambda: ({}, lambda _path: "document"),
+                        "render_page": lambda *_args: (
+                            "<span>Article v0.7: Newly rendered release</span>"
+                        ),
+                    },
+                ),
+                patch.object(
+                    namespace["subprocess"],
+                    "run",
+                    return_value=SimpleNamespace(returncode=0),
+                ),
+            ):
+                result = build_site.build(check=check)
+
+            mode = "--check" if check else "generation"
+            if result != 1:
+                raise AssertionError(
+                    f"build-site {mode} accepted source/generated release disagreement: {result}"
+                )
+            if source_path.read_text(encoding="utf-8") != source_content:
+                raise AssertionError(f"build-site {mode} changed source release evidence")
+            if generated_path.read_text(encoding="utf-8") != previous_output:
+                raise AssertionError(
+                    f"build-site {mode} overwrote generated release evidence after parity failed"
+                )
+
+
 def main() -> int:
     featured = "/writings/first-diagram-is-a-liar/#council-scoring"
     stale_release = "v0.6"
@@ -406,6 +471,7 @@ def main() -> int:
     )
     check_update_and_dry_run_preserve_repair_behavior()
     check_update_is_atomic()
+    check_generated_build_blocks_release_disagreement()
     print("check-banner localized regression checks passed")
     return 0
 

@@ -34,7 +34,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, is_public_page_path
+from public_page_boundary import iter_public_html_files, is_public_page_path
 
 PROJECT_STATUS = runpy.run_path(str(ROOT / "scripts/project-status.py"))
 OUT = ROOT / "assets" / "data" / "search-index.json"
@@ -44,7 +44,6 @@ SKIP_FILES = {
     "404.html",
     "under-construction.html",
 }
-SKIP_DIR_PARTS = set(PUBLIC_PAGE_EXCLUDED_DIRS)
 
 CATEGORY_RULES = [
     ("/writings/first-diagram-is-a-liar/v03/", "Field Guide"),
@@ -75,9 +74,7 @@ def categorise(url_path: str) -> str:
 def iter_html_files(scan_root: Path | None = None):
     """Yield index candidates inside the shared published-page boundary."""
     scan_root = Path(scan_root) if scan_root is not None else ROOT
-    for path in sorted(scan_root.rglob("*.html")):
-        if is_public_page_path(path, ROOT):
-            yield path
+    yield from iter_public_html_files(scan_root)
 
 
 class TextExtractor(HTMLParser):
@@ -458,8 +455,7 @@ def process_file(path: Path, locale: str = "") -> list[dict]:
     rel = path.relative_to(ROOT).as_posix()
     if path.name in SKIP_FILES:
         return []
-    parts = set(path.relative_to(ROOT).parts)
-    if parts & SKIP_DIR_PARTS:
+    if not is_public_page_path(path, ROOT):
         return []
 
     html = path.read_text(encoding="utf-8", errors="replace")

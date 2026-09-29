@@ -35,10 +35,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, iter_public_html_files
+from public_page_boundary import iter_public_html_files
 
-# Link reports intentionally cover site pages, not the asset tree.
-SKIP_DIRS = set(PUBLIC_PAGE_EXCLUDED_DIRS) | {"assets"}
+# Link reports intentionally cover site pages, not the asset tree. All other
+# directory eligibility comes from the shared published-page boundary.
+SKIP_DIRS = {"assets"}
 SITE = "https://overkillhill.com"
 REPORT_DATE = date.today().isoformat()
 ARTICLE_ARCHIVE_PAGE = (

@@ -19,14 +19,20 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup, NavigableString
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from public_page_boundary import is_public_page_path
+
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_STATUS = runpy.run_path(str(ROOT / "scripts/project-status.py"))
 SRC = ROOT / "site-src"
 PARTIALS = ROOT / "assets" / "partials"
 MANIFEST = SRC / "pages.json"
 SITEMAP = ROOT / "sitemap.xml"
+BANNER_CHECKER = Path(__file__).resolve().with_name("check-banner.py")
 SITE_ORIGIN = "https://overkillhill.com"
-EXCLUDED = ("assets/", ".agents/", ".local/", "node_modules/", "site-src/")
 APP_RE = re.compile(r"/assets/js/app\.js(?:\?[^\"']*)?")
 # The French pilot only covers these four routes. The shared header must not
 # grow a language switcher on any other English page.
@@ -113,13 +119,20 @@ ORGANIZATION_JSONLD = {
 
 
 def tracked_pages() -> list[Path]:
+    """Return tracked public pages that belong to the site-source bootstrap.
+
+    Embedded HTML under assets is public runtime content in some cases, but it
+    is not an editorial page for this generator, so this command keeps its
+    additional assets exclusion after applying the shared page boundary.
+    """
     result = subprocess.run(
         ["git", "ls-files", "*.html"], cwd=ROOT, check=True,
         capture_output=True, text=True,
     )
     return sorted(
         ROOT / name for name in result.stdout.splitlines()
-        if not name.startswith(EXCLUDED)
+        if not name.startswith("assets/")
+        and is_public_page_path(ROOT / name, ROOT)
     )
 
 
@@ -583,6 +596,55 @@ def render_sitemap(pages: list[dict], raw: str) -> str:
     )
 
 
+def featured_release_parity_errors(rendered_pages: dict[str, str]) -> list[str]:
+    """Validate source and newly rendered featured-article release labels."""
+    checker = runpy.run_path(str(BANNER_CHECKER))
+    source_path = checker["FEATURED_ARTICLE_SOURCE"]
+    generated_path = checker["FEATURED_ARTICLE_GENERATED"]
+    source_release, source_error = checker["_featured_article_release"](
+        str(ROOT), source_path
+    )
+
+    generated_content = rendered_pages.get(generated_path)
+    if generated_content is None:
+        generated_release = None
+        generated_error = (
+            f"current featured article release is unavailable for "
+            f"{checker['FEATURED_ARTICLE_ROUTE']}: {generated_path} was not "
+            "rendered from the page manifest"
+        )
+    else:
+        releases = [
+            release.lower()
+            for release in checker["_ARTICLE_RELEASE_RE"].findall(generated_content)
+        ]
+        if len(releases) != 1:
+            generated_release = None
+            generated_error = (
+                f"current featured article release is missing or ambiguous for "
+                f"{checker['FEATURED_ARTICLE_ROUTE']}: expected exactly one "
+                f'"Article vN.N" label in {generated_path}'
+            )
+        else:
+            generated_release = releases[0]
+            generated_error = None
+
+    errors = []
+    if source_error:
+        errors.append(source_error)
+    if generated_error:
+        errors.append(generated_error)
+    if errors:
+        return errors
+    if source_release != generated_release:
+        errors.append(
+            f"featured article release disagreement for "
+            f"{checker['FEATURED_ARTICLE_ROUTE']}: {source_path} has "
+            f"{source_release}, but {generated_path} has {generated_release}"
+        )
+    return errors
+
+
 def build(check: bool) -> int:
     theme_generator = ROOT / "scripts" / "generate-theme-controls.py"
     theme_command = [sys.executable, str(theme_generator)]
@@ -598,14 +660,27 @@ def build(check: bool) -> int:
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     csp_policies, classify = policies()
     failures = []
+    rendered_pages = {}
     for page in data["pages"]:
         output = ROOT / page["path"]
         rendered = render_page(page, csp_policies, classify)
+        rendered_pages[page["path"]] = rendered
         if check:
             if not output.exists() or output.read_text(encoding="utf-8") != rendered:
                 failures.append(page["path"])
-        else:
-            output.write_text(rendered, encoding="utf-8")
+
+    parity_errors = featured_release_parity_errors(rendered_pages)
+    if parity_errors:
+        print("Featured article release parity failed:", file=sys.stderr)
+        for error in parity_errors:
+            print(f"  {error}", file=sys.stderr)
+        print(
+            "Generated HTML was not written; source and generated evidence were preserved.",
+            file=sys.stderr,
+        )
+        return 1
+
+    rendered_sitemap = None
     if SITEMAP.exists():
         sitemap_raw = SITEMAP.read_text(encoding="utf-8")
         rendered_sitemap = render_sitemap(data["pages"], sitemap_raw)
@@ -619,6 +694,13 @@ def build(check: bool) -> int:
         print("\n".join(f"  {path}" for path in failures))
         print("Run: python3 scripts/build-site.py")
         return 1
+
+    if not check:
+        for relative_path, rendered in rendered_pages.items():
+            (ROOT / relative_path).write_text(rendered, encoding="utf-8")
+        if rendered_sitemap is not None:
+            SITEMAP.write_text(rendered_sitemap, encoding="utf-8")
+
     print(f"Generated HTML verified for {len(data['pages'])} pages." if check
           else f"Generated {len(data['pages'])} static HTML pages.")
     return 0

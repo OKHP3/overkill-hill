@@ -47,6 +47,8 @@ def is_public_page_path(path: Path, root: Path) -> bool:
         relative = Path(path).relative_to(Path(root))
     except ValueError:
         return False
+    if ".." in relative.parts:
+        return False
     return not any(part in PUBLIC_PAGE_EXCLUDED_DIRS for part in relative.parts)
 
 
