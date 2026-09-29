@@ -1,8 +1,8 @@
 {
   "reviewed_on": "2026-09-29",
   "source_route": "/projects/",
-  "source_sha256_normalized": "b00f38d6ce1365f0fa92c9dc776f4077461e196b7a345b3e2d0ec15eefe80b09",
-  "scope": "Replace the retired First Diagram project card with Diagram Truth in the two noindex regional draft catalogs. Preserve the separate writing card and all other project descriptions.",
+  "source_sha256_normalized": "41944ef00030358f7e871fde20df86c70462a0eb0be5d473a810298340900ae8",
+  "scope": "The Diagram Truth project card remains paired with the separate writing card in both noindex regional draft catalogs. The es-MX writing card now links to the canonical article. The shared English Projects menu now links to Diagram Truth.",
   "status": "ai-reviewed-draft",
   "digest_basis": "committed Git blob bytes, before platform checkout newline conversion",
   "human_native_approved": false,
@@ -16,9 +16,9 @@
     {
       "locale": "es-mx",
       "path": "es-mx/projects/index.html",
-      "sha256": "1d63b49164be414ef9738932c55ec78b406cd58b64a400488c8ddb6bc5b93ed9",
+      "sha256": "bf66159ac2a4c289b8cddafe900e1c54c352e83d1da59585e121b94cee663d8c",
       "reviewed_input": "i18n/pilot/es-mx/reviewed/projects-index.html",
-      "reviewed_input_sha256": "d51ffcbb26941561bd25ca9eda0111158302cdde3c78132f51524dfe6ba8414c"
+      "reviewed_input_sha256": "8853a6e028c652a4e60b2b5af72d005eca6f616e1720fd06a1f2ece4fbe32e1e"
     }
   ]
 }
