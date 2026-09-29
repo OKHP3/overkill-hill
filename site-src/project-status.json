@@ -67,7 +67,7 @@
       "kind": "detail",
       "availability": "Published project page",
       "maturity": "Interactive tutorial and evidence archive",
-      "reviewed": "2026-09-07",
+      "reviewed": "2026-09-29",
       "shelf": true,
       "shelf_exception": null,
       "evidence": {
@@ -75,8 +75,8 @@
         "summary": "Source description only.",
         "source": "site-src/pages/projects/diagram-truth/index.main.html",
         "delivery": "unknown",
-        "revision": "98922aebf71d90b2b18ecc34c8b00a041fff51c7",
-        "url": "https://github.com/OKHP3/OverKill-Hill/blob/98922aebf71d90b2b18ecc34c8b00a041fff51c7/projects/first-diagram-is-a-liar/index.html"
+        "revision": "35ab169efb7965eaf7c0662c1069f08e41a4c277",
+        "url": "https://github.com/OKHP3/overkill-hill/blob/35ab169efb7965eaf7c0662c1069f08e41a4c277/site-src/pages/projects/diagram-truth/index.main.html"
       }
     },
     {
