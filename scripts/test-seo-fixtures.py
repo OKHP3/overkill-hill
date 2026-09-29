@@ -830,7 +830,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL',
+                    '"description": "The Final Cut: a practical case study of AI diagrams, structured disagreement',
                     mutated_raw,
                 )
                 self.assertEqual(
@@ -878,7 +878,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL',
+            '"description": "The Final Cut: a practical case study of AI diagrams, structured disagreement',
             mutated_raw,
         )
         self.assertEqual(
@@ -948,7 +948,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL',
+                    '"description": "The Final Cut: a practical case study of AI diagrams, structured disagreement',
                     mutated_raw,
                 )
                 mutated_page = copy.deepcopy(page)
@@ -1035,7 +1035,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL',
+            '"description": "The Final Cut: a practical case study of AI diagrams, structured disagreement',
             mutated_raw,
         )
         self.assertEqual(
