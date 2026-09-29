@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- ========================================
+       METADATA: Core Document & Character Set
+       ======================================== -->
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="strict-origin-when-cross-origin" name="referrer"/><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.googletagmanager.com 'sha256-2NPQY0ewseycVRsC+HHUhYLy0axbXFwhzfvpOSU+nIw=' 'sha256-2QjV4hS3vpfycuAWFdWEHoAqsQ5TxYB9g7sU/8Lt5w8=' 'sha256-3Cackdtp7Do2OrDkhZ8HQxibdFsvQhw0sUCB/9aSLkI=' 'sha256-3e+uz8JyUVREayOofGtT7xzNexRt5TCg6RldkSFGZwk=' 'sha256-4rs1GhG4jH6g9YTwg6mvRmmHv7bjyUH7GvZnMekLv8k=' 'sha256-6qQFrumK+MBJP2jBD5/c2oyyWQl9kmfvYhkrAHbwAQI=' 'sha256-7//FvIo12Na/Gl24V5LF1JFIQrbnz6eFUWZuNysAJ98=' 'sha256-7xDjo2X53t3p3w5O/66XkJRrLrYP4BolkoKOjhBaQ18=' 'sha256-9+gDIB/FoOZbtN1NX7WLQUlPsi9h3u6HN1J0LVyv/44=' 'sha256-AA2PW7k11qt91Zc8yW1+ZfayiKhkDFCQsf15o1P30IQ=' 'sha256-AoOtS/Oy98lq33Bzi2Ql2ULsxM3fbrxb09xvuAGMkWw=' 'sha256-JMyr3Pxl9VQui6820YcOMyUBWroXCUutuhfps8+ZWhI=' 'sha256-JSwcPjWGXDAYaTZGfCB+6cpd0/AW82XCWneB7fLvyJo=' 'sha256-JcnFHpoLBroEu/WlUr4fHL8SRGYk/fKHdvVqQ5H0kSM=' 'sha256-KPE5ui6CfQFY1vcShV5JQqG/wFuo8fkRFVxhoOlZo8A=' 'sha256-OAONgQjqD0jx821ebrSh+nheLk0gXXQQQ/9iqNKQm80=' 'sha256-Onl0f/cB5mLfyrrQukG9H6HRVimBA+jiu8yf0axtdB4=' 'sha256-Tas+0h0CkkBgZYJbPhHpNPO3V3PfPz8NXZJSp/H7xKY=' 'sha256-WSDkVylC2ryMql5mrf9gYiOpx45jep9Nmq96Yi2igzM=' 'sha256-WwnnOCDpTxPsK2RDrm6unyMaoiIBSRhanv1aPVlHyRc=' 'sha256-ZCip9CRySfoKaD5D2GhNFISP5pMJCXca5ESTFC14RuQ=' 'sha256-eoZKPPj7R1opAA3EaZUGTmO56gm1hhyiyo8phdpFl9c=' 'sha256-ifPtde5wXsLugO5t9IqZOGJUJMDQhWM+R63RDPpO6uA=' 'sha256-l/PdTy5HWMe1nzt7m5liItsDDozCwJs4PXnNtMfVw8Q=' 'sha256-lF+ti2jwAVkclmfUfadvnIPEVg5xCxth9S+VP6+XGqw=' 'sha256-mp6lyUlmS9p/vWjep6wkQJYFgohVN7+KFcLvsnyQgIY=' 'sha256-qDWB71RYIA02Hd/sFOMLdLZJXtDS5WYQ0qQGy05T3q8=' 'sha256-uH8MtSiF/h0fM04cWoSyV2KPDwS69cYz6TA0ylq6yEM=' 'sha256-vMipR6Pj+J1+uzPBaR4tLBFZWq18gxHQrsF4Yl9osVQ=' 'sha256-vbjnumaGfnX0chgJjnlz2mHY4K4YSldoiIN5tMpsJ8w=' 'sha256-xh7CUIAeDEyuZ439ct3hPfIQiNb6U+VN/0//lRZ6kZg=' 'sha256-yUOkJaqPNIZARyYqMlDbRGTCmZ/C+wMChomy6GJP3QI=' 'sha256-z+kbhAfYnais1UUyDCDwulWuXH8+RLiV94ugXlzKRl8='; script-src-attr 'none'; style-src 'self' 'sha256-+/8l6fxQyrdundiK66ViWS5VlHiQUAi4V/Ir8XXFYh0=' 'sha256-02ObSVUox8Jemge0oiQ9C1xwK2uZrOMeqo8pLzcnFpU=' 'sha256-4ABrSkoP1/Af9jwER6ZHoKy+DIHE9hcdKtberkZwsQI=' 'sha256-4tOJl/LDQ37yihVDrOJTU8JF655RR92gpymrNA5hPak=' 'sha256-AC3CbEeLPJf2W6daVbkfUpWh5e6gLviBovIHzqhb7I4=' 'sha256-BVQwI1XMs+judwuBp6qTSKeBm7Qe/9Y0vierNK2EKW4=' 'sha256-Dw2yuZXpfLbQGVSS6+Dc1yQqtnkxA5bItx0dDpfEL7k=' 'sha256-G/EXI3nAn343k9zX00AXuWnDLIfGCfMFrLNYLazYwn4=' 'sha256-HNiWpXaWt2LIZnxwvhkuVd7Wm1LEyIXrCJ3LC4ED7jw=' 'sha256-JamKOmpIVQSPv+gDrYtzbxnVclnrvhrOMLmA+WaGPIE=' 'sha256-JkcUl1N8/ZqQ17T0hfO0ayOxtdvjh/bW1olXdBFpYew=' 'sha256-PcnIAdtr1NmNZcLFf5ftF5SvhkwLfoF+o79JrRr9ylA=' 'sha256-RCsCPlU52CtIRNNS7jAHKQnZEcAOjjd8Oeo0MPekLSw=' 'sha256-SZEeY3BjbbuYB9q7WMKkH+vVi//Im1FmD+bhHtViozw=' 'sha256-TOaIIZeh/Z50l+BRNbNisks9iBtnjrws592kTESLTN0=' 'sha256-XIBB7vkTmAUIJl44z0N7ywoeVnnl7kVsLHvhi2EwqUE=' 'sha256-cqi81knIZxngzyb4XrnqGdtxXgRacT17c5EgKXhc/BQ=' 'sha256-i2sZysJsK6bSduhXCopySYrSJWwkyofJX+CaFV8z00c=' 'sha256-o8nFr6pN4NzYV5vroc+6INvuMSqnMnjDaeyL6r9Khf0=' 'sha256-r7zPOqM+1h0txetMIbk4qyJDeS62YpiQ8jkhkzFtS2k=' 'sha256-y5obLVRChtKifE0CL62I5G9KcKibCbsobXYQpYejssY=' 'sha256-z+AkgkT28yIyST9LT2RBjr0JxOfBXijJkLuTEYGGKLg='; style-src-attr 'unsafe-hashes' 'sha256-+/8l6fxQyrdundiK66ViWS5VlHiQUAi4V/Ir8XXFYh0=' 'sha256-02ObSVUox8Jemge0oiQ9C1xwK2uZrOMeqo8pLzcnFpU=' 'sha256-4ABrSkoP1/Af9jwER6ZHoKy+DIHE9hcdKtberkZwsQI=' 'sha256-4tOJl/LDQ37yihVDrOJTU8JF655RR92gpymrNA5hPak=' 'sha256-AC3CbEeLPJf2W6daVbkfUpWh5e6gLviBovIHzqhb7I4=' 'sha256-BVQwI1XMs+judwuBp6qTSKeBm7Qe/9Y0vierNK2EKW4=' 'sha256-Dw2yuZXpfLbQGVSS6+Dc1yQqtnkxA5bItx0dDpfEL7k=' 'sha256-G/EXI3nAn343k9zX00AXuWnDLIfGCfMFrLNYLazYwn4=' 'sha256-HNiWpXaWt2LIZnxwvhkuVd7Wm1LEyIXrCJ3LC4ED7jw=' 'sha256-JamKOmpIVQSPv+gDrYtzbxnVclnrvhrOMLmA+WaGPIE=' 'sha256-JkcUl1N8/ZqQ17T0hfO0ayOxtdvjh/bW1olXdBFpYew=' 'sha256-PcnIAdtr1NmNZcLFf5ftF5SvhkwLfoF+o79JrRr9ylA=' 'sha256-RCsCPlU52CtIRNNS7jAHKQnZEcAOjjd8Oeo0MPekLSw=' 'sha256-SZEeY3BjbbuYB9q7WMKkH+vVi//Im1FmD+bhHtViozw=' 'sha256-TOaIIZeh/Z50l+BRNbNisks9iBtnjrws592kTESLTN0=' 'sha256-XIBB7vkTmAUIJl44z0N7ywoeVnnl7kVsLHvhi2EwqUE=' 'sha256-cqi81knIZxngzyb4XrnqGdtxXgRacT17c5EgKXhc/BQ=' 'sha256-i2sZysJsK6bSduhXCopySYrSJWwkyofJX+CaFV8z00c=' 'sha256-o8nFr6pN4NzYV5vroc+6INvuMSqnMnjDaeyL6r9Khf0=' 'sha256-r7zPOqM+1h0txetMIbk4qyJDeS62YpiQ8jkhkzFtS2k=' 'sha256-y5obLVRChtKifE0CL62I5G9KcKibCbsobXYQpYejssY=' 'sha256-z+AkgkT28yIyST9LT2RBjr0JxOfBXijJkLuTEYGGKLg='; font-src 'self' data:; img-src 'self' data: https://overkillhill.com https://*.github.io https://avatars.githubusercontent.com https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://www.googletagmanager.com https://okhp3.github.io; object-src 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" /><meta content="English" name="language"/>
+<!-- ========================================
+       METADATA: Primary Title & Description
+       ======================================== -->
+<title>Diagram Truth | OverKill Hill P³™</title>
+<meta content="Diagram Truth is the interactive companion to The First Diagram Is Usually a Liar. Compare a tidy V1 with an honest V2 in the Draw the Truth workbench." name="description"/>
+<meta content="Diagram Truth, Draw the Truth, honest diagrams, ROY method, interactive tutorial, visual communication, OverKill Hill P³" name="keywords"/>
+<meta content="OverKill Hill P³™" name="author"/>
+<meta content="OverKill Hill P³™" name="creator"/>
+<meta content="OverKill Hill P³™" name="publisher"/>
+<!-- ========================================
+       METADATA: Open Graph (Social Sharing)
+       ======================================== -->
+<meta content="Diagram Truth | OverKill Hill P³™" property="og:title"/>
+<meta content="Open the Draw the Truth workbench. Compare a tidy first diagram with a revision that exposes doubt, exceptions, and return paths." property="og:description"/>
+<meta content="website" property="og:type"/>
+<meta content="https://overkillhill.com/projects/diagram-truth/" property="og:url"/>
+<meta content="https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png" property="og:image"/>
+<meta content="ETCH-AI-SKETCH: seven AI models, two rounds, one Mermaid diagramming shootout" property="og:image:alt"/>
+<meta content="1536" property="og:image:width"/>
+<meta content="1024" property="og:image:height"/>
+<meta content="image/png" property="og:image:type"/>
+<meta content="OverKill Hill P³™" property="og:site_name"/>
+<meta content="en_US" property="og:locale"/>
+
+<!-- ========================================
+       METADATA: Twitter Card (X Social)
+       ======================================== -->
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Diagram Truth | OverKill Hill P³™" name="twitter:title"/>
+<meta content="Draw the truth, not the brochure. Try the interactive workbench from The First Diagram Is Usually a Liar." name="twitter:description"/>
+<meta content="https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png" name="twitter:image"/>
+<meta content="ETCH-AI-SKETCH: seven AI models, two rounds, one Mermaid diagramming shootout" name="twitter:image:alt"/>
+<meta content="@OverKillHillP3" name="twitter:site"/>
+<meta content="@OverKillHillP3" name="twitter:creator"/>
+<!-- ========================================
+       METADATA: Search & Crawling
+       ======================================== -->
+<meta content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" name="robots"/>
+<meta content="index, follow" name="googlebot"/>
+<meta content="index, follow" name="bingbot"/>
+<meta content="7 days" name="revisit-after"/>
+<link href="/humans.txt" rel="author"/>
+<link href="https://overkillhill.com/projects/diagram-truth/" rel="canonical"/>
+<link href="https://overkillhill.com/projects/diagram-truth/" hreflang="en" rel="alternate"/><!-- ========================================
+       METADATA: Color Scheme & Theme
+       ======================================== -->
+<meta content="#2a2320" name="theme-color"/>
+<meta content="dark light" name="color-scheme"/>
+<!-- ========================================
+       METADATA: Web App & PWA
+       ======================================== -->
+<meta content="yes" name="mobile-web-app-capable"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"/>
+<!-- ========================================
+       FAVICONS: Multi-Format Icon Support
+       ======================================== -->
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-32.png" rel="icon" sizes="32x32" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-16.png" rel="icon" sizes="16x16" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-browser-48.png" rel="icon" sizes="48x48" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon-opaque-180.png" rel="apple-touch-icon" sizes="180x180" type="image/png"/>
+<link href="/assets/img/favicons/murderbird-v2-icon.ico" rel="icon" sizes="any"/>
+<link href="/site.webmanifest" rel="manifest"/>
+<!-- ========================================
+       STYLESHEETS & FONTS
+       ======================================== -->
+<!-- AUTOGEN:SELF-HOSTED-FONTS -->
+<!-- OverKill Hill P³ fonts are loaded by the shared theme stylesheet. -->
+<link href="https://www.googletagmanager.com" rel="dns-prefetch"/>
+<script>!function(){var s=localStorage.getItem("okh-theme");document.documentElement.setAttribute("data-theme",s==="dark"||(s!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches)?"dark":"light")}();</script>
+<link href="/assets/css/theme.css?v=22800719" rel="stylesheet"/>
+<script type="speculationrules">
+    {
+      "prefetch": [
+        { "source": "document", "where": { "and": [
+          { "href_matches": "/*" },
+          { "not": { "selector_matches": "[rel~=nofollow]" } },
+          { "not": { "href_matches": "/*.{png,jpg,jpeg,webp,svg,ico,gif,pdf,zip}" } }
+        ]}, "eagerness": "moderate" }
+      ]
+    }
+    </script>
+<!-- Google tag (gtag.js) -->
+<script async="" src="https://www.googletagmanager.com/gtag/js?id=G-VJ1BKXS27H"></script>
+<script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-VJ1BKXS27H');
+    </script><script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://overkillhill.com/#organization",
+  "name": "OverKill Hill P³™",
+  "url": "https://overkillhill.com/",
+  "logo": {
+    "@type": "ImageObject",
+    "url": "https://overkillhill.com/assets/img/favicons/murderbird-v2-icon-1024.png",
+    "width": 1024,
+    "height": 1024
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/overkillhillp3",
+    "https://facebook.com/OverKillHillP3/",
+    "https://x.com/OverKillHillP3",
+    "https://www.youtube.com/@OverKillHillP3",
+    "https://ko-fi.com/overkillhillp3",
+    "https://pro.fiverr.com/s/VYKPpoB"
+  ]
+}
+</script>
+</head>
+
+<body class="projects-main">
+  <a class="okh-skip-link" href="#main">Skip to main content</a>
+<header class="site-header" id="top">
+<div class="container">
+<div class="logo">
+<a aria-label="OverKill Hill P³ home" href="/">
+<img alt="OverKill Hill P³" height="40" loading="eager" src="/assets/img/murderbird-v2-icon-nav-96.png" width="40"/>
+<span class="sr-only">OverKill Hill P³™ Home</span>
+</a>
+</div>
+<nav aria-label="Primary" class="primary-nav" id="navigation">
+<ul>
+<li><a href="/#forge">The Forge</a></li>
+<li class="has-submenu">
+<a data-current-family="" href="/projects/">Our Projects</a>
+<ul class="submenu">
+<li><a href="/skillz-forge/">Skillz Forge</a></li>
+<li><a href="/skillz-forge/skillz-shield/">Skillz Shield</a></li>
+<li><a href="/projects/found-ry/">Found‑Rᵧ</a></li>
+<li><a href="/projects/mermaid-theme-builder/">Mermaid Theme Builder</a></li>
+<li><a href="/projects/bpmn-for-mermaid/">BPMN for Mermaid</a></li>
+<li><a href="/projects/mac-studio-local-ai-workbench/">Mac Studio Local AI Workbench</a></li>
+<li><a href="/projects/abrahamic-reference-engine/">Abrahamic Reference Engine</a></li>
+<li><a href="/projects/murderbird-uncaged/">MurderBird: Uncaged</a></li>
+<li><a aria-current="page" href="/projects/diagram-truth/">Diagram Truth</a></li>
+<li><a href="/projects/glee-fully-chai-chasers/">Glee-fully Chai Chasers</a></li>
+<li><a href="/projects/kierans-lifetrkr/">Kieran's LifeTrkr</a></li>
+<li><a href="/projects/telling-forward/">Telling Forward</a></li>
+</ul>
+</li>
+<!-- Writings cluster: Manifesto / MurderBird / Promptcraft / FDIAL -->
+<li class="has-submenu">
+<a href="/writings/">Writings</a>
+<ul class="submenu">
+<li><a href="/manifesto/">The Manifesto</a></li>
+<li><a href="/writings/murderbird/">The MurderBird</a></li>
+<li><a href="/prompt-forge/">The Prompt Forge</a></li>
+<li><a href="/writings/first-diagram-is-a-liar/">The First Diagram is a Liar</a></li>
+</ul>
+</li>
+<!-- About cluster: Universe / About / Contact / Legal -->
+<li class="has-submenu">
+<a href="/about/">About</a>
+<ul class="submenu">
+<li><a href="/universe/">OKHP³™ Universe</a></li>
+<li><a href="/about/">About OKHP³™</a></li>
+<li><a href="/contact/">Contact</a></li>
+<li><a href="/legal/">Legal</a></li>
+</ul>
+</li>
+</ul>
+</nav>
+<button aria-controls="navigation" aria-expanded="false" class="nav-toggle">
+<span class="sr-only">Toggle navigation</span>
+<span class="bar"></span><span class="bar"></span><span class="bar"></span>
+</button>
+</div>
+<section aria-label="Forge update" class="site-specials site-specials--okh">
+<span class="site-specials-label">🔥Hot off the FORGE⚒️</span>
+<a class="site-specials-link" href="/writings/first-diagram-is-a-liar/#process-knowledge">v0.9 is live: the BPMN renderer grew into 15 Agent Skills for capturing the process behind the boxes. Read it →</a>
+</section>
+</header>
+
+  <main id="main">
+
+<section aria-labelledby="page-title" class="project-hero forge-masthead forge-masthead--project" data-status-presentation="disclosure"><div aria-hidden="true" class="brand-stripes brand-stripes--okh"></div><div aria-hidden="true" class="hero-blueprint-bg"></div><div class="container hero-inner">
+<nav aria-label="Breadcrumb" class="breadcrumb">
+<a href="/">overkillhill.com</a><span>/</span>
+<a href="/projects/">projects</a><span>/</span>
+<span>diagram-truth</span>
+</nav>
+<h1 id="page-title">Diagram Truth</h1><p class="hero-sub">The workbench for turning a tidy first diagram into a more honest one.</p><div data-project-status-disclosure="diagram-truth"><p data-project-status-brief="">Interactive tutorial and evidence archive. Step 3 observed September 29, 2026; full tutorial acceptance unverified.</p><details><summary>Status and source</summary><!-- AUTOGEN:PROJECT-STATUS --><p data-project-status="diagram-truth"><span data-project-status-text="">Availability: Published project page. Maturity: Interactive tutorial and evidence archive. Evidence: Source description only. Delivery: unknown.</span> <a href="https://github.com/OKHP3/OverKill-Hill/blob/98922aebf71d90b2b18ecc34c8b00a041fff51c7/projects/first-diagram-is-a-liar/index.html">Source record</a> (reviewed 2026-09-07).</p><!-- /AUTOGEN:PROJECT-STATUS --><div class="tag-row" data-project-labels="">
+<span class="tag">Live Tutorial</span>
+<span class="tag">Interactive Tutorial</span>
+<span class="tag tag--accent">ROY Method</span>
+<span class="tag tag--accent">Draw the Truth</span>
+<span class="tag">No Backend</span>
+</div></details></div>
+<div class="hero-ctas">
+<a class="btn btn-primary" href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">Open the Draw the Truth Workbench ↗</a>
+<a class="btn btn-quiet" href="https://okhp3.github.io/first-diagram-is-a-liar/" rel="noopener noreferrer" target="_blank">Start at Step 1 ↗</a>
+<a class="btn btn-quiet" href="/writings/first-diagram-is-a-liar/">Read the Story</a>
+</div>
+</div></section>
+<section aria-labelledby="project-introduction-title" class="container content-section project-introduction"><h2 id="project-introduction-title">About the project</h2><p class="hero-sub">The first shape is a claim. Make it answer for itself.</p><p>
+            Diagram Truth is the interactive side of <a href="/writings/first-diagram-is-a-liar/">The First Diagram Is Usually a Liar</a>.
+            The article explains why tidy diagrams can mislead and how the ROY method tests whether a visual earns its reading cost.
+            The browser tutorial lets you put that argument to work across five steps. Its third step, Draw the Truth,
+            compares a neat first pass with a revision that shows doubt, exceptions, and return paths.
+          </p><p>The application runs in your browser. The <a href="https://github.com/OKHP3/first-diagram-is-a-liar" rel="noopener noreferrer" target="_blank">public repository</a> preserves the tutorial source and the separate experiment archive.</p></section>
+<div class="container">
+<div class="project-layout">
+<div>
+<div class="content-block card" data-search-index="" id="workbench">
+<div class="section-label">Featured workbench · Step 03</div>
+<h2>Draw the truth, not the brochure.</h2>
+<p>Switch between the tidy V1 and the honest V2. The destination stays the same; V2 exposes the doubt, missing exception, and revision loops that the straight line concealed. Hide and reveal the return paths to see how much meaning the diagram was carrying.</p>
+<p class="why-note">These two states are teaching illustrations. They are distinct from the preserved V1 and V2 competition rounds. The workbench is not a live Mermaid parser or a general-purpose editor.</p>
+<div class="hero-ctas"><a class="btn btn-primary" href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">Try Step 3: Draw the Truth ↗</a><a class="btn btn-quiet" href="https://okhp3.github.io/first-diagram-is-a-liar/" rel="noopener noreferrer" target="_blank">Explore All Five Steps ↗</a></div>
+</div>
+<div class="content-block card" data-search-index="" id="problem">
+<div class="section-label">The Problem</div>
+<h2>A tidy diagram can still be a tidy lie.</h2>
+<div class="feature-grid" style="margin-top:0.75rem;">
+<div class="feature-item">
+<div aria-hidden="true" class="feature-icon">◑</div>
+<div>
+<h3>The first shape feels more certain than the idea.</h3>
+<p>A clean left-to-right flow can hide loops, forks, dead ends, ownership gaps, and unresolved decisions. The visual may be polished while the model is still guessing.</p>
+</div>
+</div>
+<div class="feature-item">
+<div aria-hidden="true" class="feature-icon">⊕</div>
+<div>
+<h3>Explanation has a cost.</h3>
+<p>Every line, label, legend, and exception adds reading work. A diagram earns its space only when it removes more confusion than it creates.</p>
+</div>
+</div>
+<div class="feature-item">
+<div aria-hidden="true" class="feature-icon">◎</div>
+<div>
+<h3>Different tools answer different questions.</h3>
+<p>Architect, builder, editor, and critic are not interchangeable roles. Their outputs should remain comparable without pretending that their conditions were identical.</p>
+</div>
+</div>
+<div class="feature-item">
+<div aria-hidden="true" class="feature-icon">◈</div>
+<div>
+<h3>Revision is part of the evidence.</h3>
+<p>The V1 that looked plausible and the V2 that survived critique tell a more useful story together than either one can tell alone.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="content-block" data-search-index="" id="companion">
+<div class="section-label">One Project, Two Surfaces</div>
+<h2>Read the argument. Test it in the workbench.</h2>
+<div class="relationship-grid">
+<div class="relationship-card">
+<span class="rel-tag">Public Writing</span>
+<h3>Read the argument in full.</h3>
+<p>The companion page carries the long-form story, the field guide, the four heat pages, the V1 and V2 diagrams, the deck links, and the v0.6 through v0.9 updates on Notion, Replit, visual consistency, and process knowledge.</p>
+<p style="margin-top:0.75rem;"><a class="link-amber" href="/writings/first-diagram-is-a-liar/">Open the Writing →</a></p>
+</div>
+<div class="relationship-card">
+<span class="rel-tag">Practice Surface</span>
+<h3>Test the method against your own thinking.</h3>
+<p>The companion repository contains the client-only React/Vite tutorial. It moves through Spot the Lie, Measure ROY, Draw the Truth, Use Disagreement, and Ship the Proof.</p>
+<p style="margin-top:0.75rem;"><a class="link-amber" href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">Open the Draw the Truth workbench →</a></p>
+</div>
+</div>
+<p class="why-note">The Writing holds the public explanation. Diagram Truth is the project doorway to the interactive tutorial. The archive keeps the source and evidence inspectable.</p>
+</div>
+<div class="content-block" data-search-index="" id="what-it-does">
+<div class="section-label">What It Does</div>
+<h2>Five moves for an honest model.</h2>
+<div class="relationship-grid">
+<div class="relationship-card"><span class="rel-tag">01 · Spot the Lie</span><h3>Find the hidden claim.</h3><p>Name what the diagram says, what it leaves out, and where its tidy path stops matching the work.</p></div>
+<div class="relationship-card"><span class="rel-tag">02 · Measure ROY</span><h3>Count understanding against explanation.</h3><p>Use ROY as a practical question: did the visual buy enough shared understanding to justify the reading cost?</p></div>
+<div class="relationship-card"><span class="rel-tag">03 · Draw the Truth</span><h3>Show the shape of the work.</h3><p>Make forks, loops, revisions, dead ends, and unresolved decisions visible instead of smoothing them away.</p></div>
+<div class="relationship-card"><span class="rel-tag">04 · Use Disagreement</span><h3>Keep the council legible.</h3><p>Compare outputs by round, role, prompt, and evidence. Core Five, Exhibition, Specialty, and Attempted entries do not become one leaderboard.</p></div>
+<div class="relationship-card"><span class="rel-tag">05 · Ship the Proof</span><h3>Put the source beside the picture.</h3><p>Share the explanation, Mermaid source, rendered result, revision trail, and the limits of what was actually tested.</p></div>
+</div>
+</div>
+<div class="content-block card" data-search-index="" id="evidence">
+<div class="section-label">The Evidence Stack</div>
+<h2>Receipts before rankings.</h2>
+<ul class="progress-track">
+<li class="progress-phase"><span class="progress-marker progress-marker--done">01</span><div class="progress-phase-content"><h3 class="progress-phase-title">Governing brief <span class="phase-pill phase-pill--shipped">archived</span></h3><p class="progress-phase-desc">The ETCH-AI-SKETCH brief defines the experiment, the deliverables, and the comparison boundary.</p></div></li>
+<li class="progress-phase"><span class="progress-marker progress-marker--done">02</span><div class="progress-phase-content"><h3 class="progress-phase-title">Prompts, Mermaid, and renders <span class="phase-pill phase-pill--shipped">archived</span></h3><p class="progress-phase-desc">Eight prompts, V1 and V2 source relationships, rendered assets, and slide exports remain inspectable in the repository archive.</p></div></li>
+<li class="progress-phase"><span class="progress-marker progress-marker--done">03</span><div class="progress-phase-content"><h3 class="progress-phase-title">Specialty records <span class="phase-pill phase-pill--shipped">archived</span></h3><p class="progress-phase-desc">Notion and Replit are preserved as distinct conditions. The archive does not flatten tool, round, or role differences.</p></div></li>
+<li class="progress-phase"><span class="progress-marker progress-marker--done">04</span><div class="progress-phase-content"><h3 class="progress-phase-title">Council-Assisted Scoring <span class="phase-pill phase-pill--shipped">documented in v0.5</span></h3><p class="progress-phase-desc">The Council's v0.5 scoring update remains a documented method change, not proof of an objective winner.</p></div></li>
+<li class="progress-phase"><span class="progress-marker progress-marker--active">05</span><div class="progress-phase-content"><h3 class="progress-phase-title">Process Knowledge <span class="phase-pill phase-pill--active">current writing</span></h3><p class="progress-phase-desc">The v0.9 writing follows BPMN for Mermaid into process capture, a shared narrative record, and the 15-skill BP-SKILL suite.</p></div></li>
+</ul>
+<p class="why-note">The archive is source-safe and public. Private editorial workspaces may inform the project, but they are not linked from this public page.</p>
+</div>
+<div class="content-block" data-search-index="" id="principles">
+<div class="section-label">Principles</div>
+<h2>The rules the project runs on.</h2>
+<div class="feature-grid" style="margin-top:0.75rem;">
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">1</div><div><h3>Source before polish.</h3><p>A beautiful render cannot outrank the source, the brief, or the evidence that produced it.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">2</div><div><h3>Comparison needs conditions.</h3><p>Keep role, prompt, round, and specialty context attached to every result.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">3</div><div><h3>Disagreement is useful data.</h3><p>Critique is not a defect to hide. It is where an attractive first answer can become a more honest model.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">4</div><div><h3>ROY is a heuristic.</h3><p>Use it to ask better questions, not to manufacture a scientific score or a universal ranking.</p></div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">5</div><div><h3>Make the handoff survive.</h3><p>Someone else should be able to find the source, understand the claim, and see what remains uncertain.</p></div></div>
+</div>
+</div>
+<div class="content-block" data-search-index="" id="what-is-not">
+<div class="section-label">Boundary</div>
+<h2>A field guide. Not a diagram factory.</h2>
+<div class="is-isnot-grid">
+<div class="is-isnot-col is-isnot-col--is"><div class="is-isnot-header is-isnot-header--is">This is</div><ul><li><span class="bullet">+</span><span>A writing companion and interactive tutorial</span></li><li><span class="bullet">+</span><span>A source-backed evidence archive</span></li><li><span class="bullet">+</span><span>A method for making disagreement visible</span></li><li><span class="bullet">+</span><span>A browser-only teaching surface</span></li></ul></div>
+<div class="is-isnot-col"><div class="is-isnot-header is-isnot-header--isnot">This is not</div><ul><li><span class="bullet">−</span><span>A general-purpose Mermaid editor</span></li><li><span class="bullet">−</span><span>An AI diagram generator or model leaderboard</span></li><li><span class="bullet">−</span><span>A backend, account system, or hosted database</span></li><li><span class="bullet">−</span><span>Proof that the first diagram was the right one</span></li></ul></div>
+</div>
+</div>
+<div class="content-block" data-search-index="" id="origin">
+<div class="section-label">Origin</div>
+<h2>It started as a diagramming shootout.</h2>
+<p>The project began with one brief sent through multiple tools and models. The interesting result was not that one output looked best. It was that the outputs exposed different instincts: architecture, narrative, pragmatism, restraint, code-first thinking, and the occasional polished lie.</p>
+<p>The work then became a public experiment in revision. V1 and V2 are kept together. The article moved from prose to diagrams to audience scoring and then to Council-Assisted Scoring. The project page exists to connect those surfaces without pretending they are the same artifact.</p>
+<p class="why-note">The Step 3 deep link opened the Draw the Truth workbench in a browser on September 29, 2026. That check does not certify every tutorial interaction or future GitHub Pages deployments.</p>
+</div>
+</div>
+<aside aria-label="Project information" class="sidebar-rail">
+<div class="sidebar-cta">
+<div class="section-label">Start here</div>
+<a class="btn btn-primary" href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">Open Step 3 ↗</a>
+<a class="btn btn-quiet" href="/writings/first-diagram-is-a-liar/">Read the Writing</a>
+<a class="btn btn-quiet" href="https://github.com/OKHP3/first-diagram-is-a-liar" rel="noopener noreferrer" target="_blank">View the Repository</a>
+<p class="cta-note">Start with the workbench or read the argument that led to it.</p>
+</div>
+<div class="sidebar-meta">
+<details class="project-record"><summary>Project details</summary><div class="meta-row">
+<div class="meta-item"><span class="meta-key">Status</span><span class="meta-val"><span class="status-dot"></span>Active / live tutorial</span></div>
+<div class="meta-item"><span class="meta-key">Type</span><span class="meta-val">Interactive field guide</span></div>
+<div class="meta-item"><span class="meta-key">Stack</span><span class="meta-val">React, TypeScript, Vite, Tailwind</span></div>
+<div class="meta-item"><span class="meta-key">Repository</span><span class="meta-val"><a href="https://github.com/OKHP3/first-diagram-is-a-liar" rel="noopener noreferrer" target="_blank">OKHP3/first-diagram-is-a-liar ↗</a></span></div>
+<div class="meta-item"><span class="meta-key">Writing</span><span class="meta-val"><a href="/writings/first-diagram-is-a-liar/">Companion page ↗</a></span></div>
+<div class="meta-item"><span class="meta-key">Tutorial URL</span><span class="meta-val"><a href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">Draw the Truth ↗</a></span></div>
+<div class="meta-item"><span class="meta-key">Hosting</span><span class="meta-val">GitHub Pages; Step 3 observed September 29, 2026</span></div>
+<div class="meta-item"><span class="meta-key">Maintained by</span><span class="meta-val"><a href="https://overkillhill.com">OverKill Hill P³</a></span></div>
+</div></details>
+<div class="sidebar-links">
+<a class="sidebar-link" href="https://okhp3.github.io/first-diagram-is-a-liar/#step-3" rel="noopener noreferrer" target="_blank">▶ Try the Workbench</a>
+<a class="sidebar-link" href="/writings/first-diagram-is-a-liar/">Read the Companion Writing</a>
+<a class="sidebar-link" href="https://github.com/OKHP3/first-diagram-is-a-liar/tree/main/archive" rel="noopener noreferrer" target="_blank">⬡ Browse the Evidence Archive</a>
+<a class="sidebar-link" href="https://github.com/OKHP3/first-diagram-is-a-liar/tree/main/src" rel="noopener noreferrer" target="_blank">◻ Inspect the Tutorial Source</a>
+<a class="sidebar-link" href="https://github.com/OKHP3/first-diagram-is-a-liar/issues" rel="noopener noreferrer" target="_blank">⚐ Open an Issue</a>
+</div>
+</div>
+<div class="sidebar-related" data-search-index="" id="related-resources">
+<div class="section-label">Related</div>
+<ul>
+<li><a href="/writings/first-diagram-is-a-liar/">The First Diagram Is Usually a Liar Writing</a></li>
+<li><a href="/projects/mermaid-theme-builder/">Mermaid Theme Builder</a></li>
+<li><a href="/projects/">All OverKill Hill Projects</a></li>
+<li><a href="https://github.com/OKHP3/first-diagram-is-a-liar/tree/main/docs" rel="noopener noreferrer" target="_blank">Repository planning and release docs ↗</a></li>
+</ul>
+</div>
+<div class="sidebar-related" id="toc-widget">
+<div class="section-label">On This Page</div>
+<ul class="toc-list">
+<li><a href="#workbench">Step 3 Workbench</a></li>
+<li><a href="#problem">The Problem</a></li>
+<li><a href="#companion">Two Surfaces</a></li>
+<li><a href="#what-it-does">Five Moves</a></li>
+<li><a href="#evidence">Evidence Stack</a></li>
+<li><a href="#principles">Principles</a></li>
+<li><a href="#what-is-not">Boundary</a></li>
+<li><a href="#origin">Origin</a></li>
+</ul>
+</div>
+</aside>
+</div>
+</div>
+
+  </main>
+<footer class="site-footer">
+<div class="container footer-grid">
+<div class="footer-column">
+<h3>OverKill Hill P³™</h3>
+<p>Protocol-first AI systems design: local inference, multi-model coordination, and the governance layer the platforms forgot to build.</p>
+</div>
+<div class="footer-column">
+<h4>Navigation</h4>
+<ul>
+<li><a href="/#forge">The Forge</a></li>
+<li><a href="/universe/">P³ Universe</a></li>
+<li><a href="/manifesto/">The Manifesto</a></li>
+<li><a href="/projects/">Our Projects</a></li>
+<li><a href="/writings/">Writings</a></li>
+<li><a href="/about/">About OKH P³</a></li>
+<li><a href="/contact/">Contact OKH P³</a></li>
+<li><a href="/legal/">Legal</a></li>
+</ul>
+</div>
+<div class="footer-column">
+<h4>Connect</h4>
+<ul>
+<li><a href="mailto:contact@overkillhill.com">contact@overkillhill.com</a></li>
+<li><a href="https://ko-fi.com/overkillhillp3" rel="noopener noreferrer" target="_blank">Ko-fi</a></li>
+<li><a href="https://pro.fiverr.com/s/VYKPpoB" rel="noopener noreferrer" target="_blank">Fiverr</a></li>
+<li><a href="https://www.linkedin.com/company/overkillhillp3" rel="noopener noreferrer" target="_blank">LinkedIn</a></li>
+<li><a href="https://facebook.com/OverKillHillP3/" rel="noopener noreferrer" target="_blank">Facebook</a></li>
+<li><a href="https://x.com/OverKillHillP3" rel="noopener noreferrer" target="_blank">X (Twitter)</a></li>
+<li><a href="https://www.youtube.com/@OverKillHillP3" rel="noopener noreferrer" target="_blank">YouTube</a></li>
+</ul>
+</div>
+</div>
+<div class="footer-bottom">
+<span class="footer-built-with">Built with <a href="https://replit.com/refer/overkillhillp3/" rel="noopener noreferrer" target="_blank">Replit</a></span>
+<p class="footer-copyright">© <span id="current-year"></span> OverKill Hill P³™. All rights reserved.</p>
+<span></span>
+</div>
+</footer>
+    <script src="/assets/js/app.js?v=43f41acf"></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type":"ListItem","position":1,"name":"OverKill Hill P³™","item":"https://overkillhill.com/"},
+    {"@type":"ListItem","position":2,"name":"Projects","item":"https://overkillhill.com/projects/"},
+    {"@type":"ListItem","position":3,"name":"Diagram Truth","item":"https://overkillhill.com/projects/diagram-truth/"}
+  ]
+}
+</script>
+
+
+</body>
+</html>
