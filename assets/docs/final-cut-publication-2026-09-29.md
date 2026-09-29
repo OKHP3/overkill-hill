@@ -50,3 +50,24 @@ Page and search generation completed locally. No application tests were run
 in this preparation. The protected-main CI and SHA-bound Pages deployment
 provide separate release evidence after merge. This source record does not
 claim deployment success before that workflow completes.
+
+## Intentional voice-review dispositions
+
+The owner accepted the manuscript and these four sentences are already public
+on LinkedIn. The publication reviewers separately inspected each warning under
+`docs/voice-lint-ratchet.md` and intentionally retained its factual qualification.
+Only the four article-specific content fingerprints below were added, each
+with count 1. Existing entries and all lint rules remain unchanged. HTML source
+uses sentence-boundary wrapping while rendered paragraph elements are preserved.
+
+- `aa120464c7e44ceb2be7ed084831efc6e943f6a2d9f1d08a5d347272bf0c5532` (count 1): Precise distinction between GitHub maintenance and GitHub Pages hosting.
+  > The implementation and subsequent improvements are maintained in GitHub, and the public application is hosted on GitHub Pages.
+
+- `a5efe25fe1731397cbe54eb485d115a9d12d9155748179d72586892c438b3202` (count 1): Essential provenance caveat about the historical evidence.
+  > Some published interview passages were paraphrased composites, and parts of the editorial source were reconstructed in a model's voice.
+
+- `1f37a152dad2fdef316a3f09b7e524e5d40a892964459858628b7b44d2a37548` (count 1): Explicit acceptance stop conditions. The heuristic also counts the state phrase "is unresolved".
+  > If a consequential fact is unresolved, the intended reader takes the wrong route, or the effort cap is reached, defer acceptance.
+
+- `084c4950bc92b438aed3f18d401eff9c33a89e1d3de76a7f0a64025df4fed23d` (count 1): Bounded business-outcome qualification; avoids implying an unmeasured transformation.
+  > That can be investigated without pretending the entire organization has been transformed.
