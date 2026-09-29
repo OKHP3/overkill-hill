@@ -8,14 +8,14 @@
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
   "current_release_shell": {
-    "source_revision": "git:6b63f0aed2d72c17400e620a8ea9dbb2efc80a92+working-tree-v0.8",
-    "release": "v0.8",
+    "source_revision": "git:54d73f3348443ac49423808f2f89807fe3329110+working-tree-v0.9",
+    "release": "v0.9",
     "scope": "Shared release banner refresh only; reviewed article copy and translation status are unchanged.",
     "normalized_routes": {
-      "/": "d524fc0d78ec94d5261d87215fe374abec1147f55a762ef7c286e7d9fd6b5a5c",
-      "/about/": "f735393849b73659e32de25f5bf6d1e9684870dc66cf5c4b4ebc89bdd47cb338",
-      "/projects/": "2f0e60e77f06198634323719ff1ee4e0d0aa6ac10de2159e9e99b538f133e09f",
-      "/contact/": "c0e02dbc237da727a21bba93d03f51d77b4c06712bcf391fe90ed42e5a24b9db"
+      "/": "2029203e9cfa5ca4c88adda06482ad968eb946462cc1bb8dfbdbdb97534671a9",
+      "/about/": "c040da32c1ad2603c3dfb99135fadacdc37b333f7ae6a7da16fb0b53b1becfcd",
+      "/projects/": "b1a135ca068cf59dc18e0782e0c9dd4a854e001dd96797a44c74c2a85050f630",
+      "/contact/": "534415c2fbb414d8ff064df037421b3ef7f54c5c2d54b3b23b2002fa501e1ce2"
     }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",

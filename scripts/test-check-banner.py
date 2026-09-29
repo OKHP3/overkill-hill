@@ -259,7 +259,7 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.8",
+        "found v0.9",
     )
     release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)

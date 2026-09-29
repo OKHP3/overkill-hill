@@ -30,8 +30,8 @@ FEATURED_ARTICLE_GENERATED = "writings/first-diagram-is-a-liar/index.html"
 SOURCE_BANNER = "assets/partials/header.html"
 
 CANONICAL_BANNER = (
-    "v0.8 is live: same Mermaid code, different styling. Bottle a theme with"
-    " Mermaid Theme Builder. Read it \u2192"
+    "v0.9 is live: the BPMN renderer grew into 15 Agent Skills for capturing the"
+    " process behind the boxes. Read it \u2192"
 )
 
 # Known prior versions — used for detection only, never written.
@@ -51,6 +51,10 @@ OLD_BANNERS = [
     (
         "v0.5 is live: the Council of AIs scored each other \u2014 every model was harder"
         " on itself than the architect was. Read it \u2192"
+    ),
+    (
+        "v0.8 is live: same Mermaid code, different styling. Bottle a theme with"
+        " Mermaid Theme Builder. Read it \u2192"
     ),
 ]
 
