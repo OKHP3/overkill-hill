@@ -26,6 +26,26 @@ if spec is None or spec.loader is None:
 verify_live_edge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify_live_edge)
 
+ASSET_FORMAT_CASES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "image": (
+        "/assets/img/favicons/murderbird-v2-icon-browser-32.png",
+        ("image/png",),
+    ),
+    "svg": ("/assets/img/live-edge-fixture.svg", ("image/svg+xml",)),
+    "ico": (
+        "/assets/img/live-edge-fixture.ico",
+        ("image/x-icon", "image/vnd.microsoft.icon"),
+    ),
+    "font": ("/assets/fonts/live-edge-fixture.woff2", ("font/woff2",)),
+    "woff": ("/assets/fonts/live-edge-fixture.woff", ("font/woff",)),
+    "ttf": ("/assets/fonts/live-edge-fixture.ttf", ("font/ttf",)),
+    "otf": ("/assets/fonts/live-edge-fixture.otf", ("font/otf",)),
+    "eot": (
+        "/assets/fonts/live-edge-fixture.eot",
+        ("application/vnd.ms-fontobject",),
+    ),
+}
+
 
 class VerifyLiveEdgeTests(unittest.TestCase):
     def run_live_edge_fixture(
@@ -87,15 +107,51 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "content_type": "text/javascript",
             },
             "image": {
-                "path": "/assets/img/favicons/murderbird-v2-icon-browser-32.png",
+                "path": ASSET_FORMAT_CASES["image"][0],
                 "reference": '<img src="{url}" alt="fixture image">',
                 "content_type": "image/png",
             },
             "font": {
-                "path": "/assets/fonts/live-edge-fixture.woff2",
+                "path": ASSET_FORMAT_CASES["font"][0],
                 "reference": '<link href="{url}" rel="preload" as="font">',
                 "content_type": "font/woff2",
                 "body": b"live-edge fixture font",
+            },
+            "svg": {
+                "path": ASSET_FORMAT_CASES["svg"][0],
+                "reference": '<img src="{url}" alt="fixture SVG image">',
+                "content_type": "image/svg+xml",
+                "body": b"<svg xmlns='http://www.w3.org/2000/svg'></svg>",
+            },
+            "ico": {
+                "path": ASSET_FORMAT_CASES["ico"][0],
+                "reference": '<link rel="icon" href="{url}">',
+                "content_type": "image/x-icon",
+                "body": b"live-edge fixture icon",
+            },
+            "woff": {
+                "path": ASSET_FORMAT_CASES["woff"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/woff",
+                "body": b"live-edge fixture WOFF font",
+            },
+            "ttf": {
+                "path": ASSET_FORMAT_CASES["ttf"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/ttf",
+                "body": b"live-edge fixture TTF font",
+            },
+            "otf": {
+                "path": ASSET_FORMAT_CASES["otf"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/otf",
+                "body": b"live-edge fixture OTF font",
+            },
+            "eot": {
+                "path": ASSET_FORMAT_CASES["eot"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "application/vnd.ms-fontobject",
+                "body": b"live-edge fixture EOT font",
             },
             "css-fixture": {
                 "path": "/assets/css/live-edge-fixture.css",
@@ -734,6 +790,60 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]["status"],
             "PASS",
         )
+
+    def test_supported_icon_and_font_extensions_accept_expected_content_types(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=tuple(ASSET_FORMAT_CASES),
+        )
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for kind, (path, accepted_types) in ASSET_FORMAT_CASES.items():
+            with self.subTest(kind=kind):
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
+
+    def test_both_ico_content_type_aliases_are_accepted(self) -> None:
+        path, accepted_types = ASSET_FORMAT_CASES["ico"]
+        for content_type in accepted_types:
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="ico",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
+
+    def test_wrong_supported_icon_and_font_content_types_are_named_failures(self) -> None:
+        asset_kinds = tuple(ASSET_FORMAT_CASES)
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=asset_kinds,
+            asset_content_types={kind: "text/plain" for kind in asset_kinds},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        for kind, (path, accepted_types) in ASSET_FORMAT_CASES.items():
+            with self.subTest(kind=kind):
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn("text/plain", content_type_check["evidence"])
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
 
     def test_wrong_sitemap_content_type_fails_with_explicit_mime_evidence(self) -> None:
         return_code, report = self.run_live_edge_fixture(
