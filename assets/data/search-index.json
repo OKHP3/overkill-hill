@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 178,
+  "count": 179,
   "entries": [
     {
       "url": "/",
@@ -289,7 +289,7 @@
         "The Magnus Saga",
         "Biases as Constants"
       ],
-      "body": "OverKill Hill P³™ Writings from the Hill Essays, articles, and speculative fiction from the forge. Some are arguments. Some are experiments. All of them earned their space. Featured from the Forge Speculative Fiction · Origin Story The MurderBird What the Water Kept. An ancient body, an industrial resurrection, and the heart and mind that finally awaken the forge’s sentinel. Read the story → Featured · v0.8 Live The First Diagram Is Usually a Liar Why the first diagram almost always lies, and what ROY (Return on Your Words) means for visual communication. v0.8 traces the styling gap behind Mermaid Theme Builder and reusable visual contracts."
+      "body": "OverKill Hill P³™ Writings from the Hill Essays, articles, and speculative fiction from the forge. Some are arguments. Some are experiments. All of them earned their space. Featured from the Forge Speculative Fiction · Origin Story The MurderBird What the Water Kept. An ancient body, an industrial resurrection, and the heart and mind that finally awaken the forge’s sentinel. Read the story → Featured · v0.9 Live The First Diagram Is Usually a Liar Why the first diagram almost always lies, and what ROY (Return on Your Words) means for visual communication. v0.9 follows BPMN for Mermaid into process knowledge capture and the 15-skill BP-SKILL suite."
     },
     {
       "url": "/writings/murderbird/",
@@ -312,9 +312,9 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/",
-      "title": "The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article",
-      "description": "v0.8 traces the visual consistency gap behind Mermaid Theme Builder, reusable styling contracts, and Agent Skills in hindsight.",
+      "description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL, a 15-skill suite for preserving process knowledge beside its visual model.",
       "headings": [
         "From Drawing to Modeling",
         "ROY: Return on Your Words",
@@ -330,6 +330,7 @@
         "Notion: The Room That Kept the Record",
         "Replit: The Tool I Hadn't Learned Yet",
         "v0.8: Bottling the Visual Lightning",
+        "v0.9: The Diagram Became the Happy Accident",
         "The Council Scores the Field",
         "The Models Interview Themselves",
         "Round 1: The Clean Lie",
@@ -395,15 +396,17 @@
         "LinkedIn Comment: v0.7",
         "LinkedIn Article Update: v0.8",
         "LinkedIn Comment: v0.8",
+        "LinkedIn Article Update: v0.9",
+        "LinkedIn Comment: v0.9",
         "Bring me the problem where one answer is not enough",
         "Support the Forge",
         "Version History"
       ],
-      "body": "OverKill Hill P³™ › Writings › The First Diagram Is Usually a Liar Essay · ROY Article v0.8: Bottling the Visual Lightning The First Diagram Is Usually a Liar A picture is not automatically worth 1,000 words. ROY (Return on Your Words) measures the clarity and shared understanding extracted per word invested. Jamie Hill OverKill Hill P³™ September 2026 Estimated 45 min read (including diagrams, prompts, and artifact copy) 📋 v0.8: Bottling the Visual Lightning This update traces the visual consistency gap that led to Mermaid Theme Builder and the hindsight of packaging styling instructions, assets, and checks as Agent Skills."
+      "body": "OverKill Hill P³™ › Writings › The First Diagram Is Usually a Liar Essay · ROY Article v0.9: The Diagram Became the Happy Accident The First Diagram Is Usually a Liar A picture is not automatically worth 1,000 words. ROY (Return on Your Words) measures the clarity and shared understanding extracted per word invested. Jamie Hill OverKill Hill P³™ September 2026 Estimated 45 min read (including diagrams, prompts, and artifact copy) 📋 v0.9: The Diagram Became the Happy Accident This update follows BPMN for Mermaid from a renderer prototype into BP-SKILL, a 15-skill process-documentation suite built to keep human process knowledge attached to its visual model."
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#artifacts",
-      "title": "Launch Artifacts — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Launch Artifacts — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Because this began as a LinkedIn experiment, the launch assets matter. The article is the canonical home. The post is the spear. The first comment is the afterburner.",
       "headings": [],
@@ -412,7 +415,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#attention-finite",
-      "title": "Attention Is Finite (and Text Hides Flow) — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Attention Is Finite (and Text Hides Flow) — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "People do not fail to read because they are lazy. They fail to read because their capacity to absorb meaning is finite and the workday is a relentless attention shredder.",
       "headings": [],
@@ -421,7 +424,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#co-opetition",
-      "title": "Co-opetition — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Co-opetition — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Co-opetition There is a term for the dynamic I was running: co-opetition. Competitors collaborating and competing simultaneously, depending on context.",
       "headings": [],
@@ -430,7 +433,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#contender-pre-reads",
-      "title": "Contender Pre-Reads — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Contender Pre-Reads — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Contender Pre-Reads The deck includes my first-pass read on each platform. These are architect-lane reads, independent of the audience poll results.",
       "headings": [],
@@ -439,7 +442,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#council",
-      "title": "The Council of AIs — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The Council of AIs — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "What I was running, without naming it at first, was not automation and not a pipeline. It was a deliberative body. A council is the body. The counsel is what it produces.",
       "headings": [],
@@ -448,7 +451,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#council-origin",
-      "title": "Why I Built a Council of AIs — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Why I Built a Council of AIs — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Why I Built a Council of AIs By the time I had a working draft of the first diagram, I had already run the same brief through several AI platforms. That was not the original plan. It started as impatience.",
       "headings": [],
@@ -457,7 +460,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#council-scoring",
-      "title": "The Council Scores the Field — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The Council Scores the Field — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "The Council Scores the Field The audience lane came back thin. The architect lane delivered. The council lane was the one I had been holding back, not because the work was not done, but because the work was the hardest…",
       "headings": [],
@@ -466,7 +469,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#council-seats",
-      "title": "Why Each Seat Existed — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Why Each Seat Existed — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Why Each Seat Existed The council was not random. Each member was there because its instincts differed from the others in ways that were meaningful rather than arbitrary.",
       "headings": [],
@@ -475,7 +478,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#council-synthesis",
-      "title": "What the Council Produced — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "What the Council Produced — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "What the Council Produced No single council submission was better than the synthesized result. Not one. The synthesis borrowed structure from Copilot, framing from Claude, loop logic from ChatGPT, business clarity from…",
       "headings": [],
@@ -484,7 +487,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#crude-manual-process",
-      "title": "The Crude Manual Process — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The Crude Manual Process — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "The Crude Manual Process What I was doing early in this experiment was not elegant. Here is what it actually looked like, because the honest version is more useful than the polished one. I would write a brief.",
       "headings": [],
@@ -493,7 +496,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#deck",
-      "title": "Diagramming Shootout Deck — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Diagramming Shootout Deck — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Diagramming Shootout Deck The v0.3 deck is public in the project repository. It contains 15 diagram records across V1 and V2, presented in an 18-slide deck. Available in two formats.",
       "headings": [],
@@ -502,7 +505,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#field-guide",
-      "title": "Competitor Close-ups — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Competitor Close-ups — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Competitor Close-ups The LinkedIn deck compresses the visual field. These guides give each poll heat its own page with higher-resolution diagram links and full context for each competitor.",
       "headings": [],
@@ -511,7 +514,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#ideation-to-evaluation",
-      "title": "Ideation to Evaluation — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Ideation to Evaluation — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Ideation to Evaluation The slide deck is now live, and that changes the status of the argument. Up to this point, this article has been doing the work in prose.",
       "headings": [],
@@ -520,7 +523,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#mermaid-syntax-vs-platform",
-      "title": "Mermaid the Syntax vs Mermaid.ai the Platform — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Mermaid the Syntax vs Mermaid.ai the Platform — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Mermaid the syntax is a language. Mermaid.ai the platform is one AI-assisted on-ramp to that language. Those are not the same thing. Mermaid.ai is a generative AI product purpose-built to help you produce Mermaid code…",
       "headings": [],
@@ -529,7 +532,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#model-interviews",
-      "title": "The Models Interview Themselves — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The Models Interview Themselves — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "The Models Interview Themselves After the council scoring was complete, I gave each member one final prompt: go back to your own diagrams, assess them against the rubric, and answer three questions honestly.",
       "headings": [],
@@ -538,7 +541,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#not-just-diagramming",
-      "title": "Not Just Diagramming — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Not Just Diagramming — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Not Just Diagramming What this field test actually measured: Taste under constraints Honesty in showing nonlinear thought Turning words into structure without losing meaning The difference between “generated” and…",
       "headings": [],
@@ -547,7 +550,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#notion-documentarian",
-      "title": "Notion: The Room That Kept the Record — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Notion: The Room That Kept the Record — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Notion: The Room That Kept the Record Notion had a seat in this experiment, but it was doing a different job. It could make diagrams, yet the built-in AI available to me at the time used lower-cost, earlier-generation…",
       "headings": [],
@@ -556,7 +559,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#one-that-should-have-won",
-      "title": "The One That Should Have Won — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The One That Should Have Won — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Mermaid.ai was the obvious ringer. Its entire reason for existing is to produce exactly what I was asking every other council member to produce.",
       "headings": [],
@@ -565,7 +568,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#pivot",
-      "title": "From Drawing to Modeling — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "From Drawing to Modeling — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "About eight months ago, ChatGPT coughed up a visual I didn’t ask for. It wasn’t an image. It wasn’t a screenshot. It was code . It was a text-based diagram. A flowchart.",
       "headings": [],
@@ -574,7 +577,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#poll-schedule",
-      "title": "Poll Schedule — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Poll Schedule — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Polling Windows Date Version Public Label Artifact Purpose 04/21/2026 v0.3 Visual Edition Deck / document carousel Launch the visual field 04/22/2026 v0.3.1.1 V1 Heat A Poll Begin first-pass audience scoring 04/23/2026…",
       "headings": [],
@@ -582,8 +585,17 @@
       "parent": "/writings/first-diagram-is-a-liar/"
     },
     {
+      "url": "/writings/first-diagram-is-a-liar/#process-knowledge",
+      "title": "v0.9: The Diagram Became the Happy Accident — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
+      "category": "Article Section",
+      "description": "v0.9: The Diagram Became the Happy Accident The delay between releases was not a lack of interest. Every answer opened another corridor.",
+      "headings": [],
+      "body": "v0.9: The Diagram Became the Happy Accident The delay between releases was not a lack of interest. Every answer opened another corridor. Mermaid stopped looking like a faster way to draw and started looking like a living contract: the words are the diagram, and a source change can regenerate the view before the picture goes stale. That matters most in process work. A box labeled “Review request” cannot carry the exceptions, judgment, handoffs, and lived knowledge behind the task. If an AI agent may execute the work, that context has to survive as narrative, rules, decisions, and controls. The 15-skill BP-SKILL suite grew from that need. The renderer began as the project.",
+      "parent": "/writings/first-diagram-is-a-liar/"
+    },
+    {
       "url": "/writings/first-diagram-is-a-liar/#prompts",
-      "title": "Prompts in the Wild — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Prompts in the Wild — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Velocity, iteration, and vibe over premature prompt perfection One of the points of this experiment is that the prompts were not highly polished. They were not lab-grade. They were not deeply pre-scripted.",
       "headings": [],
@@ -592,7 +604,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#replit-retrospective",
-      "title": "Replit: The Tool I Hadn't Learned Yet — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Replit: The Tool I Hadn't Learned Yet — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Replit: The Tool I Hadn't Learned Yet Replit arrived after the other platforms, so it benefited from what the earlier runs had already taught me. Its diagrams were comparable, but the conditions were not identical.",
       "headings": [],
@@ -601,7 +613,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#round1",
-      "title": "Round 1: The Clean Lie — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Round 1: The Clean Lie — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "To test the thesis, I ran the same brief through a Council of AIs : ChatGPT, Claude, Copilot, Gemini, Perplexity, Notion, and Replit. Same question. Same deliverables.",
       "headings": [],
@@ -610,7 +622,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#round2",
-      "title": "Round 2: Honestly Messy — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Round 2: Honestly Messy — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Once every model had seen the others, the second round got better fast. The diagrams became less eager to perform certainty and more willing to show recursion.",
       "headings": [],
@@ -619,7 +631,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#roy",
-      "title": "ROY: Return on Your Words — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "ROY: Return on Your Words — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Once the rendering cost collapsed, the real question became unavoidable: What did the words actually buy? The ROY Formula Clarity Delivered ÷ Words Required to Deliver It Return on Your Words = understanding extracted ÷…",
       "headings": [],
@@ -628,7 +640,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#scoring-bracket",
-      "title": "Scoring Bracket — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Scoring Bracket — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Scoring Brackets V1 Heat A: ChatGPT, Claude, Gemini, Perplexity V1 Heat B: Copilot, Notion, Replit V2 Heat A: ChatGPT, Copilot, Gemini, Notion V2 Heat B: ChatGPT Pro, Claude, Replit, Perplexity The audience vote was not…",
       "headings": [],
@@ -637,7 +649,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#scoring-model",
-      "title": "Scoring Model — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Scoring Model — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Scoring Model: Status The v0.3.x debrief compared three scoring methodologies. Results below. Audience Scoring 1,735 impressions, 5 total votes, 0.29% conversion across four heats.",
       "headings": [],
@@ -646,7 +658,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#thesis",
-      "title": "The Thesis, Standing on Its Own — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "The Thesis, Standing on Its Own — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "A picture can absolutely be worth more than the words that prompted it into existence. Not because the words disappeared. Not because reading stopped mattering.",
       "headings": [],
@@ -655,7 +667,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#v03-3-tie-off",
-      "title": "What the Polls Were For — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "What the Polls Were For — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "What the Polls Were For v0.3 is complete. The deck is out. The four polls ran. The field is built. What I learned is more precise than \"the polls underperformed.\" The field got attention. The vote did not scale.",
       "headings": [],
@@ -664,7 +676,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#v1-diagrams",
-      "title": "V1 First-Pass Diagrams — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "V1 First-Pass Diagrams — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "V1 First-Pass Diagrams All seven models responded to the same brief. These are the first-pass diagrams before critique, constraint, or revision. Copilot V1 Presentation-ready system thinking.",
       "headings": [],
@@ -673,7 +685,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#v2-diagrams",
-      "title": "V2 Optimized Diagrams — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "V2 Optimized Diagrams — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "V2 Optimized Diagrams After critique, constraint, and more context. V2 is not first instinct; V2 is adaptation. Claude V2 Thinks beautifully. Earns the elegance through honest recursion rather than decorating it on top.",
       "headings": [],
@@ -682,16 +694,16 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#version-history",
-      "title": "Version History — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Version History — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
-      "description": "Version History v0.8: Bottling the Visual Lightning Date: September 28, 2026 Changes: Added the visual consistency problem behind Mermaid Theme Builder: the same source code still varied in the previews used.",
+      "description": "Version History v0.9: The Diagram Became the Happy Accident Date: September 28, 2026 Changes: Added the text-native process-knowledge argument behind BPMN for Mermaid and the near-real-time review direction.",
       "headings": [],
-      "body": "Version History v0.8: Bottling the Visual Lightning Date: September 28, 2026 Changes: Added the visual consistency problem behind Mermaid Theme Builder: the same source code still varied in the previews used. Recorded the reusable theme and HTML/CSS-inspired styling contract, with Agent Skills as a hindsight packaging option. Preserved the published LinkedIn article update and comment, including the direct comment link. Updated the site-wide Hot off the Forge announcement and article metadata for this release. v0.7: Replit, the Late Arrival Date: September 2026 Changes: Added a retrospective on Replit's late arrival, different evaluation conditions, and distinct role as a build environment.",
+      "body": "Version History v0.9: The Diagram Became the Happy Accident Date: September 28, 2026 Changes: Added the text-native process-knowledge argument behind BPMN for Mermaid and the near-real-time review direction. Recorded BP-SKILL as the larger contribution: 15 Agent Skills for capturing, structuring, challenging, documenting, visualizing, and handing off a process. Preserved the published LinkedIn article update and comment, with the current prototype and BPMN boundaries stated directly. Updated the site-wide Hot off the Forge announcement and article metadata for this release. v0.8: Bottling the Visual Lightning Date: September 28, 2026 Changes: Added the visual consistency problem behind Mermaid Theme Builder: the same source code still varied in the previews used.",
       "parent": "/writings/first-diagram-is-a-liar/"
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#visual-consistency",
-      "title": "v0.8: Bottling the Visual Lightning — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "v0.8: Bottling the Visual Lightning — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "v0.8: Bottling the Visual Lightning Across ChatGPT, Claude, Gemini, Perplexity, and Copilot, the same instructions produced different diagrams. I expected that.",
       "headings": [],
@@ -700,7 +712,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#what-mermaid-actually-is",
-      "title": "What a Mermaid Diagram Actually Is — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "What a Mermaid Diagram Actually Is — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Mermaid is not AI. That sentence needs to land before anything else in this article makes sense, because if you carry the wrong assumption into the council comparison, the entire experiment looks like something it…",
       "headings": [],
@@ -709,7 +721,7 @@
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#why-one-model",
-      "title": "Why One Model Is Not Enough — The First Diagram Is Usually a Liar: v0.8 | OverKill Hill P³™",
+      "title": "Why One Model Is Not Enough — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
       "category": "Article Section",
       "description": "Why One Model Is Not Enough There is a reasonable argument that you should find the best model for a given task and stop there. Efficient. Practical. For most tasks, correct. Diagramming is not one of those tasks.",
       "headings": [],
@@ -1057,7 +1069,7 @@
         "Prompts, Mermaid, and renders archived",
         "Specialty records archived",
         "Council-Assisted Scoring documented in v0.5",
-        "Visual Consistency current writing",
+        "Process Knowledge current writing",
         "Source before polish.",
         "Comparison needs conditions.",
         "Disagreement is useful data.",
@@ -1072,7 +1084,7 @@
       "category": "Project",
       "description": "One Project, Two Surfaces The Writing is the narrative. The tutorial is the rehearsal room. Public Writing Read the argument in full. The companion page carries the long-form story, the field guide, the four heat pages,…",
       "headings": [],
-      "body": "One Project, Two Surfaces The Writing is the narrative. The tutorial is the rehearsal room. Public Writing Read the argument in full. The companion page carries the long-form story, the field guide, the four heat pages, the V1 and V2 diagrams, the deck links, the v0.6 Notion documentarian update, the v0.7 Replit retrospective, and the v0.8 visual consistency update. Open the Writing → Practice Surface Test the method against your own thinking. The companion repository contains the client-only React/Vite tutorial. It moves through Spot the Lie, Measure ROY, Draw the Truth, Use Disagreement, and Ship the Proof. Inspect the tutorial source → The surfaces are related, not duplicates. The Writing is the canonical public explanation. The application is an interactive teaching aid.",
+      "body": "One Project, Two Surfaces The Writing is the narrative. The tutorial is the rehearsal room. Public Writing Read the argument in full. The companion page carries the long-form story, the field guide, the four heat pages, the V1 and V2 diagrams, the deck links, and the v0.6 through v0.9 updates on Notion, Replit, visual consistency, and process knowledge. Open the Writing → Practice Surface Test the method against your own thinking. The companion repository contains the client-only React/Vite tutorial. It moves through Spot the Lie, Measure ROY, Draw the Truth, Use Disagreement, and Ship the Proof. Inspect the tutorial source → The surfaces are related, not duplicates. The Writing is the canonical public explanation. The application is an interactive teaching aid.",
       "parent": "/projects/first-diagram-is-a-liar/"
     },
     {
@@ -1081,7 +1093,7 @@
       "category": "Project",
       "description": "The Evidence Stack Receipts before rankings. 01 Governing brief archived The ETCH-AI-SKETCH brief defines the experiment, the deliverables, and the comparison boundary.",
       "headings": [],
-      "body": "The Evidence Stack Receipts before rankings. 01 Governing brief archived The ETCH-AI-SKETCH brief defines the experiment, the deliverables, and the comparison boundary. 02 Prompts, Mermaid, and renders archived Eight prompts, V1 and V2 source relationships, rendered assets, and slide exports remain inspectable in the repository archive. 03 Specialty records archived Notion and Replit are preserved as distinct conditions. The archive does not flatten tool, round, or role differences. 04 Council-Assisted Scoring documented in v0.5 The Council's v0.5 scoring update remains a documented method change, not proof of an objective winner.",
+      "body": "The Evidence Stack Receipts before rankings. 01 Governing brief archived The ETCH-AI-SKETCH brief defines the experiment, the deliverables, and the comparison boundary. 02 Prompts, Mermaid, and renders archived Eight prompts, V1 and V2 source relationships, rendered assets, and slide exports remain inspectable in the repository archive. 03 Specialty records archived Notion and Replit are preserved as distinct conditions. The archive does not flatten tool, round, or role differences. 04 Council-Assisted Scoring documented in v0.5 The Council's v0.5 scoring update remains a documented method change, not proof of an objective winner. 05 Process Knowledge current writing The v0.9 writing follows BPMN for Mermaid into process capture, a shared narrative record, and the 15-skill BP-SKILL suite.",
       "parent": "/projects/first-diagram-is-a-liar/"
     },
     {
@@ -1090,7 +1102,7 @@
       "category": "Project",
       "description": "Origin It started as a diagramming shootout. The project began with one brief sent through multiple tools and models. The interesting result was not that one output looked best.",
       "headings": [],
-      "body": "Origin It started as a diagramming shootout. The project began with one brief sent through multiple tools and models. The interesting result was not that one output looked best. It was that the outputs exposed different instincts: architecture, narrative, pragmatism, restraint, code-first thinking, and the occasional polished lie. The work then became a public experiment in revision. V1 and V2 are kept together. The article moved from prose to diagrams to audience scoring and then to Council-Assisted Scoring. The project page exists to connect those surfaces without pretending they are the same artifact. Current public writing: v0.8, the visual consistency gap that led to Mermaid Theme Builder and reusable styling contracts.",
+      "body": "Origin It started as a diagramming shootout. The project began with one brief sent through multiple tools and models. The interesting result was not that one output looked best. It was that the outputs exposed different instincts: architecture, narrative, pragmatism, restraint, code-first thinking, and the occasional polished lie. The work then became a public experiment in revision. V1 and V2 are kept together. The article moved from prose to diagrams to audience scoring and then to Council-Assisted Scoring. The project page exists to connect those surfaces without pretending they are the same artifact. Current public writing: v0.9, the process-knowledge problem that grew beside the BPMN renderer and into the 15-skill BP-SKILL suite.",
       "parent": "/projects/first-diagram-is-a-liar/"
     },
     {
