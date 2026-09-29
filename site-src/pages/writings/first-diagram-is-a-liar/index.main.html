@@ -22,7 +22,7 @@
 <span class="sep">›</span>
 <span>The First Diagram Is Usually a Liar</span>
 </nav>
-<div class="article-eyebrow"><span>Essay · ROY</span><span>Article v0.7: Replit's different tool class</span></div>
+<div class="article-eyebrow"><span>Essay · ROY</span><span>Article v0.8: Bottling the Visual Lightning</span></div>
 <h1 id="page-title">The First Diagram Is Usually a Liar</h1>
 <p class="article-subtitle">A picture is not automatically worth 1,000 words. ROY (Return on Your Words) measures the clarity and shared understanding extracted per word invested.</p>
 <div class="article-meta">
@@ -49,8 +49,8 @@
 <div class="protoform-notice">
 <span class="protoform-notice-icon">📋</span>
 <span>
-<strong class="text-amber">v0.7: Replit, the Late Arrival</strong>
-                  This update examines Replit as a late-arriving build environment with different strengths, different conditions, and a different job from a general-purpose knowledge tool.
+<strong class="text-amber">v0.8: Bottling the Visual Lightning</strong>
+                  This update traces the visual consistency gap that led to Mermaid Theme Builder and the hindsight of packaging styling instructions, assets, and checks as Agent Skills.
                 </span>
 </div>
 <nav aria-label="Jump to article sections" class="sidebar-widget article-jump-nav">
@@ -58,6 +58,7 @@
 <ul class="sidebar-links">
 <li><a href="#roy">Read the argument: ROY</a></li>
 <li><a href="#council-scoring">Inspect the evidence: Council scoring</a></li>
+<li><a href="#visual-consistency">Read the update: visual consistency</a></li>
 <li><a href="#artifacts">Browse the historical archive: launch artifacts</a></li>
 <li><a href="#version-history">Open the version history</a></li>
 </ul>
@@ -792,6 +793,11 @@ These findings describe this sample. The
 <h2>Replit: The Tool I Hadn't Learned Yet</h2>
 <p>Replit arrived after the other platforms, so it benefited from what the earlier runs had already taught me. Its diagrams were comparable, but the conditions were not identical. It had an advantage in timing and a disadvantage in role: I was comparing a build environment with general-purpose knowledge tools.</p>
 <p>At the time, I was only beginning to explore Replit. Since then, I have built single-page applications with it and watched it become a far more capable platform. I still would not choose it first for writing Mermaid files. If I were building a single-page app to create Mermaid diagrams, Replit would be my pick. More is coming on custom Mermaid applications. Stay tuned.</p>
+</section>
+<section class="article-section" id="visual-consistency">
+<h2>v0.8: Bottling the Visual Lightning</h2>
+<p>Across ChatGPT, Claude, Gemini, Perplexity, and Copilot, the same instructions produced different diagrams. I expected that. Supplying the same Mermaid code brought the results closer, yet colors, fonts, and line treatment still varied in the previews I used. They did not look like one corporate diagram set.</p>
+<p>I wanted to apply a reusable visual style to existing code and bottle a good theme for future diagrams. That led to <a class="link-amber" href="https://overkillhill.com/projects/mermaid-theme-builder/">Mermaid Theme Builder</a> and an HTML/CSS-inspired idea: give the AI both the diagram brief and the styling expectations. In hindsight, <a class="link-amber" href="https://agentskills.io/specification" rel="noopener noreferrer" target="_blank">Agent Skills</a> could have packaged those instructions, theme assets, and checks. The destination renderer still needs checking; shared code alone does not guarantee shared appearance.</p>
 </section>
 <section class="article-section" id="council-scoring">
 <h2>The Council Scores the Field</h2>
@@ -2412,6 +2418,40 @@ The v0.7 retrospective: https://overkillhill.com/writings/first-diagram-is-a-lia
 </details>
 <a class="btn btn-quiet btn-block-top" href="https://www.linkedin.com/pulse/first-diagram-usually-liar-jamie-hill-lv3hc/" rel="noopener noreferrer" target="_blank">Open article comments ↗</a>
 </div>
+<div class="artifact-card" id="linkedin-article-v08">
+<h3>LinkedIn Article Update: v0.8</h3>
+<p class="small-note">Published September 28, 2026. The styling gap, the reusable visual contract, Mermaid Theme Builder, and Agent Skills in hindsight.</p>
+<details class="code-drop">
+<summary>View article update v0.8 copy</summary>
+<pre class="artifact-copy">v0.8: Bottling the Visual Lightning
+
+I gave ChatGPT, Claude, Gemini, Perplexity, and Copilot the same diagramming instructions and got different diagrams. That was expected: each model made different choices about what to include, how to organize it, and what deserved emphasis. The surprise came when I supplied the same Mermaid code. The results looked much closer, yet the colors, fonts, and line treatment still varied in the previews I used. They did not look like one corporate diagram set.
+
+That changed the problem I wanted to solve. I wanted a postprocessor that could take an existing diagram and apply a reusable visual style. And when I stumbled onto a theme that worked, I wanted to bottle that lightning so the next diagram could use it too. A good palette should not require another round of negotiation every time somebody needs three boxes and an arrow.
+
+Then I started thinking about HTML and CSS. What if the diagram prompt came with a style file, so the AI received both the content brief and the visual expectations? Mermaid already has theme configuration for colors and fonts, so the useful idea was a reusable styling contract that could be applied to the code. An adjacent CSS file was an analogy, not a promise that every Mermaid host would load it.
+
+That line of thinking became Mermaid Theme Builder, a workbench for applying palettes and typography to Mermaid code, previewing the result, and exporting styled code or prompt scaffolds with a target renderer in mind. It works on the visual layer around a diagram you already have. It does not decide what the diagram means, and it cannot make every host behave identically. The destination still needs checking.
+
+The hindsight arrived with Agent Skills. Had I understood them a month earlier, I might have started by packaging the instructions, theme assets, and styling checks as a skill. That could have coached generation and carried an application workflow together. It would still need tools that apply the configuration and a check of the actual rendered result. Instructions are useful; visible evidence is what tells me they worked.
+
+Mermaid Theme Builder and its current scope: https://overkillhill.com/projects/mermaid-theme-builder/
+
+Diagrams that belong together should look like they belong together.</pre>
+</details>
+<a class="btn btn-quiet btn-block-top" href="https://www.linkedin.com/pulse/first-diagram-usually-liar-jamie-hill-lv3hc/" rel="noopener noreferrer" target="_blank">Read the updated article ↗</a>
+</div>
+<div class="artifact-card" id="linkedin-comment-v08">
+<h3>LinkedIn Comment: v0.8</h3>
+<p class="small-note">Published September 28, 2026. Reusing diagram code and a visual contract are separate jobs; inspect the destination renderer.</p>
+<details class="code-drop">
+<summary>View comment v0.8 copy</summary>
+<pre class="artifact-copy">The useful distinction for me was between reusing diagram code and reusing a visual contract. The same source brought the diagrams closer; a repeatable palette, typography, and line treatment were a separate job. That is why I wanted to bottle a good theme instead of prompting my way back to it every time.
+
+Agent Skills could package the instructions, assets, and checks for that workflow. The actual destination still gets the final inspection. Mermaid Theme Builder is the workbench that grew out of this gap: https://overkillhill.com/projects/mermaid-theme-builder/</pre>
+</details>
+<a class="btn btn-quiet btn-block-top" href="https://www.linkedin.com/feed/update/urn:li:ugcPost:7443529767754076161?commentUrn=urn%3Ali%3Acomment%3A%28ugcPost%3A7443529767754076161%2C7510546492177416193%29&amp;dashCommentUrn=urn%3Ali%3Afsd_comment%3A%287510546492177416193%2Curn%3Ali%3AugcPost%3A7443529767754076161%29" rel="noopener noreferrer" target="_blank">Read the published comment ↗</a>
+</div>
 </div>
 <hr/>
 <h2 id="thesis">The Thesis, Standing on Its Own</h2>
@@ -2457,6 +2497,17 @@ The v0.7 retrospective: https://overkillhill.com/writings/first-diagram-is-a-lia
 <section class="article-changelog" id="version-history">
 <h3>Version History</h3>
 <dl>
+<dt>v0.8: Bottling the Visual Lightning</dt>
+<dd>
+<strong>Date:</strong> September 28, 2026<br/>
+<strong>Changes:</strong>
+<ul>
+<li>Added the visual consistency problem behind Mermaid Theme Builder: the same source code still varied in the previews used.</li>
+<li>Recorded the reusable theme and HTML/CSS-inspired styling contract, with Agent Skills as a hindsight packaging option.</li>
+<li>Preserved the published LinkedIn article update and comment, including the direct comment link.</li>
+<li>Updated the site-wide Hot off the Forge announcement and article metadata for this release.</li>
+</ul>
+</dd>
 <dt>v0.7: Replit, the Late Arrival</dt>
 <dd>
 <strong>Date:</strong> September 2026<br/>
@@ -2555,13 +2606,13 @@ The v0.7 retrospective: https://overkillhill.com/writings/first-diagram-is-a-lia
 <aside class="article-sidebar">
 <!-- About This Article -->
 <div class="sidebar-widget">
-<a class="series-badge" href="https://www.linkedin.com/pulse/first-diagram-usually-liar-jamie-hill-lv3hc/" rel="noopener noreferrer" target="_blank">📄 Article v0.7</a>
+<a class="series-badge" href="https://www.linkedin.com/pulse/first-diagram-usually-liar-jamie-hill-lv3hc/" rel="noopener noreferrer" target="_blank">📄 Article v0.8</a>
 <h4>About This Article</h4>
 <p>
 <strong>The First Diagram Is Usually a Liar</strong>
 </p>
 <p>
-                  A public argument about visual communication, ROY, Mermaid, and what a Council of AIs revealed when multiple models worked against and with one another on the same brief. v0.7 examines Replit as a late-arriving build environment and looks ahead to custom Mermaid applications.
+                  A public argument about visual communication, ROY, Mermaid, and what a Council of AIs revealed when multiple models worked against and with one another on the same brief. v0.8 traces the styling gap that led to Mermaid Theme Builder and reusable visual contracts.
                 </p>
 </div>
 <!-- The Repository -->
@@ -2683,6 +2734,7 @@ The v0.7 retrospective: https://overkillhill.com/writings/first-diagram-is-a-lia
 <li><a href="#co-opetition">Co-opetition</a></li>
 <li><a href="#council-seats">Why Each Seat Existed</a></li>
 <li><a href="#council-synthesis">What the Council Produced</a></li>
+<li><a href="#visual-consistency">Bottling the Visual Lightning</a></li>
 <li><a href="#council-scoring">The Council Scores the Field</a></li>
 <li><a href="#model-interviews">The Models Interview Themselves</a></li>
 <li><a href="#round1">Round 1: The Clean Lie</a></li>

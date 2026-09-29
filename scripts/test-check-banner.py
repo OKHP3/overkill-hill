@@ -158,7 +158,7 @@ def check_update_is_atomic() -> None:
         source_banner.parent.mkdir(parents=True, exist_ok=True)
         source_banner.write_text(
             f'<a class="site-specials-link" href="{featured}">'
-            f"{check_banner.OLD_BANNERS[1]}</a>",
+            f"{check_banner.OLD_BANNERS[2]}</a>",
             encoding="utf-8",
         )
         later_page = root / "later.html"
@@ -225,7 +225,7 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
             banner.parent.mkdir(parents=True, exist_ok=True)
             banner.write_text(
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[0]}</a>",
+                f"{check_banner.OLD_BANNERS[1]}</a>",
                 encoding="utf-8",
             )
             before = banner.read_text(encoding="utf-8")
@@ -248,7 +248,7 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
             else:
                 if repair_target not in after:
                     raise AssertionError("update did not apply the canonical banner")
-                if check_banner.OLD_BANNERS[0] in after:
+                if check_banner.OLD_BANNERS[1] in after:
                     raise AssertionError("update left the old banner in place")
 
 
@@ -259,7 +259,7 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.7",
+        "found v0.8",
     )
     release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)
@@ -285,7 +285,7 @@ def main() -> int:
                 f"{mode} preserves {label} release drift",
                 banner_path,
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[1]}</a>",
+                f"{check_banner.OLD_BANNERS[2]}</a>",
                 release_drift_failure + (banner_path,),
                 mode=mode,
                 expect_files_unchanged=True,
@@ -342,7 +342,7 @@ def main() -> int:
             check_main_case(
                 f"{mode} {name}",
                 banner_path,
-                f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[0]}</a>',
+                f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[1]}</a>',
                 (
                     "current featured article release is missing or ambiguous",
                     check_banner.FEATURED_ARTICLE_ROUTE,
@@ -364,7 +364,7 @@ def main() -> int:
         check_main_case(
             f"{mode or 'check'} rejects source/generated release disagreement",
             check_banner.SOURCE_BANNER,
-            f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[0]}</a>',
+            f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[1]}</a>',
             disagreement_parts,
             source_article="<span>Article v0.6: Council-Assisted Scoring</span>",
             generated_article="<span>Article v0.7: Council-Assisted Scoring</span>",
