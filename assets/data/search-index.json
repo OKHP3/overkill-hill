@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 179,
+  "count": 180,
   "entries": [
     {
       "url": "/",
@@ -316,6 +316,7 @@
       "category": "Article",
       "description": "v0.9 follows BPMN for Mermaid from a renderer prototype into BP-SKILL, a 15-skill suite for preserving process knowledge beside its visual model.",
       "headings": [
+        "Read the story. Work through the idea.",
         "From Drawing to Modeling",
         "ROY: Return on Your Words",
         "Attention Is Finite (and Text Hides Flow)",
@@ -402,7 +403,7 @@
         "Support the Forge",
         "Version History"
       ],
-      "body": "OverKill Hill P³™ › Writings › The First Diagram Is Usually a Liar Essay · ROY Article v0.9: The Diagram Became the Happy Accident The First Diagram Is Usually a Liar A picture is not automatically worth 1,000 words. ROY (Return on Your Words) measures the clarity and shared understanding extracted per word invested. Jamie Hill OverKill Hill P³™ September 2026 Estimated 45 min read (including diagrams, prompts, and artifact copy) 📋 v0.9: The Diagram Became the Happy Accident This update follows BPMN for Mermaid from a renderer prototype into BP-SKILL, a 15-skill process-documentation suite built to keep human process knowledge attached to its visual model."
+      "body": "OverKill Hill P³™ › Writings › The First Diagram Is Usually a Liar Essay · ROY Article v0.9: The Diagram Became the Happy Accident The First Diagram Is Usually a Liar A picture is not automatically worth 1,000 words. ROY (Return on Your Words) measures the clarity and shared understanding extracted per word invested. Jamie Hill OverKill Hill P³™ September 2026 Estimated 45 min read (including diagrams, prompts, and artifact copy) Read the story. Work through the idea. This project now has two ways in: the complete Final Cut reading edition and an interactive field guide created using Replit ."
     },
     {
       "url": "/writings/first-diagram-is-a-liar/#artifacts",
@@ -600,6 +601,15 @@
       "description": "Velocity, iteration, and vibe over premature prompt perfection One of the points of this experiment is that the prompts were not highly polished. They were not lab-grade. They were not deeply pre-scripted.",
       "headings": [],
       "body": "Velocity, iteration, and vibe over premature prompt perfection One of the points of this experiment is that the prompts were not highly polished. They were not lab-grade. They were not deeply pre-scripted. They were not engineered like final-form production assets. Most of them started as live dictation: quick, directional, natural-language prompts spoken in the moment while the idea was still moving. That matters. If every prompt had to be honed, polished, and weaponized before I could use it, the process would lose much of what made it valuable in the first place. The friction would rise. The mental cost would rise. The velocity would drop. And at some point I may as well go back to a traditional tool and manually draw the thing in Visio.",
+      "parent": "/writings/first-diagram-is-a-liar/"
+    },
+    {
+      "url": "/writings/first-diagram-is-a-liar/#read-or-interact",
+      "title": "Read the story. Work through the idea. — The First Diagram Is Usually a Liar: v0.9 | OverKill Hill P³™",
+      "category": "Article Section",
+      "description": "This project now has two ways in: the complete Final Cut reading edition and an interactive field guide created using Replit . The application was an unexpected discovery along the way, turning the written argument into…",
+      "headings": [],
+      "body": "This project now has two ways in: the complete Final Cut reading edition and an interactive field guide created using Replit . The application was an unexpected discovery along the way, turning the written argument into something you can explore, question, and use. Read the Final Cut Use the interactive field guide OverKill Hill is home base for the story, the application, and the related projects. The earlier serialized article and its evidence remain below. 📋 v0.9: The Diagram Became the Happy Accident This update follows BPMN for Mermaid from a renderer prototype into BP-SKILL, a 15-skill process-documentation suite built to keep human process knowledge attached to its visual model.",
       "parent": "/writings/first-diagram-is-a-liar/"
     },
     {
