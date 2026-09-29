@@ -434,6 +434,38 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("!= live", checks["asset /assets/js/app.js"]["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_mixed_css_javascript_and_module_reports_stale_module(self) -> None:
+        module_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / "assets/js/mermaid-init.js"
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+            stale_asset_kind="module",
+            asset_body=module_bytes + b"\n// stale mixed-page module\n",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+        module_check = checks["asset /assets/js/mermaid-init.js"]
+        self.assertEqual(module_check["status"], "FAIL")
+        self.assertIn("!= live", module_check["evidence"])
+        self.assertEqual(
+            checks["asset /assets/css/theme.css content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/app.js content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/mermaid-init.js content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
         image_bytes = verify_live_edge.canonical_text_bytes(
             ROOT / "assets/img/favicons/murderbird-v2-icon-browser-32.png"
