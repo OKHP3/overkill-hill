@@ -415,6 +415,48 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/javascript", content_type_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_wrong_module_content_type_fails_with_explicit_mime_evidence(self) -> None:
+        for content_type in ("text/css", "text/html"):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="module",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[
+                    "asset /assets/js/mermaid-init.js content type"
+                ]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn(content_type, content_type_check["evidence"])
+                self.assertIn("application/javascript", content_type_check["evidence"])
+                self.assertIn("text/javascript", content_type_check["evidence"])
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertNotIn("asset /assets/js/app.js", checks)
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_module_accepts_explicit_javascript_media_types(self) -> None:
+        for content_type in (
+            "application/javascript; charset=utf-8",
+            "text/javascript; charset=utf-8",
+        ):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="module",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[
+                    "asset /assets/js/mermaid-init.js content type"
+                ]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_javascript_content_type_with_parameters_is_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             asset_kind="js",
