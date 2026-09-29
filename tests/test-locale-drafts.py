@@ -36,7 +36,9 @@ class LocaleDraftBuilderTests(unittest.TestCase):
         self.assertIn('loading="lazy"', rendered)
         self.assertIn('property="og:locale" content="es_MX"', rendered)
         self.assertIn('class="site-specials site-specials--okh"', rendered)
-        self.assertIn('data-banner-release="v0.5"', rendered)
+        production_es_mx = (ROOT / "es-mx" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('data-banner-release="v0.7"', production_es_mx)
+        self.assertIn('data-banner-release="v0.7"', rendered)
 
     def test_en_gb_preserves_murderbird_copy_boundaries(self):
         canonical = (ROOT / "index.html").read_text(encoding="utf-8")

@@ -257,8 +257,9 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.5",
+        "found v0.7",
     )
+    release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)
     check_main_case(
         "stale source partial reports featured route and expected release",
@@ -282,8 +283,8 @@ def main() -> int:
                 f"{mode} preserves {label} release drift",
                 banner_path,
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[0]}</a>",
-                release_failure + (banner_path,),
+                f"{check_banner.OLD_BANNERS[1]}</a>",
+                release_drift_failure + (banner_path,),
                 mode=mode,
                 expect_files_unchanged=True,
             )
