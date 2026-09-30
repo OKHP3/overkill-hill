@@ -24,6 +24,8 @@ try {
     await page.getByRole('link', { name: 'Read the transition plan →', exact: true }).click();
     assert.equal(new URL(page.url()).pathname, '/capability-transition/');
     assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'The era of Custom GPTs is ending. The work continues.');
+    assert.equal(await page.locator('#transition-acknowledgment').textContent(), "I'm aware of the change, and I'm working on it.");
+    assert.doesNotMatch(await page.locator('main').innerText(), /\u00e2\u20ac|\u00c2\u00b7/, 'Transition copy has no garbled punctuation');
     for (const route of ['bfs-framing-intelligent-futures', 'found-ry', 'hometools', 'pathscrib-r', 'un-nocked-truth']) {
       await page.goto(base + '/projects/' + route + '/');
       assert.equal(await page.locator('.capability-transition-notice').count(), 1, route + ' carries notice');
