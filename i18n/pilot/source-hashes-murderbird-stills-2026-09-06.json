@@ -8,14 +8,14 @@
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
   "current_release_shell": {
-    "source_revision": "git:31f0309e+working-tree-final-cut-release",
+    "source_revision": "git:686a1d0294de9b6c331eb314cbb9f3e3827dd4ce",
     "release": "v1.0",
-    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved.",
+    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved. Capability transition notice, modal and footer link added; regional drafts retain noindex and draft status, with explicit English fallback in es-MX.",
     "normalized_routes": {
-      "/": "16aae989d2d73ceb64bad08d8327410162fe3b322466220f28df098b0c6cfbd8",
-      "/about/": "5e9f911c94fa2d7a53a31fbe2186386d268c2707f0074798824815abb33b6ce2",
-      "/projects/": "a7f7978037dda5da75ca3161dcffaf33636d5619f52a453bd831007deebcbf3f",
-      "/contact/": "8c5afdb7e3e7acb7fc36a7f02a1bc019a32133614e3c9781003d42bdfd99b66a"
+      "/": "c094d6a0efab3c3ca24a0479fb269b4e9f7a0902cdb4304931f082068551fe0a",
+      "/about/": "9c52ce0611d1d655de073aeea64478af406c17c6ec45aac18d4645a53d6be79a",
+      "/projects/": "2d57e0d64b739cd0c23d4e2ec2ca5ae7c5cb8bc6e943b7b13eb67617e31b4487",
+      "/contact/": "6c6e06bab12ea506772655a31f0bff46b5365dba503528412a5b0fef3efc92da"
     }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",
@@ -285,5 +285,29 @@
     "record": "i18n/pilot/murderbird-project-route-review-2026-09-27.json",
     "native_or_human": false,
     "release_accepted": false
+  },
+  "capability_transition_shell_review": {
+    "source_revision": "git:686a1d0294de9b6c331eb314cbb9f3e3827dd4ce",
+    "reviewed_on": "2026-09-29",
+    "prior_release_shell": {
+      "source_revision": "git:31f0309e+working-tree-final-cut-release",
+      "release": "v1.0",
+      "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved.",
+      "normalized_routes": {
+        "/": "16aae989d2d73ceb64bad08d8327410162fe3b322466220f28df098b0c6cfbd8",
+        "/about/": "5e9f911c94fa2d7a53a31fbe2186386d268c2707f0074798824815abb33b6ce2",
+        "/projects/": "a7f7978037dda5da75ca3161dcffaf33636d5619f52a453bd831007deebcbf3f",
+        "/contact/": "8c5afdb7e3e7acb7fc36a7f02a1bc019a32133614e3c9781003d42bdfd99b66a"
+      }
+    },
+    "scope": "Homepage notice and modal plus footer link. en-GB inherits canonical English; es-MX retains explicitly lang=en-US English fallback announcements. No new Spanish translation or native approval claimed. Existing reviewed prose preserved.",
+    "review": {
+      "ai_structural_review": true,
+      "human_native_approval": false,
+      "release_accepted": false
+    },
+    "status": "ai-reviewed-draft",
+    "source_register": "plainspoken en-US",
+    "voice_profile_status": "provisional; no bilingual translation attempted"
   }
 }
