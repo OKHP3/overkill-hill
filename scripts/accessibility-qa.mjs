@@ -148,7 +148,7 @@ async function inspectAriaAndDiagrams(page, path) {
 async function inspectKeyboardAndFocus(page, definition) {
   const failures = [];
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto(`${baseUrl}${definition.path}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.goto(`${baseUrl}${definition.path}`, { waitUntil: "load", timeout: 30000 });
 
   // A first-visit announcement intentionally owns focus before the page.
   // Verify its focus, dismiss it, then audit the underlying skip-link order.
@@ -158,8 +158,9 @@ async function inspectKeyboardAndFocus(page, definition) {
       failures.push('transition announcement did not receive initial focus');
     }
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => sessionStorage.getItem('okh-capability-transition-2026-09-29') === 'dismissed');
     // Reload the dismissed state to reset the sequential focus starting point.
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'load' });
   }
 
   const keyboard = await page.evaluate(() => {

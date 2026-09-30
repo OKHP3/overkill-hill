@@ -18,6 +18,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No mobile overflow');
     await page.keyboard.press('Escape');
     assert.equal(await dialog.evaluate(el => el.open), false);
+    await page.waitForFunction(() => sessionStorage.getItem('okh-capability-transition-2026-09-29') === 'dismissed');
     await page.reload();
     assert.equal(await dialog.evaluate(el => el.open), false, 'Dismissal survives same-tab reload');
     await page.getByRole('link', { name: 'Read the transition plan →', exact: true }).click();
