@@ -150,6 +150,18 @@ async function inspectKeyboardAndFocus(page, definition) {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(`${baseUrl}${definition.path}`, { waitUntil: "domcontentloaded", timeout: 30000 });
 
+  // A first-visit announcement intentionally owns focus before the page.
+  // Verify its focus, dismiss it, then audit the underlying skip-link order.
+  const announcement = page.locator('#capability-transition-dialog[open]');
+  if (await announcement.count()) {
+    if (!await page.getByRole('button', { name: 'Close transition announcement' }).evaluate(el => el === document.activeElement)) {
+      failures.push('transition announcement did not receive initial focus');
+    }
+    await page.keyboard.press('Escape');
+    // Reload the dismissed state to reset the sequential focus starting point.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+  }
+
   const keyboard = await page.evaluate(() => {
     const visible = (element) => {
       const style = getComputedStyle(element);

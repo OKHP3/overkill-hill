@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 171,
+  "count": 172,
   "entries": [
     {
       "url": "/",
@@ -9,6 +9,7 @@
       "category": "Home",
       "description": "OverKill Hill P³™ is the digital forge for AI systems design: local inference, agentic coordination, and the protocols that make it hold.",
       "headings": [
+        "Custom GPT transition",
         "Selected work",
         "Featured from the Forge",
         "How OverKill Hill thinks",
@@ -16,6 +17,7 @@
         "Projects from the forge",
         "Let’s build something enduring.",
         "Start with the work",
+        "The Custom GPT era is ending. The work continues.",
         "Skillz Forge",
         "Abrahamic Reference Engine",
         "The First Diagram Is Usually a Liar",
@@ -33,7 +35,7 @@
         "Inspect the work",
         "Discuss a project"
       ],
-      "body": "The Forge Precision · Protocol · Promptcraft The digital forge AI tools, working methods, and the evidence behind them. Use a tool Inspect the work Discuss a project Meet the MurderBird: read the origin story → Selected work Project records distinguish published descriptions from verified operation. Skillz Forge Discoverable, inspectable, and installable Agent Skill contracts. Active build; package maturity varies. Operation unverified. Status and source Availability: Published catalog project. Maturity: Active build; package maturity varies. Evidence: Source description only. Delivery: unknown. Source record (reviewed 2026-09-07)."
+      "body": "Custom GPT transition OpenAI has scheduled Custom GPT retirement for December 11, 2026. I’m actively working to carry useful GPT-era concepts and systems into Agent Skills and plugins. Read the transition plan → The Forge Precision · Protocol · Promptcraft The digital forge AI tools, working methods, and the evidence behind them. Use a tool Inspect the work Discuss a project Meet the MurderBird: read the origin story → Selected work Project records distinguish published descriptions from verified operation. Skillz Forge Discoverable, inspectable, and installable Agent Skill contracts. Active build; package maturity varies. Operation unverified."
     },
     {
       "url": "/about/",
@@ -120,6 +122,7 @@
       "category": "Brand",
       "description": "Prompt Forge is OverKill Hill P³™'s workshop for turning prompts into governed AI protocols, audit contracts, and production-ready system specs.",
       "headings": [
+        "Custom GPT transition",
         "Prompts Are Not the Artifact",
         "What Makes a Prompt a Protocol",
         "Six Flagship Prompt Systems",
@@ -132,7 +135,7 @@
         "Bring a Messy Prompt to the Forge",
         "The Workflow"
       ],
-      "body": "Promptcraft Workshop Prompt Forge Raw prompts are disposable. Prompt protocols are reusable instruments. Prompt Forge is the OverKill Hill P³™ workshop for turning messy intent into governed AI protocols, audit contracts, Replit execution specs, Notion knowledge systems, and public-facing promptcraft patterns. Explore the Six Flagship Systems Read the Prompt Anatomy Visit the Writings Library The Thesis Prompts Are Not the Artifact A prompt is the interface layer between intent, context, constraints, tools, memory, and execution. Weak prompts ask for output. Strong prompts define the operating conditions under which useful output can exist."
+      "body": "Custom GPT transition OpenAI has scheduled Custom GPT retirement for December 11, 2026. This page includes GPT-era methods and records; references are not replacement releases. Read the transition plan → Promptcraft Workshop Prompt Forge Raw prompts are disposable. Prompt protocols are reusable instruments. Prompt Forge is the OverKill Hill P³™ workshop for turning messy intent into governed AI protocols, audit contracts, Replit execution specs, Notion knowledge systems, and public-facing promptcraft patterns."
     },
     {
       "url": "/prompt-forge/#anatomy",
@@ -272,10 +275,11 @@
       "category": "Brand",
       "description": "Download the Prompt Protocol Template. Additional prompt protocols, audit contracts and scoring rubrics are planned for public release.",
       "headings": [
+        "Custom GPT transition",
         "Ready to Download",
         "Coming Next"
       ],
-      "body": "The Prompt Forge The Prompt Vault One downloadable Prompt Protocol Template, with more protocols, audit contracts and scoring rubrics planned for public release. Copy it. Fill every field. Browse downloads Back to Prompt Forge Available Now Ready to Download Each artifact is a standalone document you can copy into your own workflow. No login, no paywall; just grab it and put it to work. Available now Prompt Protocol Template The canonical ten-element scaffold for a governed prompt. Includes all anatomy fields (Role through Handoff) with descriptions, blank fields, a filled example, and usage notes. Copy it. Fill every field."
+      "body": "Custom GPT transition OpenAI has scheduled Custom GPT retirement for December 11, 2026. This page includes GPT-era methods and records; references are not replacement releases. Read the transition plan → The Prompt Forge The Prompt Vault One downloadable Prompt Protocol Template, with more protocols, audit contracts and scoring rubrics planned for public release. Copy it. Fill every field. Browse downloads Back to Prompt Forge Available Now Ready to Download Each artifact is a standalone document you can copy into your own workflow. No login, no paywall; just grab it and put it to work. Available now Prompt Protocol Template The canonical ten-element scaffold for a governed prompt."
     },
     {
       "url": "/writings/",
@@ -802,6 +806,7 @@
       "category": "Project",
       "description": "BFS Framing Intelligent Futures: an OverKill Hill P³™ incubator project exploring AI-assisted brand governance for enterprise scale.",
       "headings": [
+        "Custom GPT transition",
         "About the project",
         "From OverKill Hill experiment to BrandGuard™ lens",
         "Why this matters for the next era of digital commerce",
@@ -827,7 +832,7 @@
         "For Builders FirstSource & close partners",
         "For other brands staring at the same horizon"
       ],
-      "body": "Availability: Published case study. Maturity: Independent prototype. Evidence: Source description only. Delivery: unknown. OverKill Hill P³ · Incubator Project · Evolved into AskJamie™ BrandGuard™ BFS Framing Intelligent Futures An independent prototype exploring how public Builders FirstSource knowledge can become a conversational reference. Independent prototype. Delivery unverified. Status and source Availability: Published case study. Maturity: Independent prototype. Evidence: Source description only. Delivery: unknown. Source record (reviewed 2026-09-07)."
+      "body": "Availability: Published case study. Maturity: Independent prototype. Evidence: Source description only. Delivery: unknown. Custom GPT transition OpenAI has scheduled Custom GPT retirement for December 11, 2026. This page records a legacy GPT prototype. Its replacement is not announced here. Read the transition plan → OverKill Hill P³ · Incubator Project · Evolved into AskJamie™ BrandGuard™ BFS Framing Intelligent Futures An independent prototype exploring how public Builders FirstSource knowledge can become a conversational reference. Independent prototype. Delivery unverified. Status and source Availability: Published case study. Maturity: Independent prototype."
     },
     {
       "url": "/projects/bpmn-for-mermaid/",
@@ -1063,6 +1068,7 @@
       "category": "Project",
       "description": "A browser-only build workbench for production-grade Custom GPTs. Nine stations from build brief to ship gate, plus audit scoring and a full spec export.",
       "headings": [
+        "Custom GPT transition",
         "About the project",
         "A good prototype is not a thing you can hand to anyone",
         "Ore, heat, anvil, quench",
@@ -1095,7 +1101,7 @@
         "Nothing leaves the browser",
         "Need a Custom GPT that survives contact with real users?"
       ],
-      "body": "Availability: Published project. Maturity: Browser workbench; maturity unverified. Evidence: Source description only. Delivery: unknown. overkillhill.com / projects / found-ry Found‑Rᵧ A browser workbench for carrying a Custom GPT from its first brief to a reviewed, exportable specification. Browser workbench; maturity unverified. Operation unverified. Status and source Availability: Published project. Maturity: Browser workbench; maturity unverified. Evidence: Source description only. Delivery: unknown. Source record (reviewed 2026-09-07). Foundry Project Open Source Browser-Only ⤢ Enter the Found‑Rᵧ View Source on GitHub Start at the Prompt Forge About the project Tools for making tools."
+      "body": "Availability: Published project. Maturity: Browser workbench; maturity unverified. Evidence: Source description only. Delivery: unknown. Custom GPT transition OpenAI has scheduled Custom GPT retirement for December 11, 2026. This workbench retains GPT-era design material while its capability scope evolves. Read the transition plan → overkillhill.com / projects / found-ry Found‑Rᵧ A browser workbench for carrying a Custom GPT from its first brief to a reviewed, exportable specification. Browser workbench; maturity unverified. Operation unverified. Status and source Availability: Published project. Maturity: Browser workbench; maturity unverified. Evidence: Source description only."
     },
     {
       "url": "/projects/found-ry/#ecosystem",
@@ -2080,6 +2086,19 @@
       "headings": [],
       "body": "The Method From committed package to reviewable evidence 01 Select A committed change selects its skill package and supporting files. Draft packages are included. Application-only changes skip scanning. 02 Resolve Official stable scanner releases become immutable, verified artifacts for the run. The Shield integration stays pinned to a reviewed commit. 03 Inspect Cisco Skill Scanner and NVIDIA SkillSpector perform static analysis without executing submitted skill instructions, scripts, installers, or dependencies. 04 Review Maintainers receive sanitized findings, coverage, source revisions, package digests, and scanner identities. Missing analysis remains visible.",
       "parent": "/skillz-forge/skillz-shield/"
+    },
+    {
+      "url": "/capability-transition/",
+      "title": "Custom GPT Transition | OverKill Hill P³™",
+      "category": "Page",
+      "description": "Custom GPTs are scheduled to retire December 11, 2026. Jamie Hill is carrying useful concepts and systems forward into Agent Skills and plugins.",
+      "headings": [
+        "I’m aware of the change, and I’m working on it.",
+        "What OpenAI has announced",
+        "How I’m carrying the work forward",
+        "What this means for the pages here"
+      ],
+      "body": "Platform transition · September 29, 2026 The Custom GPT era is ending. The work continues. Preserving the learning. Reworking the capabilities. Testing what comes next. I’m aware of the change, and I’m working on it. Custom GPTs were an important part of my learning: a place to explore ideas, develop working methods, and discover what useful AI assistance could become. Across OverKill Hill, AskJamie, and Glee-fully, that work includes published GPTs, prototypes, unfinished concepts, and supporting documents. OpenAI has announced the retirement of Custom GPTs."
     },
     {
       "url": "/fr/",

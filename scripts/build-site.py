@@ -334,6 +334,33 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
     rel = page["path"]
     stem = SRC / "pages" / rel
     main = stem.with_suffix(".main.html").read_text(encoding="utf-8")
+    transition_routes = {
+        "/projects/bfs-framing-intelligent-futures/": "legacy",
+        "/projects/found-ry/": "workbench",
+        "/projects/hometools/": "concept",
+        "/projects/pathscrib-r/": "concept",
+        "/projects/un-nocked-truth/": "concept",
+        "/prompt-forge/": "methods",
+        "/vault/": "methods",
+    }
+    transition_kind = transition_routes.get(page["route"])
+    if transition_kind or page["route"] == "/":
+        qualifier = {
+            "legacy": "This page records a legacy GPT prototype. Its replacement is not announced here.",
+            "workbench": "This workbench retains GPT-era design material while its capability scope evolves.",
+            "concept": "The GPT components described here are concepts, not released replacements.",
+            "methods": "This page includes GPT-era methods and records; references are not replacement releases.",
+        }.get(transition_kind, "I’m actively working to carry useful GPT-era concepts and systems into Agent Skills and plugins.")
+        main = (
+            '<!-- AUTOGEN:CAPABILITY-TRANSITION -->\n'
+            '<aside class="capability-transition-notice container" aria-labelledby="transition-notice-title">'
+            '<h2 id="transition-notice-title">Custom GPT transition</h2>'
+            '<p>OpenAI has scheduled Custom GPT retirement for December 11, 2026. '
+            + qualifier + '</p><a href="/capability-transition/">Read the transition plan →</a></aside>\n'
+            + main
+        )
+    if page["route"] == "/":
+        main += "\n" + (PARTIALS / "capability-transition-dialog.html").read_text(encoding="utf-8")
     main = PROJECT_STATUS["render"](main, page["route"], PROJECT_STATUS["load_registry"](ROOT))
     extras = stem.with_suffix(".extras.html").read_text(encoding="utf-8")
     head = (PARTIALS / "head.html").read_text(encoding="utf-8")
