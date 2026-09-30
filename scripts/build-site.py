@@ -354,8 +354,8 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
         main = (
             '<!-- AUTOGEN:CAPABILITY-TRANSITION -->\n'
             '<aside class="capability-transition-notice container" aria-labelledby="transition-notice-title">'
-            '<h2 id="transition-notice-title">Custom GPT transition</h2>'
-            '<p>OpenAI has scheduled Custom GPT retirement for December 11, 2026. '
+            '<h2 id="transition-notice-title">Capability transition</h2>'
+            '<p>OpenAI has scheduled the retirement of Custom GPTs for December 11, 2026. '
             + qualifier + '</p><a href="/capability-transition/">Read the transition plan →</a></aside>\n'
             + main
         )

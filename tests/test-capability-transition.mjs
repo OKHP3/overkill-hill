@@ -22,7 +22,7 @@ try {
     assert.equal(await dialog.evaluate(el => el.open), false, 'Dismissal survives same-tab reload');
     await page.getByRole('link', { name: 'Read the transition plan →', exact: true }).click();
     assert.equal(new URL(page.url()).pathname, '/capability-transition/');
-    assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'The Custom GPT era is ending. The work continues.');
+    assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'The era of Custom GPTs is ending. The work continues.');
     for (const route of ['bfs-framing-intelligent-futures', 'found-ry', 'hometools', 'pathscrib-r', 'un-nocked-truth']) {
       await page.goto(base + '/projects/' + route + '/');
       assert.equal(await page.locator('.capability-transition-notice').count(), 1, route + ' carries notice');
