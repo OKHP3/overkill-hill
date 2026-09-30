@@ -50,6 +50,12 @@ try {
     }, scenario);
     try {
       await page.goto(base + '/', { waitUntil: 'load' });
+      // Audit underlying page behavior after the first-visit dialog is closed.
+      const announcement = page.locator('#capability-transition-dialog[open]');
+      if (await announcement.count()) {
+        await page.getByRole('button', { name: 'Close transition announcement' }).click();
+        await page.waitForFunction(() => !document.getElementById('capability-transition-dialog').open);
+      }
       assert.equal(new URL(page.url()).pathname, '/');
       assert.match(await page.title(), /OverKill/);
       await page.waitForFunction(() => [...document.querySelectorAll('.reveal-on-scroll')].every(el => Number(getComputedStyle(el).opacity) === 1), null, { timeout: 2500 });

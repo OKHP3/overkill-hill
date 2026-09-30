@@ -1,4 +1,37 @@
 // French interaction drafts and source provenance: i18n/pilot/fr/interactions/.
+// The versioned announcement is dismissed for this tab's session only.
+(function () {
+  function initTransition() {
+    const dialog = document.getElementById("capability-transition-dialog");
+    if (!dialog || typeof dialog.showModal !== "function") return;
+    const key = "okh-capability-transition-2026-09-29";
+    const previousFocus = document.activeElement;
+    const remember = () => {
+      try { sessionStorage.setItem(key, "dismissed"); } catch (_) { /* Storage is optional. */ }
+      if (previousFocus && previousFocus !== document.body) previousFocus.focus();
+    };
+    dialog.addEventListener("close", remember);
+    dialog.addEventListener("keydown", event => {
+      if (event.key !== "Tab") return;
+      const controls = [...dialog.querySelectorAll("a[href], button:not([disabled])")];
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    dialog.querySelector("[data-close-transition]").addEventListener("click", () => dialog.close());
+    try { if (sessionStorage.getItem(key) === "dismissed") return; } catch (_) { /* Show without storage. */ }
+    dialog.showModal();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initTransition);
+  else initTransition();
+})();
+
 // Display text only. Locale routes, search keys, and keyboard behavior stay canonical.
 function okhLocaleText(english, french) {
   return /^fr(?:-|$)/i.test(document.documentElement.lang || "") ? french : english;
