@@ -11,6 +11,18 @@ const repositoryRoot = resolve(testsDirectory, "..");
 let server;
 let baseUrl;
 
+// Search interactions begin after the first-visit announcement is dismissed.
+// The announcement's own focus and persistence have dedicated regressions.
+async function dismissAnnouncement(page) {
+  await page.waitForLoadState('load');
+  const announcement = page.locator('#capability-transition-dialog[open]');
+  if (await announcement.count()) {
+    await page.getByRole('button', { name: 'Close transition announcement' }).click();
+    await page.waitForFunction(() => !document.getElementById('capability-transition-dialog').open);
+  }
+}
+
+
 function contentTypeFor(pathname) {
   const ext = extname(pathname).toLowerCase();
   return { ".css": "text/css; charset=utf-8", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp" }[ext] || "text/plain; charset=utf-8";
@@ -53,6 +65,7 @@ for (const overlayMode of [true, false]) {
         await route.fulfill({ contentType: "application/json", body: '{"entries":[]}' });
       });
       await page.goto(`${baseUrl}${overlayMode ? "/" : "/search/"}`, { waitUntil: "domcontentloaded" });
+      await dismissAnnouncement(page);
       if (overlayMode) await page.locator(".okh-search-trigger").click();
       const input = page.locator(overlayMode ? ".okh-search-input" : "#search-page-input");
       const status = page.locator(overlayMode ? ".okh-search-status" : "#search-stats");
@@ -75,6 +88,7 @@ for (const overlayMode of [true, false]) {
         contentType: "application/json", body: JSON.stringify({ entries: makeSearchEntries().slice(0, 3) }),
       }));
       await page.goto(`${baseUrl}${overlayMode ? "/" : "/search/?q=omega"}`, { waitUntil: "networkidle" });
+      await dismissAnnouncement(page);
       const trigger = page.locator(".okh-search-trigger");
       if (overlayMode) await trigger.click();
       const input = page.locator(overlayMode ? ".okh-search-input" : "#search-page-input");
@@ -147,6 +161,7 @@ test("uses each site's identity and vocabulary in the shared search overlay", as
         await page.route(/\/assets\/js\/(?:glee-site-enhancements|askjamie-analytics)\.js(?:\?.*)?$/, route => route.fulfill({ contentType: "text/javascript", body: "export {};" }));
         await page.route("**/assets/data/search-index.json", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ entries: makeSearchEntries() }) }));
         await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
+        await dismissAnnouncement(page);
         await page.locator(".okh-search-trigger").click();
         const overlay = page.getByRole("dialog", { name: brand.label, exact: true });
         await overlay.waitFor({ state: "visible" });
@@ -162,6 +177,7 @@ async function openSearchPage(page, indexResponder, path = "/search/?q=omega&cat
   let requestCount = 0;
   await page.route("**/assets/data/search-index.json", async (route) => { requestCount += 1; await indexResponder(route, requestCount); });
   await page.goto(`${baseUrl}${path}`, { waitUntil: "networkidle" });
+  await dismissAnnouncement(page);
   return () => requestCount;
 }
 
@@ -199,6 +215,7 @@ test("contains overlay index failures without an unhandled rejection", async () 
   try {
     await page.route("**/assets/data/search-index.json", async (route) => { requests += 1; await route.fulfill(requests === 1 ? { status: 503, contentType: "application/json", body: "{}" } : { status: 200, contentType: "application/json", body: JSON.stringify({ entries: makeSearchEntries() }) }); });
     await page.goto(`${baseUrl}/`, { waitUntil: "networkidle" });
+    await dismissAnnouncement(page);
     await page.getByRole("button", { name: "Search" }).click();
     await page.locator(".okh-search-overlay .okh-search-noresults--error").waitFor();
     // Arm the retry response before clicking. The previous document's
@@ -235,6 +252,7 @@ test("preserves an overlay query entered while the index is loading", async () =
       });
     });
     await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
+    await dismissAnnouncement(page);
     await page.getByRole("button", { name: "Search" }).click();
     await page.locator(".okh-search-input").fill("resume");
     await page.locator('.okh-search-result[href="/resume-builder/"]').waitFor();
