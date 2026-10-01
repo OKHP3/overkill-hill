@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic live-edge reports used by Actions-summary tests."""
+"""Generate deterministic report fixtures used by Actions-summary tests."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import importlib.util
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -92,6 +93,175 @@ SCENARIOS: dict[str, dict[str, Any]] = {
     },
 }
 
+EXTERNAL_ROUTES = ["/", "/about/", "/contact/"]
+EXTERNAL_SCENARIOS: dict[str, dict[str, Any]] = {
+    "external-runtime-pass.json": {
+        "dependencies": [
+            {"url": "https://cdn.example/site.css", "route": "/", "state": "available"},
+            {"url": "https://images.example/hero.webp", "route": "/", "state": "available"},
+        ],
+    },
+    "external-runtime-degraded.json": {
+        "dependencies": [
+            {"url": "https://cdn.example/site.css", "route": "/", "state": "available"},
+            {
+                "url": "https://images.example/hero.webp",
+                "route": "/",
+                "state": "unavailable",
+                "errorText": "net::ERR_NAME_NOT_RESOLVED",
+            },
+        ],
+    },
+    "external-runtime-local-failure.json": {
+        "dependencies": [
+            {"url": "https://cdn.example/site.css", "route": "/", "state": "available"},
+            {"url": "https://images.example/hero.webp", "route": "/", "state": "available"},
+        ],
+        "localFailures": [
+            {"path": "/about/", "error": "local HTTP error: 500 https://fixture.example/about/"},
+        ],
+    },
+    "external-runtime-mixed-failure.json": {
+        "dependencies": [
+            {"url": "https://cdn.example/site.css", "route": "/", "state": "available"},
+            {"url": "https://images.example/hero.webp", "route": "/", "state": "available"},
+            {
+                "url": "https://fonts.example/site.woff2",
+                "route": "/about/",
+                "state": "unavailable",
+                "errorText": "net::ERR_CONNECTION_RESET",
+            },
+            {
+                "url": "https://video.example/embed.js",
+                "route": "/contact/",
+                "state": "unavailable",
+                "errorText": "net::ERR_TIMED_OUT",
+            },
+        ],
+        "localFailures": [
+            {"path": "/about/", "error": "local HTTP error: 500 https://fixture.example/about/"},
+        ],
+        "cspDiagnostics": [
+            {"path": "/contact/", "message": "CSP: refused to load an embedded resource"},
+        ],
+    },
+}
+
+
+def external_dependency_for(scenario: dict[str, Any]) -> dict[str, Any]:
+    url = scenario["url"]
+    route = scenario["route"]
+    state = scenario["state"]
+    parsed_url = urlsplit(url)
+    extension = Path(parsed_url.path).suffix.lower()
+    resource_type = {
+        ".css": "stylesheet",
+        ".js": "script",
+        ".woff": "font",
+        ".woff2": "font",
+        ".ttf": "font",
+    }.get(extension, "image")
+    responses = (
+        [{"status": 200, "statusText": "OK"}]
+        if state == "available"
+        else []
+    )
+    failures = (
+        [{"route": route, "errorText": scenario["errorText"], "count": 1}]
+        if state == "unavailable"
+        else []
+    )
+    outcome = {
+        "route": route,
+        "state": state,
+        "cspBlocked": False,
+        "responses": responses,
+        "failures": failures,
+        "timeouts": [],
+        "cspEvidence": [],
+    }
+    return {
+        "url": url,
+        "origin": f"{parsed_url.scheme}://{parsed_url.netloc}",
+        "routes": [route],
+        "routeOutcomes": [outcome],
+        "resourceTypes": [resource_type],
+        "requestCount": 1,
+        "responses": responses,
+        "failures": failures,
+        "timeouts": [],
+        "cspEvidence": [],
+        "cspBlocked": False,
+        "state": state,
+    }
+
+
+def external_report_for(scenario: dict[str, Any]) -> dict[str, Any]:
+    dependencies = [
+        external_dependency_for(dependency)
+        for dependency in scenario["dependencies"]
+    ]
+    external_outages = [
+        dependency
+        for dependency in dependencies
+        if dependency["state"] in {"unavailable", "no-response"}
+    ]
+    local_failures = scenario.get("localFailures", [])
+    csp_diagnostics = scenario.get("cspDiagnostics", [])
+    csp_evidence: list[dict[str, Any]] = []
+    timeouts: list[dict[str, Any]] = []
+    time_budget = {
+        "limitMs": 30000,
+        "elapsedMs": 1250,
+        "exceeded": False,
+        "routesCutShort": [],
+        "routesSkipped": [],
+    }
+    if external_outages:
+        status = "EXTERNAL_OUTAGE"
+    elif csp_diagnostics or csp_evidence:
+        status = "CSP_BLOCKED"
+    elif local_failures:
+        status = "LOCAL_FAILURE"
+    elif time_budget["exceeded"]:
+        status = "TIME_BUDGET_EXCEEDED"
+    else:
+        status = "PASS"
+    return {
+        "version": 1,
+        "mode": "external-health",
+        "baseUrl": "https://fixture.example",
+        "routes": EXTERNAL_ROUTES,
+        "dependencies": dependencies,
+        "externalOutages": external_outages,
+        "cspDiagnostics": csp_diagnostics,
+        "cspEvidence": csp_evidence,
+        "timeouts": timeouts,
+        "localFailures": local_failures,
+        "timeBudget": time_budget,
+        "summary": {
+            "routes": len(EXTERNAL_ROUTES),
+            "dependencies": len(dependencies),
+            "available": sum(
+                dependency["state"] == "available" for dependency in dependencies
+            ),
+            "externalOutages": len(external_outages),
+            "failureEvents": sum(
+                failure.get("count", 1)
+                for dependency in dependencies
+                for failure in dependency["failures"]
+            ),
+            "cspDiagnostics": len(csp_diagnostics),
+            "cspEvidence": len(csp_evidence),
+            "timeouts": len(timeouts),
+            "localFailures": len(local_failures),
+            "budgetExceeded": time_budget["exceeded"],
+            "routesCutShortByBudget": len(time_budget["routesCutShort"]),
+            "routesSkippedByBudget": len(time_budget["routesSkipped"]),
+        },
+        "status": status,
+    }
+
 
 def report_for(scenario: dict[str, Any]) -> dict[str, Any]:
     checks = scenario["checks"]
@@ -120,10 +290,15 @@ def report_for(scenario: dict[str, Any]) -> dict[str, Any]:
 
 
 def rendered_fixtures() -> dict[str, str]:
-    return {
+    live_edge = {
         name: json.dumps(report_for(scenario), indent=2) + "\n"
         for name, scenario in SCENARIOS.items()
     }
+    external_runtime = {
+        name: json.dumps(external_report_for(scenario), indent=2) + "\n"
+        for name, scenario in EXTERNAL_SCENARIOS.items()
+    }
+    return {**live_edge, **external_runtime}
 
 
 def sync_fixtures(output_directory: Path, *, write: bool) -> list[str]:
@@ -143,7 +318,12 @@ def sync_fixtures(output_directory: Path, *, write: bool) -> list[str]:
 
     if not write:
         expected_names = set(expected)
-        for path in sorted(output_directory.glob("live-edge-*.json")):
+        generated_fixtures = [
+            path
+            for pattern in ("live-edge-*.json", "external-runtime-*.json")
+            for path in output_directory.glob(pattern)
+        ]
+        for path in sorted(generated_fixtures):
             if path.name not in expected_names:
                 problems.append(f"unexpected generated fixture: {path}")
     return problems
@@ -168,7 +348,8 @@ def main() -> int:
         return 1
     print(
         f"{'wrote' if args.write else 'checked'} "
-        f"{len(SCENARIOS)} deterministic Actions-summary fixtures in "
+        f"{len(SCENARIOS) + len(EXTERNAL_SCENARIOS)} deterministic "
+        "Actions-summary fixtures in "
         f"{args.output_directory}"
     )
     return 0
