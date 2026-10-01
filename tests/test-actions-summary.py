@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts/write-actions-summary.py'
 FIXTURE_GENERATOR = ROOT / 'scripts/generate-actions-summary-fixtures.py'
 FIXTURE_DIRECTORY = ROOT / 'tests/fixtures/actions-summary'
+EXTERNAL_RUNTIME_FIXTURES = {
+    'external-runtime-pass.json': 'PASS',
+    'external-runtime-degraded.json': 'EXTERNAL_OUTAGE',
+    'external-runtime-local-failure.json': 'LOCAL_FAILURE',
+    'external-runtime-mixed-failure.json': 'EXTERNAL_OUTAGE',
+}
 ARCHIVED_LIVE_EDGE_REPORTS = {
     ROOT / 'tests/fixtures/actions-summary/archived-live-edge-2026-09-07.json': 'current',
 }
@@ -29,7 +35,7 @@ class SummaryTests(unittest.TestCase):
     def load_fixture(self, name):
         return json.loads((FIXTURE_DIRECTORY / name).read_text(encoding='utf-8'))
 
-    def test_committed_live_edge_fixtures_are_current(self):
+    def test_committed_generated_fixtures_are_current(self):
         result = subprocess.run(
             [sys.executable, str(FIXTURE_GENERATOR), '--check'],
             capture_output=True,
@@ -40,6 +46,103 @@ class SummaryTests(unittest.TestCase):
             0,
             result.stdout + result.stderr,
         )
+
+    def test_generated_fixture_check_detects_external_runtime_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_directory = Path(directory)
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--write',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+
+            fixture = output_directory / 'external-runtime-degraded.json'
+            actual_content = fixture.read_text(encoding='utf-8').replace(
+                '"status": "EXTERNAL_OUTAGE"',
+                '"status": "PASS"',
+                1,
+            )
+            fixture.write_text(actual_content, encoding='utf-8')
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--check',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            unchanged_content = fixture.read_text(encoding='utf-8')
+
+        self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
+        self.assertIn('generated fixture is stale', checked.stdout + checked.stderr)
+        self.assertIn('external-runtime-degraded.json', checked.stdout + checked.stderr)
+        self.assertIn('--- expected/external-runtime-degraded.json', checked.stdout)
+        self.assertIn('+++ actual/external-runtime-degraded.json', checked.stdout)
+        self.assertIn('-  "status": "EXTERNAL_OUTAGE"', checked.stdout)
+        self.assertIn('+  "status": "PASS"', checked.stdout)
+        self.assertEqual(unchanged_content, actual_content)
+
+    def test_generated_fixture_check_keeps_missing_and_unexpected_files_explicit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_directory = Path(directory)
+            unexpected = output_directory / 'external-runtime-untracked.json'
+            unexpected.write_text('{}\n', encoding='utf-8')
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--check',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        output = checked.stdout + checked.stderr
+        self.assertEqual(checked.returncode, 1, output)
+        self.assertIn('missing generated fixture:', output)
+        self.assertIn('unexpected generated fixture:', output)
+        self.assertIn('external-runtime-untracked.json', output)
+
+    def test_external_runtime_fixtures_match_the_report_contract(self):
+        for name, expected_status in EXTERNAL_RUNTIME_FIXTURES.items():
+            with self.subTest(fixture=name):
+                report = self.load_fixture(name)
+                self.assertEqual(report['version'], 1)
+                self.assertEqual(report['mode'], 'external-health')
+                self.assertEqual(report['status'], expected_status)
+                self.assertIsInstance(report['baseUrl'], str)
+                self.assertEqual(len(report['routes']), report['summary']['routes'])
+                self.assertEqual(len(report['dependencies']), report['summary']['dependencies'])
+                self.assertEqual(
+                    report['externalOutages'],
+                    [
+                        dependency for dependency in report['dependencies']
+                        if dependency['state'] in {'unavailable', 'no-response'}
+                    ],
+                )
+                summary = report['summary']
+                self.assertEqual(
+                    summary['available'],
+                    sum(dependency['state'] == 'available'
+                        for dependency in report['dependencies']),
+                )
+                self.assertEqual(summary['externalOutages'], len(report['externalOutages']))
+                self.assertEqual(summary['localFailures'], len(report['localFailures']))
+                self.assertEqual(summary['cspDiagnostics'], len(report['cspDiagnostics']))
+                self.assertEqual(summary['cspEvidence'], len(report['cspEvidence']))
+                self.assertEqual(summary['timeouts'], len(report['timeouts']))
 
     def test_committed_live_edge_fixtures_match_verifier_report_shape(self):
         fixtures = sorted(FIXTURE_DIRECTORY.glob('live-edge-*.json'))
@@ -290,24 +393,35 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('NOT RUN', summary)
 
     def test_mixed_external_and_local_failure(self):
-        code, summary = self.run_summary({'summary': {'routes': 3, 'dependencies': 4, 'available': 2,
-            'externalOutages': 2, 'localFailures': 1, 'cspDiagnostics': 1}}, 'external')
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-mixed-failure.json'), 'external'
+        )
         self.assertEqual(code, 1)
         self.assertIn('| Content delivery | FAILED |', summary)
         self.assertIn('| External availability | DEGRADED |', summary)
         self.assertIn('| Browser CSP diagnostics | WARN |', summary)
 
-    def test_external_only_is_nonblocking(self):
-        code, summary = self.run_summary({'summary': {'routes': 3, 'dependencies': 4, 'available': 2,
-            'externalOutages': 2, 'localFailures': 0, 'cspDiagnostics': 0}}, 'external')
+    def test_external_runtime_pass_summary(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-pass.json'), 'external'
+        )
+
         self.assertEqual(code, 0)
-        self.assertIn('DEGRADED', summary)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| External availability | PASS |', summary)
+        self.assertIn('| Browser CSP diagnostics | PASS |', summary)
+
+    def test_external_only_is_nonblocking(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'), 'external'
+        )
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED |', summary)
 
     def test_external_degraded_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/987'
         code, summary = self.run_summary(
-            {'summary': {'routes': 3, 'dependencies': 4, 'available': 2,
-                         'externalOutages': 2, 'localFailures': 0, 'cspDiagnostics': 0}},
+            self.load_fixture('external-runtime-degraded.json'),
             'external',
             artifact_url=artifact_url,
         )
@@ -321,8 +435,7 @@ class SummaryTests(unittest.TestCase):
     def test_external_local_failure_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/988'
         code, summary = self.run_summary(
-            {'summary': {'routes': 3, 'dependencies': 4, 'available': 4,
-                         'externalOutages': 0, 'localFailures': 1, 'cspDiagnostics': 0}},
+            self.load_fixture('external-runtime-local-failure.json'),
             'external',
             artifact_url=artifact_url,
         )
@@ -359,8 +472,9 @@ class SummaryTests(unittest.TestCase):
                 self.assertIn('UNKNOWN', output.read_text(encoding='utf-8'))
 
     def test_empty_external_sample_does_not_pass(self):
-        code, summary = self.run_summary({'summary': dict.fromkeys(
-            ('routes', 'dependencies', 'available', 'externalOutages', 'localFailures', 'cspDiagnostics'), 0)}, 'external')
+        report = self.load_fixture('external-runtime-pass.json')
+        report['summary']['routes'] = 0
+        code, summary = self.run_summary(report, 'external')
         self.assertEqual(code, 1)
         self.assertIn('UNKNOWN', summary)
 

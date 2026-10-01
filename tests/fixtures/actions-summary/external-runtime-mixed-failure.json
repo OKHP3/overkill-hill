@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "mode": "external-health",
+  "baseUrl": "https://fixture.example",
+  "routes": [
+    "/",
+    "/about/",
+    "/contact/"
+  ],
+  "dependencies": [
+    {
+      "url": "https://cdn.example/site.css",
+      "origin": "https://cdn.example",
+      "routes": [
+        "/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/",
+          "state": "available",
+          "cspBlocked": false,
+          "responses": [
+            {
+              "status": 200,
+              "statusText": "OK"
+            }
+          ],
+          "failures": [],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "stylesheet"
+      ],
+      "requestCount": 1,
+      "responses": [
+        {
+          "status": 200,
+          "statusText": "OK"
+        }
+      ],
+      "failures": [],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "available"
+    },
+    {
+      "url": "https://images.example/hero.webp",
+      "origin": "https://images.example",
+      "routes": [
+        "/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/",
+          "state": "available",
+          "cspBlocked": false,
+          "responses": [
+            {
+              "status": 200,
+              "statusText": "OK"
+            }
+          ],
+          "failures": [],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "image"
+      ],
+      "requestCount": 1,
+      "responses": [
+        {
+          "status": 200,
+          "statusText": "OK"
+        }
+      ],
+      "failures": [],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "available"
+    },
+    {
+      "url": "https://fonts.example/site.woff2",
+      "origin": "https://fonts.example",
+      "routes": [
+        "/about/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/about/",
+          "state": "unavailable",
+          "cspBlocked": false,
+          "responses": [],
+          "failures": [
+            {
+              "route": "/about/",
+              "errorText": "net::ERR_CONNECTION_RESET",
+              "count": 1
+            }
+          ],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "font"
+      ],
+      "requestCount": 1,
+      "responses": [],
+      "failures": [
+        {
+          "route": "/about/",
+          "errorText": "net::ERR_CONNECTION_RESET",
+          "count": 1
+        }
+      ],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "unavailable"
+    },
+    {
+      "url": "https://video.example/embed.js",
+      "origin": "https://video.example",
+      "routes": [
+        "/contact/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/contact/",
+          "state": "unavailable",
+          "cspBlocked": false,
+          "responses": [],
+          "failures": [
+            {
+              "route": "/contact/",
+              "errorText": "net::ERR_TIMED_OUT",
+              "count": 1
+            }
+          ],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "script"
+      ],
+      "requestCount": 1,
+      "responses": [],
+      "failures": [
+        {
+          "route": "/contact/",
+          "errorText": "net::ERR_TIMED_OUT",
+          "count": 1
+        }
+      ],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "unavailable"
+    }
+  ],
+  "externalOutages": [
+    {
+      "url": "https://fonts.example/site.woff2",
+      "origin": "https://fonts.example",
+      "routes": [
+        "/about/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/about/",
+          "state": "unavailable",
+          "cspBlocked": false,
+          "responses": [],
+          "failures": [
+            {
+              "route": "/about/",
+              "errorText": "net::ERR_CONNECTION_RESET",
+              "count": 1
+            }
+          ],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "font"
+      ],
+      "requestCount": 1,
+      "responses": [],
+      "failures": [
+        {
+          "route": "/about/",
+          "errorText": "net::ERR_CONNECTION_RESET",
+          "count": 1
+        }
+      ],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "unavailable"
+    },
+    {
+      "url": "https://video.example/embed.js",
+      "origin": "https://video.example",
+      "routes": [
+        "/contact/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/contact/",
+          "state": "unavailable",
+          "cspBlocked": false,
+          "responses": [],
+          "failures": [
+            {
+              "route": "/contact/",
+              "errorText": "net::ERR_TIMED_OUT",
+              "count": 1
+            }
+          ],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "script"
+      ],
+      "requestCount": 1,
+      "responses": [],
+      "failures": [
+        {
+          "route": "/contact/",
+          "errorText": "net::ERR_TIMED_OUT",
+          "count": 1
+        }
+      ],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "unavailable"
+    }
+  ],
+  "cspDiagnostics": [
+    {
+      "path": "/contact/",
+      "message": "CSP: refused to load an embedded resource"
+    }
+  ],
+  "cspEvidence": [],
+  "timeouts": [],
+  "localFailures": [
+    {
+      "path": "/about/",
+      "error": "local HTTP error: 500 https://fixture.example/about/"
+    }
+  ],
+  "timeBudget": {
+    "limitMs": 30000,
+    "elapsedMs": 1250,
+    "exceeded": false,
+    "routesCutShort": [],
+    "routesSkipped": []
+  },
+  "summary": {
+    "routes": 3,
+    "dependencies": 4,
+    "available": 2,
+    "externalOutages": 2,
+    "failureEvents": 2,
+    "cspDiagnostics": 1,
+    "cspEvidence": 0,
+    "timeouts": 0,
+    "localFailures": 1,
+    "budgetExceeded": false,
+    "routesCutShortByBudget": 0,
+    "routesSkippedByBudget": 0
+  },
+  "status": "EXTERNAL_OUTAGE"
+}
