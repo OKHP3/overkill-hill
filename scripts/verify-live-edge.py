@@ -77,6 +77,7 @@ ASSET_CONTENT_TYPES = {
 }
 FINGERPRINTED_ASSET_SUFFIXES = frozenset({".css", ".js"})
 FIRST_PARTY_CONTENT_TYPES = {
+    RELEASE_MANIFEST: frozenset({"application/json"}),
     "/sitemap.xml": frozenset({"application/xml", "text/xml"}),
     "/assets/data/search-index.json": frozenset({"application/json"}),
 }
@@ -230,10 +231,10 @@ def check_content_type(
     label: str,
     expected: frozenset[str],
     response: dict[str, Any],
-) -> None:
+) -> bool:
     """Require an accepted media type for a successful first-party response."""
     if not response.get("ok") or response.get("status") != 200:
-        return
+        return False
 
     received = response["headers"].get("content-type", "")
     media_type = received.split(";", 1)[0].strip().lower()
@@ -253,6 +254,7 @@ def check_content_type(
             accepted_content_types=sorted(expected),
         )
     )
+    return status == "PASS"
 
 
 def check_asset_content_type(
@@ -266,16 +268,17 @@ def check_asset_content_type(
 
 def check_first_party_content_type(
     report: list[dict[str, Any]], path: str, response: dict[str, Any]
-) -> None:
-    """Require the declared media type for each generated data feed."""
+) -> bool:
+    """Require the declared media type for each first-party structured response."""
     expected = FIRST_PARTY_CONTENT_TYPES.get(path)
     if expected is None:
-        return
+        return True
     label = {
+        RELEASE_MANIFEST: "release manifest",
         "/sitemap.xml": "generated sitemap",
         "/assets/data/search-index.json": "generated search index",
     }[path]
-    check_content_type(report, label, expected, response)
+    return check_content_type(report, label, expected, response)
 
 
 def fetch(base: str, path: str, timeout: float = TIMEOUT) -> dict[str, Any]:
@@ -528,6 +531,9 @@ def check_release_manifest(
                 response.get("error", f"HTTP {response.get('status')}"),
             )
         )
+        return
+
+    if not check_first_party_content_type(report, RELEASE_MANIFEST, response):
         return
 
     try:
