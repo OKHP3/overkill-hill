@@ -138,6 +138,12 @@ Use the full existing `.github/workflows/validate.yml` contract for responsive,
 overflow, TOC, accessibility, theme, search, embedding and Mermaid behavior.
 Reinstall Playwright's matching Chromium build before browser tests.
 
+The Lighthouse 13.5.0 update coordinates the exact manifest and lockfile pin
+with `NPM_REQUIRED` in `scripts/check-stack-conformance.py`. The runtime
+alignment suite checks this declaration on both CI Python versions. Keep
+these declarations together in future browser QA upgrades until the focused
+manifest/lock agreement follow-up replaces the checker's version literals.
+
 Python media updates additionally require import/dependency checks, rendering
 into a new isolated directory, deterministic score/MIDI checks, output duration,
 channels, sample rate, peak and loudness checks, plus listening review. Site

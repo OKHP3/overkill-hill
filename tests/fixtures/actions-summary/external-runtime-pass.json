@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "mode": "external-health",
+  "baseUrl": "https://fixture.example",
+  "routes": [
+    "/",
+    "/about/",
+    "/contact/"
+  ],
+  "dependencies": [
+    {
+      "url": "https://cdn.example/site.css",
+      "origin": "https://cdn.example",
+      "routes": [
+        "/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/",
+          "state": "available",
+          "cspBlocked": false,
+          "responses": [
+            {
+              "status": 200,
+              "statusText": "OK"
+            }
+          ],
+          "failures": [],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "stylesheet"
+      ],
+      "requestCount": 1,
+      "responses": [
+        {
+          "status": 200,
+          "statusText": "OK"
+        }
+      ],
+      "failures": [],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "available"
+    },
+    {
+      "url": "https://images.example/hero.webp",
+      "origin": "https://images.example",
+      "routes": [
+        "/"
+      ],
+      "routeOutcomes": [
+        {
+          "route": "/",
+          "state": "available",
+          "cspBlocked": false,
+          "responses": [
+            {
+              "status": 200,
+              "statusText": "OK"
+            }
+          ],
+          "failures": [],
+          "timeouts": [],
+          "cspEvidence": []
+        }
+      ],
+      "resourceTypes": [
+        "image"
+      ],
+      "requestCount": 1,
+      "responses": [
+        {
+          "status": 200,
+          "statusText": "OK"
+        }
+      ],
+      "failures": [],
+      "timeouts": [],
+      "cspEvidence": [],
+      "cspBlocked": false,
+      "state": "available"
+    }
+  ],
+  "externalOutages": [],
+  "cspDiagnostics": [],
+  "cspEvidence": [],
+  "timeouts": [],
+  "localFailures": [],
+  "timeBudget": {
+    "limitMs": 30000,
+    "elapsedMs": 1250,
+    "exceeded": false,
+    "routesCutShort": [],
+    "routesSkipped": []
+  },
+  "summary": {
+    "routes": 3,
+    "dependencies": 2,
+    "available": 2,
+    "externalOutages": 0,
+    "failureEvents": 0,
+    "cspDiagnostics": 0,
+    "cspEvidence": 0,
+    "timeouts": 0,
+    "localFailures": 0,
+    "budgetExceeded": false,
+    "routesCutShortByBudget": 0,
+    "routesSkippedByBudget": 0
+  },
+  "status": "PASS"
+}
