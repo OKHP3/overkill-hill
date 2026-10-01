@@ -26,6 +26,26 @@ if spec is None or spec.loader is None:
 verify_live_edge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(verify_live_edge)
 
+ASSET_FORMAT_CASES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "image": (
+        "/assets/img/favicons/murderbird-v2-icon-browser-32.png",
+        ("image/png",),
+    ),
+    "svg": ("/assets/img/live-edge-fixture.svg", ("image/svg+xml",)),
+    "ico": (
+        "/assets/img/live-edge-fixture.ico",
+        ("image/x-icon", "image/vnd.microsoft.icon"),
+    ),
+    "font": ("/assets/fonts/live-edge-fixture.woff2", ("font/woff2",)),
+    "woff": ("/assets/fonts/live-edge-fixture.woff", ("font/woff",)),
+    "ttf": ("/assets/fonts/live-edge-fixture.ttf", ("font/ttf",)),
+    "otf": ("/assets/fonts/live-edge-fixture.otf", ("font/otf",)),
+    "eot": (
+        "/assets/fonts/live-edge-fixture.eot",
+        ("application/vnd.ms-fontobject",),
+    ),
+}
+
 
 class VerifyLiveEdgeTests(unittest.TestCase):
     def run_live_edge_fixture(
@@ -33,6 +53,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         *,
         expected_commit: str | None = None,
         manifest_commit: str = "a" * 40,
+        manifest_content_type: str | None = "application/json",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
         include_asset_fingerprint: bool = True,
@@ -40,10 +61,10 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_kinds: tuple[str, ...] | None = None,
         stale_asset_kind: str | None = None,
         asset_content_type: str | None = None,
-        asset_content_types: dict[str, str] | None = None,
+        asset_content_types: dict[str, str | None] | None = None,
         asset_body: bytes | None = None,
-        sitemap_content_type: str = "application/xml",
-        search_index_content_type: str = "application/json",
+        sitemap_content_type: str | None = "application/xml",
+        search_index_content_type: str | None = "application/json",
         css_asset_kinds: tuple[str, ...] = (),
     ) -> tuple[int, dict[str, object]]:
         """Run the full verifier against deterministic synthetic edge responses."""
@@ -86,15 +107,51 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "content_type": "text/javascript",
             },
             "image": {
-                "path": "/assets/img/favicons/murderbird-v2-icon-browser-32.png",
+                "path": ASSET_FORMAT_CASES["image"][0],
                 "reference": '<img src="{url}" alt="fixture image">',
                 "content_type": "image/png",
             },
             "font": {
-                "path": "/assets/fonts/live-edge-fixture.woff2",
+                "path": ASSET_FORMAT_CASES["font"][0],
                 "reference": '<link href="{url}" rel="preload" as="font">',
                 "content_type": "font/woff2",
                 "body": b"live-edge fixture font",
+            },
+            "svg": {
+                "path": ASSET_FORMAT_CASES["svg"][0],
+                "reference": '<img src="{url}" alt="fixture SVG image">',
+                "content_type": "image/svg+xml",
+                "body": b"<svg xmlns='http://www.w3.org/2000/svg'></svg>",
+            },
+            "ico": {
+                "path": ASSET_FORMAT_CASES["ico"][0],
+                "reference": '<link rel="icon" href="{url}">',
+                "content_type": "image/x-icon",
+                "body": b"live-edge fixture icon",
+            },
+            "woff": {
+                "path": ASSET_FORMAT_CASES["woff"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/woff",
+                "body": b"live-edge fixture WOFF font",
+            },
+            "ttf": {
+                "path": ASSET_FORMAT_CASES["ttf"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/ttf",
+                "body": b"live-edge fixture TTF font",
+            },
+            "otf": {
+                "path": ASSET_FORMAT_CASES["otf"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "font/otf",
+                "body": b"live-edge fixture OTF font",
+            },
+            "eot": {
+                "path": ASSET_FORMAT_CASES["eot"][0],
+                "reference": '<link href="{url}" rel="preload" as="font">',
+                "content_type": "application/vnd.ms-fontobject",
+                "body": b"live-edge fixture EOT font",
             },
             "css-fixture": {
                 "path": "/assets/css/live-edge-fixture.css",
@@ -102,14 +159,21 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "content_type": "text/css",
             },
         }
-        selected_kinds = asset_kinds or (asset_kind,)
+        selected_kinds = (asset_kind,) if asset_kinds is None else asset_kinds
         all_kinds = (*selected_kinds, *css_asset_kinds)
         if not selected_kinds or any(kind not in asset_catalog for kind in all_kinds):
             raise ValueError(f"unsupported fixture asset kinds: {selected_kinds}")
-        if stale_asset_kind is not None and stale_asset_kind not in selected_kinds:
-            raise ValueError(f"stale asset kind is not selected: {stale_asset_kind}")
         if css_asset_kinds and "css-fixture" not in selected_kinds:
             raise ValueError("CSS fixture dependencies require the css-fixture asset")
+        if stale_asset_kind is not None and stale_asset_kind not in all_kinds:
+            raise ValueError(f"stale asset kind is not rendered: {stale_asset_kind}")
+        if stale_asset_kind is not None and asset_body is None:
+            raise ValueError("stale_asset_kind requires asset_body")
+        if asset_body is not None and len(all_kinds) > 1 and stale_asset_kind is None:
+            raise ValueError(
+                "stale_asset_kind is required when asset_body is supplied for "
+                "multiple rendered assets"
+            )
         asset_content_types = asset_content_types or {}
         if any(kind not in all_kinds for kind in asset_content_types):
             raise ValueError("content type override is for an unselected asset kind")
@@ -147,29 +211,34 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         html = '<!doctype html><meta name="robots" content="{robots}">' + "".join(
             asset["details"]["reference"].format(url=asset["url"]) for asset in assets
         )
+        manifest_headers = (
+            {"content-type": manifest_content_type}
+            if manifest_content_type is not None
+            else {}
+        )
+        sitemap_headers = {"cache-control": "max-age=600"}
+        if sitemap_content_type is not None:
+            sitemap_headers["content-type"] = sitemap_content_type
+        search_index_headers = {"cache-control": "max-age=300"}
+        if search_index_content_type is not None:
+            search_index_headers["content-type"] = search_index_content_type
         responses = {
             verify_live_edge.RELEASE_MANIFEST: {
                 "ok": True,
                 "status": 200,
-                "headers": {},
+                "headers": manifest_headers,
                 "body": manifest,
             },
             "/sitemap.xml": {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": sitemap_content_type,
-                    "cache-control": "max-age=600",
-                },
+                "headers": sitemap_headers,
                 "body": sitemap,
             },
             "/assets/data/search-index.json": {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": search_index_content_type,
-                    "cache-control": "max-age=300",
-                },
+                "headers": search_index_headers,
                 "body": search_index,
             },
             "/": {
@@ -192,13 +261,13 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             },
         }
         for asset in all_assets:
+            asset_headers = {"cache-control": "max-age=31536000, immutable"}
+            if asset["details"]["content_type"] is not None:
+                asset_headers["content-type"] = asset["details"]["content_type"]
             responses[asset["url"]] = {
                 "ok": True,
                 "status": 200,
-                "headers": {
-                    "content-type": asset["details"]["content_type"],
-                    "cache-control": "max-age=31536000, immutable",
-                },
+                "headers": asset_headers,
                 "body": (
                     asset_body
                     if asset_body is not None
@@ -247,6 +316,46 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 return_code = verify_live_edge.main()
             return return_code, json.loads(report_path.read_text(encoding="utf-8"))
 
+    def test_mixed_asset_stale_body_requires_explicit_target(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale_asset_kind is required when asset_body is supplied for multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                asset_body=b"stale mixed asset",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale_asset_kind is required when asset_body is supplied for multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kind="css-fixture",
+                css_asset_kinds=("image", "font"),
+                asset_body=b"stale dependency asset",
+            )
+
+    def test_stale_asset_selection_must_match_a_rendered_asset(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"unsupported fixture asset kinds: \(\)",
+        ):
+            self.run_live_edge_fixture(asset_kinds=())
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "stale asset kind is not rendered: module",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                stale_asset_kind="module",
+                asset_body=b"stale asset",
+            )
+
+        with self.assertRaisesRegex(ValueError, "stale_asset_kind requires asset_body"):
+            self.run_live_edge_fixture(stale_asset_kind="css")
+
     def test_direct_github_pages_limitations_are_partial_not_failures(self) -> None:
         return_code, report = self.run_live_edge_fixture()
 
@@ -271,6 +380,36 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertEqual(checks["release manifest"]["status"], "FAIL")
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_wrong_release_manifest_content_type_fails_before_json_parsing(self) -> None:
+        for content_type in ("text/html; charset=utf-8", None):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    manifest_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks["release manifest content type"]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn("application/json", content_type_check["evidence"])
+                if content_type is not None:
+                    self.assertIn(content_type, content_type_check["evidence"])
+                else:
+                    self.assertIn("received ''", content_type_check["evidence"])
+                self.assertNotIn("release manifest", checks)
+
+    def test_release_manifest_accepts_parameterized_json_content_type(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            manifest_content_type="application/json; charset=utf-8",
+        )
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest content type"]["status"], "PASS")
+        self.assertEqual(checks["release manifest"]["status"], "PASS")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_wrong_asset_fingerprint_still_fails(self) -> None:
         return_code, report = self.run_live_edge_fixture(asset_fingerprint="00000000")
         self.assertEqual(return_code, 1)
@@ -292,6 +431,21 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_check = checks["asset /assets/css/theme.css"]
         self.assertEqual(asset_check["status"], "FAIL")
         self.assertIn("missing 8-character", asset_check["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_missing_module_fingerprint_fails_despite_pages_limitations(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module",
+            include_asset_fingerprint=False,
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        module_check = checks["asset /assets/js/mermaid-init.js"]
+        self.assertEqual(module_check["status"], "FAIL")
+        self.assertIn("missing 8-character ?v= fingerprint", module_check["evidence"])
+        self.assertNotIn("asset /assets/js/app.js", checks)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_changed_asset_response_fails_despite_pages_limitations(self) -> None:
@@ -321,6 +475,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_check = checks["asset /assets/js/app.js"]
         self.assertEqual(asset_check["status"], "FAIL")
         self.assertIn("!= live", asset_check["evidence"])
+        self.assertNotIn("asset /assets/js/mermaid-init.js", checks)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_changed_module_javascript_asset_response_fails_despite_pages_limitations(self) -> None:
@@ -336,6 +491,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_check = checks["asset /assets/js/mermaid-init.js"]
         self.assertEqual(asset_check["status"], "FAIL")
         self.assertIn("!= live", asset_check["evidence"])
+        self.assertNotIn("asset /assets/js/app.js", checks)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_mixed_assets_report_stale_css_as_named_failure(self) -> None:
@@ -370,6 +526,61 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("!= live", checks["asset /assets/js/app.js"]["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_mixed_css_javascript_and_module_reports_stale_module(self) -> None:
+        module_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / "assets/js/mermaid-init.js"
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+            stale_asset_kind="module",
+            asset_body=module_bytes + b"\n// stale mixed-page module\n",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+        module_check = checks["asset /assets/js/mermaid-init.js"]
+        self.assertEqual(module_check["status"], "FAIL")
+        self.assertIn("!= live", module_check["evidence"])
+        self.assertEqual(
+            checks["asset /assets/css/theme.css content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/app.js content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/mermaid-init.js content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
+        image_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / "assets/img/favicons/murderbird-v2-icon-browser-32.png"
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="css-fixture",
+            css_asset_kinds=("image", "font"),
+            stale_asset_kind="image",
+            asset_body=image_bytes + b"\n/* stale image fixture */\n",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png"
+        ]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("!= live", image_check["evidence"])
+        self.assertEqual(checks["asset /assets/fonts/live-edge-fixture.woff2"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/css/live-edge-fixture.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_wrong_css_content_type_fails_with_explicit_mime_evidence(self) -> None:
         return_code, report = self.run_live_edge_fixture(asset_content_type="text/html")
 
@@ -398,6 +609,48 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/javascript", content_type_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_wrong_module_content_type_fails_with_explicit_mime_evidence(self) -> None:
+        for content_type in ("text/css", "text/html"):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="module",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[
+                    "asset /assets/js/mermaid-init.js content type"
+                ]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn(content_type, content_type_check["evidence"])
+                self.assertIn("application/javascript", content_type_check["evidence"])
+                self.assertIn("text/javascript", content_type_check["evidence"])
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertNotIn("asset /assets/js/app.js", checks)
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_module_accepts_explicit_javascript_media_types(self) -> None:
+        for content_type in (
+            "application/javascript; charset=utf-8",
+            "text/javascript; charset=utf-8",
+        ):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="module",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[
+                    "asset /assets/js/mermaid-init.js content type"
+                ]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_javascript_content_type_with_parameters_is_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             asset_kind="js",
@@ -424,6 +677,26 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertEqual(content_type_check["status"], "FAIL")
         self.assertIn("text/html", content_type_check["evidence"])
         self.assertIn("image/png", content_type_check["evidence"])
+
+    def test_missing_html_discovered_image_and_font_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("image", "font"),
+            asset_content_types={"image": None, "font": None},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png content type"
+        ]
+        font_check = checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("received ''", image_check["evidence"])
+        self.assertIn("image/png", image_check["evidence"])
+        self.assertEqual(font_check["status"], "FAIL")
+        self.assertIn("received ''", font_check["evidence"])
+        self.assertIn("font/woff2", font_check["evidence"])
 
     def test_unfingerprinted_image_still_reports_wrong_content_type(self) -> None:
         return_code, report = self.run_live_edge_fixture(
@@ -475,6 +748,27 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/html", image_check["evidence"])
         self.assertIn("text/plain", font_check["evidence"])
 
+    def test_missing_css_discovered_image_and_font_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="css-fixture",
+            css_asset_kinds=("image", "font"),
+            asset_content_types={"image": None, "font": None},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[
+            "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png content type"
+        ]
+        font_check = checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("received ''", image_check["evidence"])
+        self.assertIn("image/png", image_check["evidence"])
+        self.assertEqual(font_check["status"], "FAIL")
+        self.assertIn("received ''", font_check["evidence"])
+        self.assertIn("font/woff2", font_check["evidence"])
+
     def test_image_and_font_content_types_with_parameters_are_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             asset_kinds=("image", "font"),
@@ -497,6 +791,60 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             "PASS",
         )
 
+    def test_supported_icon_and_font_extensions_accept_expected_content_types(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=tuple(ASSET_FORMAT_CASES),
+        )
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for kind, (path, accepted_types) in ASSET_FORMAT_CASES.items():
+            with self.subTest(kind=kind):
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
+
+    def test_both_ico_content_type_aliases_are_accepted(self) -> None:
+        path, accepted_types = ASSET_FORMAT_CASES["ico"]
+        for content_type in accepted_types:
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="ico",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
+
+    def test_wrong_supported_icon_and_font_content_types_are_named_failures(self) -> None:
+        asset_kinds = tuple(ASSET_FORMAT_CASES)
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=asset_kinds,
+            asset_content_types={kind: "text/plain" for kind in asset_kinds},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        for kind, (path, accepted_types) in ASSET_FORMAT_CASES.items():
+            with self.subTest(kind=kind):
+                content_type_check = checks[f"asset {path} content type"]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn("text/plain", content_type_check["evidence"])
+                self.assertEqual(
+                    content_type_check["accepted_content_types"],
+                    sorted(accepted_types),
+                )
+
     def test_wrong_sitemap_content_type_fails_with_explicit_mime_evidence(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             sitemap_content_type="text/html; charset=utf-8",
@@ -510,6 +858,25 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         self.assertIn("text/html", content_type_check["evidence"])
         self.assertIn("application/xml", content_type_check["evidence"])
         self.assertIn("text/xml", content_type_check["evidence"])
+
+    def test_missing_data_feed_content_types_fail_explicitly(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            sitemap_content_type=None,
+            search_index_content_type=None,
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        sitemap_check = checks["generated sitemap content type"]
+        search_index_check = checks["generated search index content type"]
+        self.assertEqual(sitemap_check["status"], "FAIL")
+        self.assertIn("received ''", sitemap_check["evidence"])
+        self.assertIn("application/xml", sitemap_check["evidence"])
+        self.assertIn("text/xml", sitemap_check["evidence"])
+        self.assertEqual(search_index_check["status"], "FAIL")
+        self.assertIn("received ''", search_index_check["evidence"])
+        self.assertIn("application/json", search_index_check["evidence"])
 
     def test_wrong_search_index_content_type_fails_with_explicit_mime_evidence(self) -> None:
         return_code, report = self.run_live_edge_fixture(
