@@ -512,6 +512,32 @@ const expression = /import\(["']\.\/regex\.mjs["']\)/;
             ],
         )
 
+    def test_statement_and_xor_regex_text_never_fetches_fake_modules(self) -> None:
+        for statement in (
+            r'if (value) {} else /import(".\/fake.mjs")/.test(text);',
+            r'do /import(".\/fake.mjs")/.test(text); while (value);',
+            r'const result = value ^ /import(".\/fake.mjs")/.test(text);',
+            r'value ^= /import(".\/fake.mjs")/.test(text);',
+        ):
+            with self.subTest(statement=statement):
+                source = statement + '\nimport "./real.mjs";'
+                imports, issue = verify_live_edge.extract_javascript_imports(source)
+                self.assertIsNone(issue)
+                self.assertEqual(imports, ["./real.mjs"])
+                modules = {
+                    "/assets/js/fixture-entry.mjs": source.encode("utf-8"),
+                    "/assets/js/real.mjs": b"export const real = true;\n",
+                }
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="module-graph",
+                    javascript_modules=modules,
+                )
+                self.assertEqual(return_code, 0)
+                self.assertNotIn("/assets/js/fake.mjs", self.last_fixture_requests)
+                self.assertEqual(self.last_fixture_requests["/assets/js/real.mjs"], 1)
+                checks = {item["check"]: item for item in report["checks"]}
+                self.assertEqual(checks["asset /assets/js/real.mjs"]["status"], "PASS")
+
     def test_ambiguous_slash_after_brace_blocks_instead_of_claiming_full_coverage(self) -> None:
         imports, issue = verify_live_edge.extract_javascript_imports(
             'class Example {} /import("./regex-fake.mjs")/.test(text); '
