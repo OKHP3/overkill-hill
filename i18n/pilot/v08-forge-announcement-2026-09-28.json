@@ -1,0 +1,121 @@
+{
+  "source_revision": "git:6b63f0aed2d72c17400e620a8ea9dbb2efc80a92",
+  "release": "v0.8",
+  "reviewed_on": "2026-09-28",
+  "scope": "One shared release announcement per published locale shell. Existing translated body and page publication status retained.",
+  "source_text": "v0.8 is live: same Mermaid code, different styling. Bottle a theme with Mermaid Theme Builder. Read it →",
+  "source_register": "plainspoken en-US",
+  "voice_authority": "AGENTS.md sections 0, 6, 7 and owner-directed v0.8 copy",
+  "publication_authority": "Owner request to update the announcement on every page after LinkedIn publication.",
+  "protected_tokens": [
+    "v0.8",
+    "Mermaid",
+    "Mermaid Theme Builder",
+    "/writings/first-diagram-is-a-liar/#visual-consistency"
+  ],
+  "agent_review": "Every source proposition and locked token preserved; per-page removal of the inserted notice reproduces prior text exactly. No native certification claimed.",
+  "translations": [
+    {
+      "direction": "en-US -> fr-FR",
+      "text": "La v0.8 est en ligne : même code Mermaid, styles différents. Gardez un thème à réutiliser avec Mermaid Theme Builder. Lire la suite →",
+      "paths": [
+        {
+          "path": "fr/index.html",
+          "source_page_sha256": "f8676f8058cb1380c0deecc27b1976f23722765d083c078372fb7ae5498dde91",
+          "target_page_sha256": "40890e484ceddba2668eddb8341c777e526fe9b16595521a8228eb07f89e8994",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/about/index.html",
+          "source_page_sha256": "bcb0e57808ebe8df65f98af261dacc0124eb3e548cacc3b6c1c61f9afce5131d",
+          "target_page_sha256": "449750b4bccb5b8b0fe87fca6678d10a284767d264803735b1ea01f0d905aeee",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/contact/index.html",
+          "source_page_sha256": "4930223a40ed79d97f1de54ed2c7f8bf385ad37e8f7f81e6e325e19922e06b33",
+          "target_page_sha256": "fe4f32324ffbc60a40236ba947217db1b5c7bb69cb971621f2b620769f918475",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/projects/index.html",
+          "source_page_sha256": "39ed2846adc38bf7b50006e6f0e6475dc3a8a2574f157495f99262485a4207cf",
+          "target_page_sha256": "a3081d9b1d5bbf67b8da88bf67afeb7ef10fa87260262ace10f4303ab08eadf6",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-fr-fr/assets/dictionary.en-us-fr-fr.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    },
+    {
+      "direction": "en-US -> de-DE",
+      "text": "v0.8 ist live: gleicher Mermaid-Code, unterschiedliche Gestaltung. Bewahre ein Thema zur Wiederverwendung mit Mermaid Theme Builder. Weiterlesen →",
+      "paths": [
+        {
+          "path": "de/index.html",
+          "source_page_sha256": "3b2f150d5250fdef664843df08d66475c364ff4e77c427e2be28f8a2247eccfa",
+          "target_page_sha256": "6770454851de49810e5539c3e54ea3ce4864013c6fa8f10f7550b1b936724b36",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/about/index.html",
+          "source_page_sha256": "f3380b9a0659fcbcd06c328c313807e1dc44704e911402b5f67bc4126e522cea",
+          "target_page_sha256": "e87c05ed88a30ce55df9e2a44498067c80227b6a8133847c867c7cb65008a2d7",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/contact/index.html",
+          "source_page_sha256": "9c6b3004b264a7d1448481ffa11aa7be6a0f60e0aba4dec502e6feb7f7147c90",
+          "target_page_sha256": "9c00f655ece669058658d4efbb9db31a21174c8e3debde9c71861f5683ca63f4",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/projects/index.html",
+          "source_page_sha256": "028797b926657fd818c5f7ed79edb0adeeaa68cfcda501b64d42e28124668cfb",
+          "target_page_sha256": "7baff54da0b22a0bf72db2fe82bf1a6b66551234a785c2c9bdbeceea0ee575b7",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-de-de/assets/dictionary.en-us-de-de.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    },
+    {
+      "direction": "en-US -> es-ES",
+      "text": "La versión 0.8 ya está disponible: mismo código Mermaid, estilos distintos. Guarda un tema con Mermaid Theme Builder para volver a usarlo. Léelo →",
+      "paths": [
+        {
+          "path": "es/index.html",
+          "source_page_sha256": "3fe2c420cff35c1f93b0c226dfe63de7f88006989f988d0ef1eb32c1e5d50378",
+          "target_page_sha256": "cdae8410e8d51147e894dd2923a8590f4a1f34b85ac5d98b4b0003a380bb39b7",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/about/index.html",
+          "source_page_sha256": "ab6d95998f6b8e4372c0fa1feacd0b25d50dc37c4b7c5705310db82b273ac2b0",
+          "target_page_sha256": "5353a16a5a6572d6efad616a6ad3c0c29655181d1a8a884df5ddf6c545736117",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/contact/index.html",
+          "source_page_sha256": "b429d6a591e55dba57c89c5a55a3aa4ee23d7b260b93e5e4bc39bcba611702ce",
+          "target_page_sha256": "9523db856088bf2de7c1b1049fa1c26306c6bc11ec3181f8901afcbe3b10b33e",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/projects/index.html",
+          "source_page_sha256": "1334abaad36636b8e5397911f40d494c3b53925f6171ed41b0b023da09714726",
+          "target_page_sha256": "1aba9e8192dc9a94ad40ea86d19497d2fdc0b46fc3a85cc29d3ef6765f63c68e",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-es-es/assets/dictionary.en-us-es-es.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    }
+  ]
+}

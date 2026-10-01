@@ -23,7 +23,7 @@
 
   <url>
     <loc>https://overkillhill.com/writings/first-diagram-is-a-liar/</loc>
-    <lastmod>2026-05-24</lastmod>
+    <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -88,7 +88,7 @@
   </url>
 
   <url>
-    <loc>https://overkillhill.com/projects/first-diagram-is-a-liar/</loc>
+    <loc>https://overkillhill.com/projects/diagram-truth/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -222,4 +222,5 @@
     <loc>https://overkillhill.com/projects/murderbird-uncaged/</loc>
     <lastmod>2026-09-27</lastmod>
   </url>
+  <url><loc>https://overkillhill.com/capability-transition/</loc><lastmod>2026-09-29</lastmod></url>
 </urlset>

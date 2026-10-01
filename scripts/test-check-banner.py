@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -17,6 +19,14 @@ if SPEC is None or SPEC.loader is None:
     raise SystemExit("Unable to load scripts/check-banner.py")
 check_banner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(check_banner)
+
+BUILD_SITE_SPEC = importlib.util.spec_from_file_location(
+    "build_site", ROOT / "scripts" / "build-site.py"
+)
+if BUILD_SITE_SPEC is None or BUILD_SITE_SPEC.loader is None:
+    raise SystemExit("Unable to load scripts/build-site.py")
+build_site = importlib.util.module_from_spec(BUILD_SITE_SPEC)
+BUILD_SITE_SPEC.loader.exec_module(build_site)
 
 
 def check_case(
@@ -158,7 +168,7 @@ def check_update_is_atomic() -> None:
         source_banner.parent.mkdir(parents=True, exist_ok=True)
         source_banner.write_text(
             f'<a class="site-specials-link" href="{featured}">'
-            f"{check_banner.OLD_BANNERS[0]}</a>",
+            f"{check_banner.OLD_BANNERS[2]}</a>",
             encoding="utf-8",
         )
         later_page = root / "later.html"
@@ -207,10 +217,11 @@ def check_update_is_atomic() -> None:
 
 
 def check_update_and_dry_run_preserve_repair_behavior() -> None:
+    repair_target = "v0.6 is live: refreshed copy →"
     for mode in ("--dry-run", "--update"):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            valid_article = "<span>Article v0.5: Council-Assisted Scoring</span>"
+            valid_article = "<span>Article v0.6: Council-Assisted Scoring</span>"
             for relative_path in (
                 check_banner.FEATURED_ARTICLE_SOURCE,
                 check_banner.FEATURED_ARTICLE_GENERATED,
@@ -224,13 +235,14 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
             banner.parent.mkdir(parents=True, exist_ok=True)
             banner.write_text(
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[0]}</a>",
+                f"{check_banner.OLD_BANNERS[1]}</a>",
                 encoding="utf-8",
             )
             before = banner.read_text(encoding="utf-8")
             output = StringIO()
             with (
                 patch.object(check_banner, "__file__", str(root / "scripts/check-banner.py")),
+                patch.object(check_banner, "CANONICAL_BANNER", repair_target),
                 patch("sys.argv", ["check-banner.py", mode]),
                 redirect_stdout(output),
             ):
@@ -244,10 +256,65 @@ def check_update_and_dry_run_preserve_repair_behavior() -> None:
                 if "[dry-run] would fix" not in report:
                     raise AssertionError(f"dry-run omitted repair preview: {report}")
             else:
-                if check_banner.CANONICAL_BANNER not in after:
+                if repair_target not in after:
                     raise AssertionError("update did not apply the canonical banner")
-                if check_banner.OLD_BANNERS[0] in after:
+                if check_banner.OLD_BANNERS[1] in after:
                     raise AssertionError("update left the old banner in place")
+
+
+def check_generated_build_blocks_release_disagreement() -> None:
+    for check in (False, True):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / check_banner.FEATURED_ARTICLE_SOURCE
+            source_path.parent.mkdir(parents=True, exist_ok=True)
+            source_content = "<span>Article v0.6: Source release</span>"
+            source_path.write_text(source_content, encoding="utf-8")
+
+            generated_path = root / check_banner.FEATURED_ARTICLE_GENERATED
+            generated_path.parent.mkdir(parents=True, exist_ok=True)
+            previous_output = "<span>Article v0.5: Previously generated release</span>"
+            generated_path.write_text(previous_output, encoding="utf-8")
+            manifest = root / "site-src" / "pages.json"
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(
+                json.dumps({"pages": [{"path": check_banner.FEATURED_ARTICLE_GENERATED}]}),
+                encoding="utf-8",
+            )
+
+            namespace = build_site.build.__globals__
+            with (
+                patch.dict(
+                    namespace,
+                    {
+                        "ROOT": root,
+                        "MANIFEST": manifest,
+                        "SITEMAP": root / "sitemap.xml",
+                        "policies": lambda: ({}, lambda _path: "document"),
+                        "render_page": lambda *_args: (
+                            "<span>Article v0.7: Newly rendered release</span>"
+                        ),
+                    },
+                ),
+                patch.object(
+                    namespace["subprocess"],
+                    "run",
+                    return_value=SimpleNamespace(returncode=0),
+                ),
+            ):
+                result = build_site.build(check=check)
+
+            mode = "--check" if check else "generation"
+            if result != 1:
+                raise AssertionError(
+                    f"build-site {mode} accepted source/generated release disagreement: {result}"
+                )
+            if source_path.read_text(encoding="utf-8") != source_content:
+                raise AssertionError(f"build-site {mode} changed source release evidence")
+            if generated_path.read_text(encoding="utf-8") != previous_output:
+                raise AssertionError(
+                    f"build-site {mode} overwrote generated release evidence after parity failed"
+                )
 
 
 def main() -> int:
@@ -257,20 +324,21 @@ def main() -> int:
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
-        "found v0.5",
+        "found v1.0",
     )
+    release_drift_failure = release_failure[:2] + ("found v0.5",)
     stale_source_failure = release_failure + (check_banner.SOURCE_BANNER,)
     check_main_case(
         "stale source partial reports featured route and expected release",
         check_banner.SOURCE_BANNER,
-        f'<a class="site-specials-link" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
+        f'<a class="site-specials-link" data-banner-release="v1.0" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
         stale_source_failure,
     )
     stale_generated_failure = release_failure + (check_banner.FEATURED_ARTICLE_GENERATED,)
     check_main_case(
         "stale generated banner reports featured route and expected release",
         check_banner.FEATURED_ARTICLE_GENERATED,
-        f'<a class="site-specials-link" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
+        f'<a class="site-specials-link" data-banner-release="v1.0" href="{featured}">{check_banner.CANONICAL_BANNER}</a>',
         stale_generated_failure,
     )
     for mode in ("--update", "--dry-run"):
@@ -282,8 +350,8 @@ def main() -> int:
                 f"{mode} preserves {label} release drift",
                 banner_path,
                 f'<a class="site-specials-link" href="{featured}">'
-                f"{check_banner.OLD_BANNERS[0]}</a>",
-                release_failure + (banner_path,),
+                f"{check_banner.OLD_BANNERS[2]}</a>",
+                release_drift_failure + (banner_path,),
                 mode=mode,
                 expect_files_unchanged=True,
             )
@@ -339,7 +407,7 @@ def main() -> int:
             check_main_case(
                 f"{mode} {name}",
                 banner_path,
-                f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[0]}</a>',
+                f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[1]}</a>',
                 (
                     "current featured article release is missing or ambiguous",
                     check_banner.FEATURED_ARTICLE_ROUTE,
@@ -361,7 +429,7 @@ def main() -> int:
         check_main_case(
             f"{mode or 'check'} rejects source/generated release disagreement",
             check_banner.SOURCE_BANNER,
-            f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[0]}</a>',
+            f'<a class="site-specials-link" href="{featured}">{check_banner.OLD_BANNERS[1]}</a>',
             disagreement_parts,
             source_article="<span>Article v0.6: Council-Assisted Scoring</span>",
             generated_article="<span>Article v0.7: Council-Assisted Scoring</span>",
@@ -403,6 +471,7 @@ def main() -> int:
     )
     check_update_and_dry_run_preserve_repair_behavior()
     check_update_is_atomic()
+    check_generated_build_blocks_release_disagreement()
     print("check-banner localized regression checks passed")
     return 0
 

@@ -96,6 +96,10 @@ def visitor_summary(record):
     if record['id'] == 'mac-studio-local-ai-workbench':
         # The RAG limit is material even when the source disclosure is closed.
         return text + ' ' + record['evidence']['summary']
+    if record['id'] == 'diagram-truth':
+        # The deep link opened in a browser; the source registry does not
+        # certify the rest of the tutorial or future deployments.
+        return text + ' Step 3 observed September 29, 2026; full tutorial acceptance unverified.'
     software = record['availability'] in ('Published project', 'Published catalog project', 'Noindex concept page')
     label = 'Operation unverified.' if software else 'Delivery unverified.'
     return text + ' ' + label

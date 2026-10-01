@@ -27,7 +27,7 @@ test('a newly shipped noindex page is discovered without a sitemap entry', async
     for (const dir of ['scripts', 'site-src', 'projects/new-draft', 'assets/templates']) {
       mkdirSync(join(temporary, dir), { recursive: true });
     }
-    for (const file of ['build-release.py', 'release-qa-inventory.mjs']) {
+    for (const file of ['build-release.py', 'public_page_boundary.py', 'release-qa-inventory.mjs']) {
       copyFileSync(join(root, 'scripts', file), join(temporary, 'scripts', file));
     }
     writeFileSync(join(temporary, 'site-src/pages.json'), JSON.stringify({ pages: [{ path: 'index.html' }] }));

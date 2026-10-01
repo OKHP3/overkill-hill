@@ -1,0 +1,24 @@
+{
+  "reviewed_on": "2026-09-29",
+  "source_route": "/projects/",
+  "source_sha256_normalized": "41944ef00030358f7e871fde20df86c70462a0eb0be5d473a810298340900ae8",
+  "scope": "The Diagram Truth project card remains paired with the separate writing card in both noindex regional draft catalogs. The es-MX writing card now links to the canonical article. The shared English Projects menu now links to Diagram Truth.",
+  "status": "ai-reviewed-draft",
+  "digest_basis": "committed Git blob bytes, before platform checkout newline conversion",
+  "human_native_approved": false,
+  "release_accepted": false,
+  "targets": [
+    {
+      "locale": "en-gb",
+      "path": "en-gb/projects/index.html",
+      "sha256": "2286aaf7fd78cb54a01381a2abf08485329deedf7007a3cfa57785781c88548a"
+    },
+    {
+      "locale": "es-mx",
+      "path": "es-mx/projects/index.html",
+      "sha256": "bf66159ac2a4c289b8cddafe900e1c54c352e83d1da59585e121b94cee663d8c",
+      "reviewed_input": "i18n/pilot/es-mx/reviewed/projects-index.html",
+      "reviewed_input_sha256": "8853a6e028c652a4e60b2b5af72d005eca6f616e1720fd06a1f2ece4fbe32e1e"
+    }
+  ]
+}

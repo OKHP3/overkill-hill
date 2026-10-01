@@ -22,6 +22,12 @@ POLICY_FILE = ROOT / "config" / "csp-policies.json"
 MURDERBIRD_THEME_AUDIO = "https://okhp3.github.io/murderbird-uncaged/audio/iron-verdict-v3/full-song.mp3"
 CSP_HEADER = "Content-Security-Policy"
 CSP_REPORT_ONLY_HEADER = f"{CSP_HEADER}-Report-Only"
+
+
+class CspPageManifestError(ValueError):
+    """Raised when a CSP source-manifest page declaration cannot be used."""
+
+
 META_RE = re.compile(
     rf'<meta\s+http-equiv=["\']{re.escape(CSP_HEADER)}["\']\s+content=(["\'])(.*?)\1\s*/?>',
     re.IGNORECASE,
@@ -99,10 +105,77 @@ def all_pages() -> list[Path]:
     names = set(tracked.stdout.splitlines())
     manifest = ROOT / "site-src" / "pages.json"
     if manifest.exists():
-        for page in json.loads(manifest.read_text(encoding="utf-8"))["pages"]:
-            candidate = (ROOT / page["path"]).resolve()
-            if candidate.is_relative_to(ROOT) and candidate.is_file():
-                names.add(candidate.relative_to(ROOT).as_posix())
+        manifest_name = manifest.relative_to(ROOT).as_posix()
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise CspPageManifestError(
+                f"{manifest_name}: cannot read CSP source page manifest: {exc}"
+            ) from exc
+        pages = payload.get("pages") if isinstance(payload, dict) else None
+        if not isinstance(pages, list):
+            raise CspPageManifestError(
+                f'{manifest_name}: expected a top-level "pages" array'
+            )
+
+        root = ROOT.resolve()
+        for index, page in enumerate(pages, start=1):
+            if not isinstance(page, dict):
+                raise CspPageManifestError(
+                    f'{manifest_name}: page entry {index} must be an object with a "path"'
+                )
+            raw_path = page.get("path")
+            if not isinstance(raw_path, str) or not raw_path:
+                raise CspPageManifestError(
+                    f'{manifest_name}: page entry {index} must contain a non-empty string "path"'
+                )
+            if (
+                raw_path.startswith("/")
+                or re.match(r"^[A-Za-z]:", raw_path)
+                or ".." in raw_path.split("/")
+            ):
+                raise CspPageManifestError(
+                    f"{manifest_name}: page entry {index} path {raw_path!r} is outside or "
+                    "could escape the repository root; use a contained relative path"
+                )
+            if (
+                raw_path != raw_path.strip()
+                or "\\" in raw_path
+                or "?" in raw_path
+                or "#" in raw_path
+                or not raw_path.endswith(".html")
+                or any(part in {"", "."} for part in raw_path.split("/"))
+            ):
+                raise CspPageManifestError(
+                    f'{manifest_name}: page entry {index} path {raw_path!r} must be a '
+                    "normalized repository-relative .html path without query or fragment"
+                )
+
+            candidate = root / raw_path
+            try:
+                resolved = candidate.resolve()
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise CspPageManifestError(
+                    f"{manifest_name}: page entry {index} path {raw_path!r} "
+                    f"cannot be resolved: {exc}"
+                ) from exc
+            try:
+                resolved.relative_to(root)
+            except ValueError as exc:
+                raise CspPageManifestError(
+                    f"{manifest_name}: page entry {index} path {raw_path!r} "
+                    "resolves outside the repository root; use a contained relative path"
+                ) from exc
+            if not candidate.is_file():
+                raise CspPageManifestError(
+                    f"{manifest_name}: page entry {index} path {raw_path!r} does not exist "
+                    "as a regular HTML file; generate the page or correct/remove the stale "
+                    "manifest entry"
+                )
+            # Validate declared evidence paths too, then deliberately leave
+            # them out of the CSP inventory through the shared boundary.
+            if is_public_page_path(candidate, root):
+                names.add(candidate.relative_to(root).as_posix())
     return sorted(
         ROOT / name
         for name in names

@@ -40,6 +40,10 @@ echo "Post-merge: regenerating CSP policies and page metadata..."
 run_step "CSP regeneration" "CSP regeneration failed." python3 scripts/generate-csp.py
 echo "Post-merge: rebuilding HTML with canonical CSP policies..."
 run_step "site rebuild after CSP regeneration" "site rebuild after CSP regeneration failed." python3 scripts/build-site.py
+echo "Post-merge: checking featured article release and banner parity..."
+run_step "featured article release parity" \
+  "featured article source and generated output or site banners disagree." \
+  python3 scripts/check-banner.py
 echo "Post-merge: synchronizing shared asset fingerprints..."
 run_step "cache-busting synchronization" "shared asset fingerprints are stale." python3 scripts/cache-bust.py
 run_step "generated HTML check" "generated HTML is out of sync with site sources." python3 scripts/build-site.py --check

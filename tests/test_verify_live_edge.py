@@ -658,6 +658,17 @@ class PostMergeTests(unittest.TestCase):
         self.assertIn("ERROR: full site validation failed.", output)
         self.assertNotIn("Post-merge: all checks passed.", output)
 
+    def test_post_merge_stops_when_featured_release_parity_fails(self) -> None:
+        result = self.run_post_merge_with_python_failure("check-banner.py")
+
+        self.assertNotEqual(result.returncode, 0)
+        output = (result.stderr + result.stdout).decode("utf-8", errors="replace")
+        self.assertIn(
+            "ERROR: featured article source and generated output or site banners disagree.",
+            output,
+        )
+        self.assertNotIn("Post-merge: all checks passed.", output)
+
     def test_post_merge_stops_after_link_check_failure(self) -> None:
         result = self.run_post_merge_with_python_failure("check-links.py")
 

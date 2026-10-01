@@ -574,7 +574,9 @@ class SEOFixtureTests(unittest.TestCase):
                 for fixture in (ROOT / "tests" / "fixtures" / "csp").glob("*.html"):
                     self.assertEqual(module.process_file(fixture), [])
             else:
-                self.assertIn("tests", module.SKIP_DIRS)
+                pages = module.iter_html_files()
+                self.assertTrue(set(csp_fixtures).isdisjoint(pages))
+                self.assertFalse(any("tests" in path.relative_to(ROOT).parts for path in pages))
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -830,7 +832,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "From AutoCAD 10 and Visio trauma',
+                    '"description": "The Final Cut: AI diagrams, structured disagreement',
                     mutated_raw,
                 )
                 self.assertEqual(
@@ -878,7 +880,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "From AutoCAD 10 and Visio trauma',
+            '"description": "The Final Cut: AI diagrams, structured disagreement',
             mutated_raw,
         )
         self.assertEqual(
@@ -948,7 +950,7 @@ class SEOFixtureTests(unittest.TestCase):
                     mutated_raw,
                 )
                 self.assertIn(
-                    '"description": "From AutoCAD 10 and Visio trauma',
+                    '"description": "The Final Cut: AI diagrams, structured disagreement',
                     mutated_raw,
                 )
                 mutated_page = copy.deepcopy(page)
@@ -984,7 +986,7 @@ class SEOFixtureTests(unittest.TestCase):
         page = self.pages_by_route[route]
         sitemap_url = page["canonical"]
         baseline = validator.load_sitemap_entries()
-        self.assertEqual(baseline[sitemap_url], "2026-05-24")
+        self.assertEqual(baseline[sitemap_url], "2026-09-29")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),
@@ -1035,7 +1037,7 @@ class SEOFixtureTests(unittest.TestCase):
             mutated_raw,
         )
         self.assertIn(
-            '"description": "From AutoCAD 10 and Visio trauma',
+            '"description": "The Final Cut: AI diagrams, structured disagreement',
             mutated_raw,
         )
         self.assertEqual(
@@ -1358,7 +1360,7 @@ class SEOFixtureTests(unittest.TestCase):
         page = self.pages_by_route[route]
         path = GENERATED_FIXTURE / "article.html.fixture"
         baseline = validator.load_sitemap_entries()
-        self.assertEqual(baseline[page["canonical"]], "2026-05-24")
+        self.assertEqual(baseline[page["canonical"]], "2026-09-29")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),

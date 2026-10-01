@@ -1,0 +1,122 @@
+{
+  "source_revision": "git:54d73f3348443ac49423808f2f89807fe3329110",
+  "release": "v0.9",
+  "reviewed_on": "2026-09-29",
+  "scope": "One shared release announcement per published locale shell. Existing translated body and page publication status retained.",
+  "source_text": "v0.9 is live: the BPMN renderer grew into 15 Agent Skills for capturing the process behind the boxes. Read it →",
+  "source_register": "plainspoken en-US",
+  "voice_authority": "AGENTS.md sections 0, 6, 7 and owner-directed v0.9 copy",
+  "publication_authority": "Owner request to update the announcement on every page after LinkedIn publication.",
+  "protected_tokens": [
+    "v0.9",
+    "BPMN",
+    "15 Agent Skills",
+    "/writings/first-diagram-is-a-liar/#process-knowledge"
+  ],
+  "agent_review": "Every source proposition and locked token preserved; per-page removal of the inserted notice reproduces prior text exactly. No native certification claimed.",
+  "translations": [
+    {
+      "direction": "en-US -> fr-FR",
+      "text": "La v0.9 est en ligne : le moteur de rendu BPMN a évolué en 15 Agent Skills pour saisir le processus derrière les cases. Lire la suite →",
+      "paths": [
+        {
+          "path": "fr/index.html",
+          "source_page_sha256": "40890e484ceddba2668eddb8341c777e526fe9b16595521a8228eb07f89e8994",
+          "target_page_sha256": "5cbc81b81f43d3430afcc743bf5f711a96b761c2fa4a05811152b002cc9470f9",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/about/index.html",
+          "source_page_sha256": "449750b4bccb5b8b0fe87fca6678d10a284767d264803735b1ea01f0d905aeee",
+          "target_page_sha256": "305ed9afde8cddb53e3829ca2fb436951a6f5b91f0f2f26838be78ce99f03557",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/contact/index.html",
+          "source_page_sha256": "fe4f32324ffbc60a40236ba947217db1b5c7bb69cb971621f2b620769f918475",
+          "target_page_sha256": "c3e57313364a0b14aadac163621483d74a60a237618935184d142ecd08ca01d3",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "fr/projects/index.html",
+          "source_page_sha256": "a3081d9b1d5bbf67b8da88bf67afeb7ef10fa87260262ace10f4303ab08eadf6",
+          "target_page_sha256": "2f9f230d5f342db4fc3052e572482504d2acfdbfa94925e4d66d436a5331d194",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-fr-fr/assets/dictionary.en-us-fr-fr.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    },
+    {
+      "direction": "en-US -> de-DE",
+      "text": "v0.9 ist live: Aus dem BPMN-Renderer wurden 15 Agent Skills, die den Prozess hinter den Kästchen erfassen. Weiterlesen →",
+      "paths": [
+        {
+          "path": "de/index.html",
+          "source_page_sha256": "6770454851de49810e5539c3e54ea3ce4864013c6fa8f10f7550b1b936724b36",
+          "target_page_sha256": "c47ff1921b57327badacc1d00b9e134afca12bafad9af39c93df3b0451c9bb53",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/about/index.html",
+          "source_page_sha256": "e87c05ed88a30ce55df9e2a44498067c80227b6a8133847c867c7cb65008a2d7",
+          "target_page_sha256": "385f2623e6c790866cdcebaee8df7111057c84efff17d1f34441688813b989e1",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/contact/index.html",
+          "source_page_sha256": "9c00f655ece669058658d4efbb9db31a21174c8e3debde9c71861f5683ca63f4",
+          "target_page_sha256": "334e340af4f9a2a30b1377993de6d7b5f8ec2bcb6247a0ebad9952af9270001b",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "de/projects/index.html",
+          "source_page_sha256": "7baff54da0b22a0bf72db2fe82bf1a6b66551234a785c2c9bdbeceea0ee575b7",
+          "target_page_sha256": "2190d6ca049085bc5c9c0dd8d36340e0b717cd71e9076855b8a46a2815fc6ed6",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-de-de/assets/dictionary.en-us-de-de.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    },
+    {
+      "direction": "en-US -> es-ES",
+      "text": "La versión 0.9 ya está disponible: el renderizador BPMN creció hasta convertirse en 15 Agent Skills para capturar el proceso detrás de los recuadros. Léelo →",
+      "paths": [
+        {
+          "path": "es/index.html",
+          "source_page_sha256": "cdae8410e8d51147e894dd2923a8590f4a1f34b85ac5d98b4b0003a380bb39b7",
+          "target_page_sha256": "b439363c284143bdf2453a3913bfac3aec6caadd1d7465e9842cca4f71dd3e87",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/about/index.html",
+          "source_page_sha256": "5353a16a5a6572d6efad616a6ad3c0c29655181d1a8a884df5ddf6c545736117",
+          "target_page_sha256": "2460a24a876b640d780656e61c54b3c20f738391dbdae25b9bd0e41d9141f51e",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/contact/index.html",
+          "source_page_sha256": "9523db856088bf2de7c1b1049fa1c26306c6bc11ec3181f8901afcbe3b10b33e",
+          "target_page_sha256": "e079491ee4073cf580391fbd634575af7b91fbfff56e498584f72a1b89d70ba8",
+          "outside_notice_byte_parity": true
+        },
+        {
+          "path": "es/projects/index.html",
+          "source_page_sha256": "1aba9e8192dc9a94ad40ea86d19497d2fdc0b46fc3a85cc29d3ef6765f63c68e",
+          "target_page_sha256": "0fef2eed4216d8faa31a5a2b4e4a35a19c7af4d37253dfe064924fa0e1edafe0",
+          "outside_notice_byte_parity": true
+        }
+      ],
+      "dictionary": ".agents/skills/okhp3-translation-en-us-es-es/assets/dictionary.en-us-es-es.json",
+      "dictionary_version": "0.1.0",
+      "status": "ai-reviewed-accepted",
+      "human_native_reviewed": false
+    }
+  ]
+}
+
