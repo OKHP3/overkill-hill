@@ -3,7 +3,7 @@ import copy
 import importlib.util
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 import tempfile
@@ -20,8 +20,111 @@ EXTERNAL_RUNTIME_FIXTURES = {
     'external-runtime-mixed-failure.json': 'EXTERNAL_OUTAGE',
 }
 ARCHIVED_LIVE_EDGE_REPORTS = {
-    ROOT / 'tests/fixtures/actions-summary/archived-live-edge-2026-09-07.json': 'current',
+    # assets/audit is ignored by Git; the tracked fixture keeps clean checkouts testable.
+    'assets/audit/assessment-2026-09-07/delivery/live-edge.json': {
+        'classification': 'current',
+        'fixture': 'archived-live-edge-2026-09-07.json',
+        'required_action': 'validate_report_shape',
+    },
 }
+LEGACY_LIVE_EDGE_FIXTURE = {
+    'classification': 'legacy',
+    'fixture': 'archived-live-edge-legacy.json',
+    'required_action': 'summary_renderer',
+}
+REPORT_ACTIONS = {
+    'current': 'validate_report_shape',
+    'legacy': 'summary_renderer',
+}
+
+
+def discover_archived_live_edge_reports(root):
+    return sorted(
+        path.relative_to(root).as_posix()
+        for path in root.glob('assets/audit/**/delivery/live-edge.json')
+        if path.is_file()
+    )
+
+
+def archive_registry_issues(
+    root,
+    registry,
+    *,
+    fixture_root=ROOT,
+    require_registered_files=False,
+):
+    if not isinstance(registry, dict):
+        return ['Malformed live-edge report registry; required action: use a path-to-record object.']
+
+    discovered = set(discover_archived_live_edge_reports(root))
+    registered = set()
+    issues = []
+    for report_path, entry in registry.items():
+        display_path = report_path if isinstance(report_path, str) else repr(report_path)
+        path = PurePosixPath(report_path) if isinstance(report_path, str) else None
+        if (
+            path is None
+            or path.is_absolute()
+            or '..' in path.parts
+            or path.as_posix() != report_path
+            or path.parts[:2] != ('assets', 'audit')
+            or path.parts[-2:] != ('delivery', 'live-edge.json')
+        ):
+            issues.append(
+                f'Malformed live-edge registry path {display_path}; required action: '
+                'use the exact repository-relative assets/audit/**/delivery/live-edge.json path.'
+            )
+            continue
+        registered.add(report_path)
+        if not isinstance(entry, dict):
+            issues.append(
+                f'Malformed live-edge registry entry for {report_path}; required action: '
+                "set classification to 'current' or 'legacy' and include its fixture and required_action."
+            )
+            continue
+
+        classification = entry.get('classification')
+        if not isinstance(classification, str) or classification not in REPORT_ACTIONS:
+            issues.append(
+                f'Malformed live-edge registry entry for {report_path}; required action: '
+                "set classification to 'current' or 'legacy'."
+            )
+            continue
+        required_action = REPORT_ACTIONS[classification]
+        if entry.get('required_action') != required_action:
+            issues.append(
+                f'Malformed live-edge registry entry for {report_path}; required action: '
+                f"set required_action to '{required_action}' for classification '{classification}'."
+            )
+        fixture = entry.get('fixture')
+        if not isinstance(fixture, str) or PurePosixPath(fixture).name != fixture:
+            issues.append(
+                f'Malformed live-edge registry fixture for {report_path}; required action: '
+                'name a fixture file under tests/fixtures/actions-summary/.'
+            )
+        elif not (fixture_root / 'tests/fixtures/actions-summary' / fixture).is_file():
+            issues.append(
+                f'Missing compatibility fixture for {report_path}: '
+                f'tests/fixtures/actions-summary/{fixture}; required action: '
+                'restore the fixture without changing the retained report.'
+            )
+
+    for report_path in sorted(discovered - registered):
+        issues.append(
+            f'Unlisted retained live-edge report: {report_path}; required action: '
+            'add this exact path to ARCHIVED_LIVE_EDGE_REPORTS and classify it as '
+            "'current' with validator coverage or 'legacy' with summary-renderer coverage."
+        )
+
+    if require_registered_files:
+        for report_path in sorted(registered - discovered):
+            issues.append(
+                f'Registered live-edge report is missing: {report_path}; required action: '
+                'restore the archived report or remove its registry entry only after confirming its disposition.'
+            )
+    return issues
+
+
 VERIFY_SPEC = importlib.util.spec_from_file_location(
     'verify_live_edge', ROOT / 'scripts/verify-live-edge.py'
 )
@@ -177,45 +280,188 @@ class SummaryTests(unittest.TestCase):
                                     capture_output=True, text=True)
             return result.returncode, output.read_text(encoding='utf-8') if output.exists() else ''
 
-    def assert_archived_report_contract(self, path, report):
-        contract = ARCHIVED_LIVE_EDGE_REPORTS.get(path)
+    def assert_archived_report_contract(self, path, report, entry):
+        classification = entry.get('classification') if isinstance(entry, dict) else None
         self.assertIn(
-            contract,
+            classification,
             {'current', 'legacy'},
             f'{path} must be explicitly classified as current or legacy',
         )
-        if contract == 'current':
+        if classification == 'current':
             try:
                 VERIFY.validate_report_shape(report)
             except ValueError as exc:
                 self.fail(
                     f'{path} is classified as current but no longer matches the '
-                    f'verifier contract: {exc}. Migrate the archived report or '
-                    'declare and test legacy compatibility.'
+                    f'verifier contract: {exc}. Required action: migrate the archived '
+                    'report to the current shape, or classify it as legacy and add '
+                    'a summary-renderer compatibility test.'
                 )
+        else:
+            code, summary = self.run_summary(report)
+            self.assertIn(
+                '| Content delivery |',
+                summary,
+                f'{path} is classified as legacy; required action: keep it renderable '
+                'through scripts/write-actions-summary.py.',
+            )
+
+    def test_retained_archive_reports_are_discovered_and_registered(self):
+        issues = archive_registry_issues(ROOT, ARCHIVED_LIVE_EDGE_REPORTS)
+        self.assertEqual(issues, [], '\n'.join(issues))
+
+    def test_archive_discovery_is_recursive_and_complete(self):
+        expected_paths = {
+            'assets/audit/assessment-2026-09-07/delivery/live-edge.json',
+            'assets/audit/secondary/deeper/delivery/live-edge.json',
+        }
+        report_bytes = (
+            FIXTURE_DIRECTORY / 'archived-live-edge-2026-09-07.json'
+        ).read_bytes()
+        registry = {
+            path: {
+                'classification': 'current',
+                'fixture': 'archived-live-edge-2026-09-07.json',
+                'required_action': 'validate_report_shape',
+            }
+            for path in expected_paths
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path in expected_paths:
+                archive_path = root / path
+                archive_path.parent.mkdir(parents=True, exist_ok=True)
+                archive_path.write_bytes(report_bytes)
+            decoy = root / 'assets/audit/secondary/delivery/live-edge-old.json'
+            decoy.parent.mkdir(parents=True, exist_ok=True)
+            decoy.write_bytes(report_bytes)
+
+            discovered = set(discover_archived_live_edge_reports(root))
+            issues = archive_registry_issues(
+                root,
+                registry,
+                fixture_root=ROOT,
+                require_registered_files=True,
+            )
+
+        self.assertEqual(discovered, expected_paths)
+        self.assertEqual(issues, [], '\n'.join(issues))
+
+    def test_unlisted_archive_report_names_exact_path_and_required_action(self):
+        report_path = 'assets/audit/unlisted/deep/delivery/live-edge.json'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / report_path
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            archive_path.write_text('{}\n', encoding='utf-8')
+            issues = archive_registry_issues(root, {}, fixture_root=ROOT)
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn(report_path, issues[0])
+        self.assertIn('add this exact path', issues[0])
+        self.assertIn("'current'", issues[0])
+        self.assertIn("'legacy'", issues[0])
+
+    def test_missing_registered_archive_report_names_exact_path_and_required_action(self):
+        report_path = next(iter(ARCHIVED_LIVE_EDGE_REPORTS))
+        with tempfile.TemporaryDirectory() as directory:
+            issues = archive_registry_issues(
+                Path(directory),
+                ARCHIVED_LIVE_EDGE_REPORTS,
+                fixture_root=ROOT,
+                require_registered_files=True,
+            )
+
+        missing = [issue for issue in issues if 'is missing' in issue]
+        self.assertEqual(len(missing), 1, '\n'.join(issues))
+        self.assertIn(report_path, missing[0])
+        self.assertIn('restore the archived report', missing[0])
+
+    def test_malformed_archive_registry_entries_name_path_and_required_action(self):
+        report_path = next(iter(ARCHIVED_LIVE_EDGE_REPORTS))
+        malformed_entries = (
+            (
+                {'classification': 'unknown', 'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set classification to 'current' or 'legacy'",
+            ),
+            (
+                {'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set classification to 'current' or 'legacy'",
+            ),
+            (
+                {'classification': 'current', 'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set required_action to 'validate_report_shape'",
+            ),
+            (
+                {
+                    'classification': 'current',
+                    'fixture': '../outside.json',
+                    'required_action': 'validate_report_shape',
+                },
+                'name a fixture file under tests/fixtures/actions-summary/',
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for entry, required_action in malformed_entries:
+                with self.subTest(entry=entry):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=ROOT,
+                    )
+                    matching = [issue for issue in issues if required_action in issue]
+                    self.assertTrue(matching, '\n'.join(issues))
+                    self.assertIn(report_path, matching[0])
 
     def test_archived_live_edge_reports_have_an_explicit_contract(self):
-        for path, contract in ARCHIVED_LIVE_EDGE_REPORTS.items():
+        for path, entry in ARCHIVED_LIVE_EDGE_REPORTS.items():
             with self.subTest(report=path):
-                report = json.loads(path.read_text(encoding='utf-8'))
-                self.assert_archived_report_contract(path, report)
-                self.assertIn(contract, {'current', 'legacy'})
+                archived_path = ROOT / path
+                fixture_path = FIXTURE_DIRECTORY / entry['fixture']
+                source_path = archived_path if archived_path.is_file() else fixture_path
+                report = json.loads(source_path.read_text(encoding='utf-8'))
+                self.assert_archived_report_contract(path, report, entry)
 
     def test_archived_contract_drift_has_an_actionable_failure(self):
-        path = next(iter(ARCHIVED_LIVE_EDGE_REPORTS))
-        report = json.loads(path.read_text(encoding='utf-8'))
+        path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        report = json.loads(
+            (FIXTURE_DIRECTORY / entry['fixture']).read_text(encoding='utf-8')
+        )
         del report['summary']['warnings']
 
         with self.assertRaisesRegex(
             AssertionError,
-            r'Migrate the archived report or declare and test legacy compatibility',
+            r'Required action: migrate the archived report to the current shape',
         ):
-            self.assert_archived_report_contract(path, report)
+            self.assert_archived_report_contract(path, report, entry)
+
+    def test_legacy_report_is_explicitly_classified_and_renders_in_summary_cli(self):
+        self.assertEqual(LEGACY_LIVE_EDGE_FIXTURE['classification'], 'legacy')
+        self.assertEqual(
+            LEGACY_LIVE_EDGE_FIXTURE['required_action'],
+            REPORT_ACTIONS['legacy'],
+        )
+        report = self.load_fixture(LEGACY_LIVE_EDGE_FIXTURE['fixture'])
+
+        with self.assertRaises(ValueError):
+            VERIFY.validate_report_shape(report)
+
+        code, summary = self.run_summary(report)
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| Edge policy | PARTIAL |', summary)
+        self.assertIn('not specified (monitoring)', summary)
+        self.assertIn('Report time: unknown', summary)
 
     def test_historical_partial_is_not_an_outage_or_full_policy_pass(self):
-        path = ROOT / 'tests/fixtures/actions-summary/archived-live-edge-2026-09-07.json'
-        report = json.loads(path.read_text())
-        self.assert_archived_report_contract(path, report)
+        path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        report = json.loads(
+            (FIXTURE_DIRECTORY / entry['fixture']).read_text(encoding='utf-8')
+        )
+        self.assert_archived_report_contract(path, report, entry)
         code, summary = self.run_summary(report)
         self.assertEqual(code, 0)
         self.assertIn('| Content delivery | PASS |', summary)

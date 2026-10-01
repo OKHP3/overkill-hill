@@ -1,0 +1,14 @@
+{
+  "checks": [
+    {
+      "check": "route /",
+      "status": "PASS",
+      "evidence": "HTTP 200; legacy reports did not include the current report envelope"
+    },
+    {
+      "check": "route / observed header content-security-policy",
+      "status": "BLOCKED",
+      "evidence": "The archived report records an unevaluated edge policy check"
+    }
+  ]
+}
