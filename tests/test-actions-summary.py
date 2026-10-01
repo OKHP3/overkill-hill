@@ -64,7 +64,39 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
 
             fixture = output_directory / 'external-runtime-degraded.json'
-            fixture.write_text('{"summary": {}}\n', encoding='utf-8')
+            actual_content = fixture.read_text(encoding='utf-8').replace(
+                '"status": "EXTERNAL_OUTAGE"',
+                '"status": "PASS"',
+                1,
+            )
+            fixture.write_text(actual_content, encoding='utf-8')
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--check',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            unchanged_content = fixture.read_text(encoding='utf-8')
+
+        self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
+        self.assertIn('generated fixture is stale', checked.stdout + checked.stderr)
+        self.assertIn('external-runtime-degraded.json', checked.stdout + checked.stderr)
+        self.assertIn('--- expected/external-runtime-degraded.json', checked.stdout)
+        self.assertIn('+++ actual/external-runtime-degraded.json', checked.stdout)
+        self.assertIn('-  "status": "EXTERNAL_OUTAGE"', checked.stdout)
+        self.assertIn('+  "status": "PASS"', checked.stdout)
+        self.assertEqual(unchanged_content, actual_content)
+
+    def test_generated_fixture_check_keeps_missing_and_unexpected_files_explicit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_directory = Path(directory)
+            unexpected = output_directory / 'external-runtime-untracked.json'
+            unexpected.write_text('{}\n', encoding='utf-8')
             checked = subprocess.run(
                 [
                     sys.executable,
@@ -77,9 +109,11 @@ class SummaryTests(unittest.TestCase):
                 text=True,
             )
 
-        self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
-        self.assertIn('generated fixture is stale', checked.stdout + checked.stderr)
-        self.assertIn('external-runtime-degraded.json', checked.stdout + checked.stderr)
+        output = checked.stdout + checked.stderr
+        self.assertEqual(checked.returncode, 1, output)
+        self.assertIn('missing generated fixture:', output)
+        self.assertIn('unexpected generated fixture:', output)
+        self.assertIn('external-runtime-untracked.json', output)
 
     def test_external_runtime_fixtures_match_the_report_contract(self):
         for name, expected_status in EXTERNAL_RUNTIME_FIXTURES.items():

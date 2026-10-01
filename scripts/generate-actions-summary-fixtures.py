@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import importlib.util
 import json
 from pathlib import Path
@@ -313,8 +314,20 @@ def sync_fixtures(output_directory: Path, *, write: bool) -> list[str]:
             path.write_text(content, encoding="utf-8")
         elif not path.is_file():
             problems.append(f"missing generated fixture: {path}")
-        elif path.read_text(encoding="utf-8") != content:
-            problems.append(f"generated fixture is stale: {path}")
+        else:
+            actual = path.read_text(encoding="utf-8")
+            if actual != content:
+                diff = "".join(
+                    difflib.unified_diff(
+                        content.splitlines(keepends=True),
+                        actual.splitlines(keepends=True),
+                        fromfile=f"expected/{name}",
+                        tofile=f"actual/{name}",
+                    )
+                )
+                problems.append(
+                    f"generated fixture is stale: {path}\n{diff.rstrip()}"
+                )
 
     if not write:
         expected_names = set(expected)
