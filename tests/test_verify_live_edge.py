@@ -66,8 +66,15 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         sitemap_content_type: str | None = "application/xml",
         search_index_content_type: str | None = "application/json",
         css_asset_kinds: tuple[str, ...] = (),
+        javascript_modules: dict[str, bytes] | None = None,
+        javascript_module_content_types: dict[str, str | None] | None = None,
+        javascript_response_overrides: dict[str, bytes] | None = None,
+        inline_module_source: str | None = None,
     ) -> tuple[int, dict[str, object]]:
         """Run the full verifier against deterministic synthetic edge responses."""
+        javascript_modules = javascript_modules or {}
+        javascript_module_content_types = javascript_module_content_types or {}
+        javascript_response_overrides = javascript_response_overrides or {}
         sitemap = verify_live_edge.canonical_text_bytes(verify_live_edge.SITEMAP)
         search_index = verify_live_edge.canonical_text_bytes(verify_live_edge.SEARCH_INDEX)
         manifest = json.dumps(
@@ -159,6 +166,20 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "content_type": "text/css",
             },
         }
+        if javascript_modules:
+            module_entry_path = next(iter(javascript_modules))
+            if (
+                not module_entry_path.startswith("/assets/")
+                or verify_live_edge.urllib.parse.urlsplit(module_entry_path).query
+                or Path(module_entry_path).suffix.lower()
+                not in verify_live_edge.JAVASCRIPT_SUFFIXES
+            ):
+                raise ValueError("JavaScript module fixture keys must be query-free JS asset paths")
+            asset_catalog["module-graph"] = {
+                "path": module_entry_path,
+                "reference": '<script src="{url}" type="module"></script>',
+                "content_type": "text/javascript",
+            }
         selected_kinds = (asset_kind,) if asset_kinds is None else asset_kinds
         all_kinds = (*selected_kinds, *css_asset_kinds)
         if not selected_kinds or any(kind not in asset_catalog for kind in all_kinds):
@@ -185,7 +206,11 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             elif asset_content_type is not None and len(selected_kinds) == 1:
                 asset_details["content_type"] = asset_content_type
             asset_path = asset_details["path"]
-            asset_bytes = asset_details.pop("body", None)
+            asset_bytes = (
+                javascript_modules[asset_path]
+                if kind == "module-graph"
+                else asset_details.pop("body", None)
+            )
             if asset_bytes is None:
                 asset_bytes = verify_live_edge.canonical_text_bytes(ROOT / asset_path.lstrip("/"))
             asset_hash = asset_fingerprint or hashlib.sha256(asset_bytes).hexdigest()[:8]
@@ -208,8 +233,17 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         assets = [build_asset(kind) for kind in selected_kinds]
         all_assets = assets + css_assets
 
-        html = '<!doctype html><meta name="robots" content="{robots}">' + "".join(
-            asset["details"]["reference"].format(url=asset["url"]) for asset in assets
+        html = (
+            '<!doctype html><meta name="robots" content="{robots}">'
+            + "".join(
+                asset["details"]["reference"].format(url=asset["url"])
+                for asset in assets
+            )
+            + (
+                f'<script type="module">{inline_module_source}</script>'
+                if inline_module_source is not None
+                else ""
+            )
         )
         manifest_headers = (
             {"content-type": manifest_content_type}
@@ -276,6 +310,29 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 ),
             }
 
+        for module_path, module_source in javascript_modules.items():
+            module_headers = {"cache-control": "max-age=31536000, immutable"}
+            content_type = javascript_module_content_types.get(
+                module_path, "text/javascript"
+            )
+            if content_type is not None:
+                module_headers["content-type"] = content_type
+            responses[module_path] = {
+                "ok": True,
+                "status": 200,
+                "headers": module_headers,
+                "body": module_source,
+            }
+        for response_url, response_body in javascript_response_overrides.items():
+            module_path = verify_live_edge.urllib.parse.urlsplit(response_url).path
+            if module_path not in responses:
+                raise ValueError(
+                    f"JavaScript response override has no source module: {response_url}"
+                )
+            overridden = dict(responses[module_path])
+            overridden["body"] = response_body
+            responses[response_url] = overridden
+
         # The fixture serves the real canonical theme CSS for fingerprint tests.
         # Include its self-hosted font dependencies in the synthetic response set.
         # Explicit fixture responses still control negative MIME/status cases.
@@ -287,11 +344,44 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "body": font.read_bytes(),
             })
 
-        def fixture_fetch(_base: str, path: str, _timeout: float) -> dict[str, object]:
+        if "module" in all_kinds and not javascript_modules:
+            for module_file in (ROOT / "assets/vendor/mermaid").rglob("*.mjs"):
+                responses.setdefault(
+                    "/" + module_file.relative_to(ROOT).as_posix(),
+                    {
+                        "ok": True,
+                        "status": 200,
+                        "headers": {
+                            "content-type": "text/javascript",
+                            "cache-control": "max-age=31536000, immutable",
+                        },
+                        "body": module_file.read_bytes(),
+                    },
+                )
+
+        request_counts: dict[str, int] = {}
+
+        def fixture_fetch(
+            _base: str,
+            path: str,
+            _timeout: float,
+            max_bytes: int | None = None,
+        ) -> dict[str, object]:
+            request_counts[path] = request_counts.get(path, 0) + 1
             try:
-                return responses[path]
+                response_key = (
+                    path
+                    if path in responses
+                    else verify_live_edge.urllib.parse.urlsplit(path).path
+                )
+                response = dict(responses[response_key])
             except KeyError as exc:
                 raise AssertionError(f"fixture did not define a response for {path}") from exc
+            if max_bytes is not None:
+                body = response["body"]
+                response["truncated"] = len(body) > max_bytes
+                response["body"] = body[:max_bytes]
+            return response
 
         argv = [
             "verify-live-edge.py",
@@ -305,16 +395,268 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             argv.extend(["--expected-commit", expected_commit])
         with tempfile.TemporaryDirectory(prefix="live-edge-fixture-") as directory:
             report_path = Path(directory) / "report.json"
+            fixture_root = ROOT
+            if javascript_modules:
+                fixture_root = Path(directory) / "site"
+                for module_path, module_source in javascript_modules.items():
+                    local_path = fixture_root / module_path.lstrip("/")
+                    local_path.parent.mkdir(parents=True, exist_ok=True)
+                    local_path.write_bytes(module_source)
             argv.extend(["--report", str(report_path)])
             output = io.StringIO()
             with (
                 patch.object(verify_live_edge, "fetch", side_effect=fixture_fetch),
                 patch.object(verify_live_edge, "load_routes", return_value=(["/"], None)),
+                patch.object(verify_live_edge, "ROOT", fixture_root),
                 patch.object(sys, "argv", argv),
                 redirect_stdout(output),
             ):
                 return_code = verify_live_edge.main()
+            self.last_fixture_requests = request_counts
             return return_code, json.loads(report_path.read_text(encoding="utf-8"))
+
+    def test_literal_javascript_import_parser_ignores_non_code_and_computed_imports(self) -> None:
+        source = r'''
+// import "./comment.mjs";
+const text = 'import("./string.mjs")';
+import { value } from "./static.mjs";
+export * from "./reexport.mjs";
+void import("./dynamic.mjs");
+import(variable);
+import(variable || import("./nested-dynamic.mjs"));
+import.meta.resolve("./meta.mjs");
+const expression = /import\(["']\.\/regex\.mjs["']\)/;
+'''
+        imports, exceeded = verify_live_edge.extract_javascript_imports(source)
+
+        self.assertFalse(exceeded)
+        self.assertEqual(
+            imports,
+            [
+                "./static.mjs",
+                "./reexport.mjs",
+                "./dynamic.mjs",
+                "./nested-dynamic.mjs",
+            ],
+        )
+        self.assertIsNone(
+            verify_live_edge.resolve_javascript_import(
+                "https://fixture.example",
+                "/assets/js/entry.mjs",
+                "https://external.example/not-followed.mjs",
+            )
+        )
+        self.assertIsNone(
+            verify_live_edge.resolve_javascript_import(
+                "https://fixture.example",
+                "/assets/js/entry.mjs",
+                "bare-package",
+            )
+        )
+
+    def test_javascript_import_limit_is_explicit(self) -> None:
+        imports, exceeded = verify_live_edge.extract_javascript_imports(
+            'import("./one.mjs"); import("./two.mjs");',
+            max_imports=1,
+        )
+
+        self.assertEqual(imports, ["./one.mjs"])
+        self.assertTrue(exceeded)
+
+    def test_javascript_source_fetch_is_byte_bounded(self) -> None:
+        class FixtureResponse(io.BytesIO):
+            status = 200
+            headers = {"Content-Type": "text/javascript"}
+
+            def geturl(self) -> str:
+                return "https://fixture.example/assets/js/large.mjs"
+
+        with patch.object(
+            verify_live_edge.urllib.request,
+            "urlopen",
+            return_value=FixtureResponse(b"0123456789"),
+        ):
+            response = verify_live_edge.fetch(
+                "https://fixture.example",
+                "/assets/js/large.mjs",
+                max_bytes=4,
+            )
+
+        self.assertEqual(response["body"], b"0123")
+        self.assertTrue(response["truncated"])
+
+    def test_module_count_limit_is_reported_without_fetching_extra_modules(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": (
+                b'import "./first.mjs"; import "./second.mjs";\n'
+            ),
+            "/assets/js/first.mjs": b"export const first = true;\n",
+            "/assets/js/second.mjs": b"export const second = true;\n",
+        }
+        with patch.object(verify_live_edge, "MAX_JS_MODULES", 2):
+            return_code, report = self.run_live_edge_fixture(
+                asset_kind="module-graph",
+                javascript_modules=modules,
+            )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertNotIn("/assets/js/second.mjs", self.last_fixture_requests)
+        limit_check = next(
+            item
+            for item in report["checks"]
+            if item["check"] == "JavaScript dependency discovery"
+        )
+        self.assertEqual(limit_check["status"], "BLOCKED")
+        self.assertIn("2 JavaScript assets", limit_check["evidence"])
+
+    def test_graph_source_budget_caps_download_and_blocks_unseen_imports(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": b'import "./child.mjs";\n',
+            "/assets/js/child.mjs": b"export const child = true;\n",
+        }
+        with (
+            patch.object(verify_live_edge, "MAX_JS_SOURCE_BYTES", 1024),
+            patch.object(verify_live_edge, "MAX_JS_GRAPH_SOURCE_BYTES", 16),
+        ):
+            return_code, report = self.run_live_edge_fixture(
+                asset_kind="module-graph",
+                javascript_modules=modules,
+            )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertNotIn("/assets/js/child.mjs", self.last_fixture_requests)
+        checks = {item["check"]: item for item in report["checks"]}
+        entry_check = checks["asset /assets/js/fixture-entry.mjs"]
+        self.assertEqual(entry_check["status"], "BLOCKED")
+        self.assertIn("remaining 16-byte graph budget", entry_check["evidence"])
+
+    def test_static_dynamic_relative_and_vendor_modules_are_discovered(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": (
+                b'''// import "./comment-only.mjs";
+const text = 'import("./string-only.mjs")';
+import { shared } from "./nested/static.mjs";
+void import("./dynamic.mjs");
+import "/assets/vendor/fixture/vendor-entry.mjs";
+import("https://external.example/not-followed.mjs");
+import(bareSpecifier);
+'''
+            ),
+            "/assets/js/nested/static.mjs": (
+                b'export { shared } from "../shared/common.mjs";\n'
+            ),
+            "/assets/js/shared/common.mjs": b"export const shared = true;\n",
+            "/assets/js/dynamic.mjs": b"export const loaded = true;\n",
+            "/assets/vendor/fixture/vendor-entry.mjs": (
+                b"export const vendored = true;\n"
+            ),
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+        )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["summary"]["failures"], 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for path in (
+            "/assets/js/nested/static.mjs",
+            "/assets/js/shared/common.mjs",
+            "/assets/js/dynamic.mjs",
+            "/assets/vendor/fixture/vendor-entry.mjs",
+        ):
+            self.assertEqual(checks[f"asset {path}"]["status"], "PASS")
+        self.assertNotIn(
+            "https://external.example/not-followed.mjs",
+            self.last_fixture_requests,
+        )
+        self.assertNotIn("/assets/js/comment-only.mjs", self.last_fixture_requests)
+        self.assertNotIn("/assets/js/string-only.mjs", self.last_fixture_requests)
+        self.assertNotIn("/assets/js/bareSpecifier", self.last_fixture_requests)
+
+    def test_relative_import_cycle_fetches_each_dependency_once(self) -> None:
+        modules = {
+            "/assets/js/cycle-entry.mjs": b'import "./cycle/a.mjs";\n',
+            "/assets/js/cycle/a.mjs": b'import "./b.mjs";\n',
+            "/assets/js/cycle/b.mjs": b'import "./a.mjs";\n',
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+        )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(self.last_fixture_requests["/assets/js/cycle/a.mjs"], 1)
+        self.assertEqual(self.last_fixture_requests["/assets/js/cycle/b.mjs"], 1)
+        checks = [item["check"] for item in report["checks"]]
+        self.assertEqual(checks.count("asset /assets/js/cycle/a.mjs"), 1)
+        self.assertEqual(checks.count("asset /assets/js/cycle/b.mjs"), 1)
+
+    def test_inline_module_import_resolves_from_the_page_route(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": b"export const entry = true;\n",
+            "/assets/js/inline-child.mjs": b"export const child = true;\n",
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            inline_module_source='import "./assets/js/inline-child.mjs";',
+        )
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/js/inline-child.mjs"]["status"], "PASS")
+        self.assertEqual(
+            self.last_fixture_requests["/assets/js/inline-child.mjs"],
+            1,
+        )
+
+    def test_stale_fingerprinted_imported_module_fails(self) -> None:
+        dependency = b"export const version = 'current';\n"
+        fingerprint = hashlib.sha256(dependency).hexdigest()[:8]
+        stale_body = b"export const version = 'stale';\n"
+        modules = {
+            "/assets/js/fixture-entry.mjs": (
+                f'import("./stale.mjs?v={fingerprint}");\n'.encode()
+            ),
+            "/assets/js/stale.mjs": dependency,
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            javascript_response_overrides={
+                f"/assets/js/stale.mjs?v={fingerprint}": stale_body
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        stale_check = checks["asset /assets/js/stale.mjs"]
+        self.assertEqual(stale_check["status"], "FAIL")
+        self.assertIn("!= live", stale_check["evidence"])
+
+    def test_imported_module_with_wrong_mime_fails_explicitly(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": b'import "./wrong-type.mjs";\n',
+            "/assets/js/wrong-type.mjs": b"export const value = true;\n",
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            javascript_module_content_types={
+                "/assets/js/wrong-type.mjs": "text/html"
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        mime_check = checks["asset /assets/js/wrong-type.mjs content type"]
+        self.assertEqual(mime_check["status"], "FAIL")
+        self.assertIn("text/html", mime_check["evidence"])
+        self.assertIn("text/javascript", mime_check["evidence"])
 
     def test_mixed_asset_stale_body_requires_explicit_target(self) -> None:
         with self.assertRaisesRegex(
