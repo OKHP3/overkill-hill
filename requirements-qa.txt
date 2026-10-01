@@ -4,6 +4,6 @@
 # Versions reflect the compatible local runtime
 # inventory on 2026-09-04 (Python 3.14) and support the CI Python 3.11 job.
 beautifulsoup4==4.15.0
-soupsieve==2.9.2
+soupsieve==2.10
 typing-extensions==4.16.0
 Pillow==12.3.0
