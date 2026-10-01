@@ -51,7 +51,7 @@ NPM_ENGINE = ">=11.6.2 <12"
 # Exact pins, matching docs/dependency-policy.md in the reference repo.
 NPM_REQUIRED = {
     "playwright": "1.63.0",
-    "lighthouse": "13.4.1",
+    "lighthouse": "13.5.0",
 }
 
 NPM_FORBIDDEN = ("puppeteer", "puppeteer-core")
