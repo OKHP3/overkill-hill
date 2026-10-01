@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import hashlib
 import json
 import re
@@ -62,6 +63,7 @@ COMMIT_RE = re.compile(r"[0-9a-f]{40}", re.I)
 ASSET_CONTENT_TYPES = {
     ".css": frozenset({"text/css"}),
     ".js": frozenset({"application/javascript", "text/javascript"}),
+    ".mjs": frozenset({"application/javascript", "text/javascript"}),
     ".png": frozenset({"image/png"}),
     ".jpg": frozenset({"image/jpeg"}),
     ".jpeg": frozenset({"image/jpeg"}),
@@ -76,19 +78,34 @@ ASSET_CONTENT_TYPES = {
     ".eot": frozenset({"application/vnd.ms-fontobject"}),
 }
 FINGERPRINTED_ASSET_SUFFIXES = frozenset({".css", ".js"})
+JAVASCRIPT_SUFFIXES = frozenset({".js", ".mjs"})
+MAX_JS_SOURCE_BYTES = 2 * 1024 * 1024
+MAX_JS_GRAPH_SOURCE_BYTES = 8 * 1024 * 1024
+MAX_JS_MODULES = 256
+MAX_JS_IMPORTS_PER_MODULE = 256
+MAX_JS_IMPORT_CLAUSE_TOKENS = 512
 FIRST_PARTY_CONTENT_TYPES = {
     RELEASE_MANIFEST: frozenset({"application/json"}),
     "/sitemap.xml": frozenset({"application/xml", "text/xml"}),
     "/assets/data/search-index.json": frozenset({"application/json"}),
 }
 HTML_ASSET_RE = re.compile(
-    r"""(?<![A-Za-z0-9_:/])(?P<url>/assets/(?:css|js|img|fonts)/[^'"<>\s,?#]+(?:\?[^'"<>\s,]*)?)""",
+    r"""(?<![A-Za-z0-9_:/])(?P<url>/assets/(?:css|js|img|fonts|vendor)/[^'"<>\s,?#]+(?:\?[^'"<>\s,]*)?)""",
     re.I,
 )
 CSS_ASSET_RE = re.compile(
     r"""url\(\s*['"]?(?P<url>/assets/(?:img|fonts)/[^)'"\s,?#]+(?:\?[^)'"\s,]*)?)['"]?\s*\)""",
     re.I,
 )
+HTML_SCRIPT_BLOCK_RE = re.compile(
+    r"""<script\b(?P<attributes>[^>]*)>(?P<source>.*?)</script\s*>""",
+    re.I | re.S,
+)
+HTML_MODULE_TYPE_RE = re.compile(
+    r"""\btype\s*=\s*(?:"module"|'module'|module(?=\s|/|$))""",
+    re.I,
+)
+HTML_SCRIPT_SRC_RE = re.compile(r"(?:^|\s)src(?:\s|=|/?>)", re.I)
 ROBOTS_RE = re.compile(
     r"""<meta\b(?=[^>]*\bname=["']robots["'])(?=[^>]*\bcontent=["']([^"']+)["'])[^>]*>""",
     re.I,
@@ -226,6 +243,22 @@ def transport_status(response: dict[str, Any]) -> str:
     return "BLOCKED" if response.get("status") is None else "FAIL"
 
 
+def is_accepted_hosting_block(check: dict[str, Any], hosting: str) -> bool:
+    """Recognize only the verifier's explicit GitHub Pages policy limitations."""
+    if (
+        hosting != "github-pages"
+        or check.get("status") != "BLOCKED"
+        or check.get("evidence") != GITHUB_PAGES_POLICY_NOTE
+    ):
+        return False
+    name = check.get("check", "")
+    return (
+        name in {"sitemap cache policy", "search index cache policy"}
+        or (name.startswith("route ") and name.endswith(" cache policy"))
+        or name.startswith("asset /")
+    )
+
+
 def check_content_type(
     report: list[dict[str, Any]],
     label: str,
@@ -259,11 +292,12 @@ def check_content_type(
 
 def check_asset_content_type(
     report: list[dict[str, Any]], path: str, response: dict[str, Any]
-) -> None:
+) -> bool:
     """Require a browser-compatible MIME type for each first-party asset."""
     expected = ASSET_CONTENT_TYPES.get(Path(path).suffix.lower())
     if expected is not None:
-        check_content_type(report, f"asset {path}", expected, response)
+        return check_content_type(report, f"asset {path}", expected, response)
+    return True
 
 
 def check_first_party_content_type(
@@ -281,15 +315,34 @@ def check_first_party_content_type(
     return check_content_type(report, label, expected, response)
 
 
-def fetch(base: str, path: str, timeout: float = TIMEOUT) -> dict[str, Any]:
+def fetch(
+    base: str,
+    path: str,
+    timeout: float = TIMEOUT,
+    max_bytes: int | None = None,
+    same_origin_redirects_only: bool = False,
+) -> dict[str, Any]:
     url = urllib.parse.urljoin(base.rstrip("/") + "/", path.lstrip("/"))
     request = urllib.request.Request(
         url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"}
     )
     started = time.monotonic()
+
+    def read_body(response: Any) -> tuple[bytes, bool]:
+        if max_bytes is None:
+            return response.read(), False
+        body = response.read(max_bytes + 1)
+        truncated = len(body) > max_bytes
+        return body[:max_bytes], truncated
+
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read()
+        if same_origin_redirects_only:
+            opener = urllib.request.build_opener(_SameOriginRedirectHandler())
+            response_context = opener.open(request, timeout=timeout)
+        else:
+            response_context = urllib.request.urlopen(request, timeout=timeout)
+        with response_context as response:
+            body, truncated = read_body(response)
             headers = {k.lower(): v.strip() for k, v in response.headers.items()}
             return {
                 "ok": True,
@@ -297,16 +350,18 @@ def fetch(base: str, path: str, timeout: float = TIMEOUT) -> dict[str, Any]:
                 "status": response.status,
                 "headers": headers,
                 "body": body,
+                "truncated": truncated,
                 "elapsed_ms": round((time.monotonic() - started) * 1000),
             }
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
         headers = {}
         body = b""
         status = getattr(exc, "code", None)
+        truncated = False
         if isinstance(exc, urllib.error.HTTPError):
             headers = {k.lower(): v.strip() for k, v in exc.headers.items()}
             try:
-                body = exc.read()
+                body, truncated = read_body(exc)
             except OSError:
                 pass
         return {
@@ -315,9 +370,610 @@ def fetch(base: str, path: str, timeout: float = TIMEOUT) -> dict[str, Any]:
             "status": status,
             "headers": headers,
             "body": body,
+            "truncated": truncated,
             "error": f"{type(exc).__name__}: {exc}",
             "elapsed_ms": round((time.monotonic() - started) * 1000),
         }
+
+
+JS_LINE_TERMINATORS = frozenset({"\r", "\n", "\u2028", "\u2029"})
+MAX_JS_TEMPLATE_NESTING = 64
+
+
+class _JavaScriptLexError(ValueError):
+    """A lexical boundary the bounded JavaScript scanner cannot safely cross."""
+
+
+def _read_javascript_string(source: str, start: int) -> tuple[str | None, int]:
+    """Read a quoted JS string without executing it; unsupported escapes stay opaque."""
+    quote = source[start]
+    value: list[str] = []
+    index = start + 1
+    invalid = False
+    while index < len(source):
+        char = source[index]
+        if char == quote:
+            return (None if invalid else "".join(value)), index + 1
+        if char in JS_LINE_TERMINATORS:
+            raise _JavaScriptLexError("unterminated JavaScript string literal")
+        if char != "\\":
+            value.append(char)
+            index += 1
+            continue
+
+        index += 1
+        if index >= len(source):
+            raise _JavaScriptLexError("unterminated JavaScript string escape")
+        escaped = source[index]
+        if escaped in JS_LINE_TERMINATORS:
+            index += 1
+            if escaped == "\r" and index < len(source) and source[index] == "\n":
+                index += 1
+            continue
+        if escaped in {"b", "f", "n", "r", "t", "v", "0"}:
+            value.append(
+                {
+                    "b": "\b",
+                    "f": "\f",
+                    "n": "\n",
+                    "r": "\r",
+                    "t": "\t",
+                    "v": "\v",
+                    "0": "\0",
+                }[escaped]
+            )
+            index += 1
+            continue
+        if escaped == "x":
+            digits = source[index + 1 : index + 3]
+            if len(digits) == 2 and re.fullmatch(r"[0-9a-fA-F]{2}", digits):
+                value.append(chr(int(digits, 16)))
+                index += 3
+            else:
+                invalid = True
+                index += 1
+            continue
+        if escaped == "u":
+            if index + 1 < len(source) and source[index + 1] == "{":
+                end = source.find("}", index + 2)
+                digits = source[index + 2 : end] if end >= 0 else ""
+                if (
+                    digits
+                    and re.fullmatch(r"[0-9a-fA-F]{1,6}", digits)
+                    and int(digits, 16) <= 0x10FFFF
+                ):
+                    value.append(chr(int(digits, 16)))
+                    index = end + 1
+                else:
+                    invalid = True
+                    index = end + 1 if end >= 0 else len(source)
+            else:
+                digits = source[index + 1 : index + 5]
+                if len(digits) == 4 and re.fullmatch(r"[0-9a-fA-F]{4}", digits):
+                    value.append(chr(int(digits, 16)))
+                    index += 5
+                else:
+                    invalid = True
+                    index += 1
+            continue
+        value.append(escaped)
+        index += 1
+    raise _JavaScriptLexError("unterminated JavaScript string literal")
+
+
+def _skip_javascript_regex(source: str, start: int) -> int:
+    """Skip a regular-expression literal conservatively to avoid fake import tokens."""
+    index = start + 1
+    in_character_class = False
+    escaped = False
+    while index < len(source):
+        char = source[index]
+        if char in JS_LINE_TERMINATORS:
+            raise _JavaScriptLexError("unterminated JavaScript regular-expression literal")
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == "[":
+            in_character_class = True
+        elif char == "]":
+            in_character_class = False
+        elif char == "/" and not in_character_class:
+            index += 1
+            while index < len(source) and source[index].isalpha():
+                index += 1
+            return index
+        index += 1
+    raise _JavaScriptLexError("unterminated JavaScript regular-expression literal")
+
+
+def _regex_can_start_after(
+    previous: tuple[str, str | None] | None,
+    *,
+    after_control_paren: bool = False,
+    after_block_close: bool = False,
+) -> bool:
+    if after_control_paren or after_block_close:
+        return True
+    if previous is None:
+        return True
+    kind, value = previous
+    if kind == "identifier":
+        return value in {
+            "await",
+            "case",
+            "delete",
+            "do",
+            "else",
+            "in",
+            "instanceof",
+            "new",
+            "of",
+            "return",
+            "throw",
+            "typeof",
+            "void",
+            "yield",
+        }
+    return kind == "punctuation" and value in {
+        "!",
+        "!=",
+        "!==",
+        "%",
+        "%=",
+        "&",
+        "&=",
+        "&&",
+        "&&=",
+        "(",
+        ",",
+        ":",
+        ";",
+        "<",
+        "<=",
+        "=",
+        "==",
+        "===",
+        "=>",
+        ">",
+        ">=",
+        "?",
+        "??",
+        "??=",
+        "[",
+        "{",
+        "|",
+        "|=",
+        "||",
+        "||=",
+        "~",
+        "+",
+        "+=",
+        "-",
+        "-=",
+        "*",
+        "*=",
+        "/",
+        "/=",
+        "**",
+        "**=",
+        "^",
+        "^=",
+        "<<",
+        ">>",
+        ">>>",
+        ">>>=",
+    }
+
+
+def _javascript_tokens(source: str):
+    """Yield code tokens, including template expressions but not template text."""
+    operators = (
+        ">>>=",
+        "===",
+        "!==",
+        "**=",
+        "&&=",
+        "||=",
+        "??=",
+        ">>>",
+        "...",
+        "=>",
+        "==",
+        "!=",
+        "<=",
+        ">=",
+        "++",
+        "--",
+        "&&",
+        "||",
+        "??",
+        "?.",
+        "**",
+        "+=",
+        "-=",
+        "*=",
+        "/=",
+        "%=",
+        "&=",
+        "|=",
+        "^=",
+        "<<",
+        ">>",
+    )
+
+    control_keywords = {"catch", "for", "if", "switch", "while", "with"}
+
+    def scan_code(index: int, template_expression: bool, nesting: int):
+        if nesting > MAX_JS_TEMPLATE_NESTING:
+            raise _JavaScriptLexError(
+                f"template nesting exceeds {MAX_JS_TEMPLATE_NESTING} levels"
+            )
+        previous: tuple[str, str | None] | None = None
+        paren_stack: list[bool] = []
+        brace_stack: list[bool | None] = []
+        after_control_paren = False
+        after_block_close = False
+        after_ambiguous_brace_close = False
+        while index < len(source):
+            char = source[index]
+            if template_expression and char == "}" and not brace_stack:
+                return index + 1
+            if char.isspace():
+                index += 1
+                continue
+            if source.startswith("//", index):
+                index += 2
+                while index < len(source) and source[index] not in JS_LINE_TERMINATORS:
+                    index += 1
+                continue
+            if source.startswith("/*", index):
+                end = source.find("*/", index + 2)
+                index = len(source) if end < 0 else end + 2
+                continue
+
+            this_after_control_paren = False
+            this_after_block_close = False
+            this_after_ambiguous_brace_close = False
+            if char in {"'", '"'}:
+                value, index = _read_javascript_string(source, index)
+                token = ("string", value)
+            elif char == "`":
+                # Boundary tokens keep import recognition inside an interpolation
+                # independent from the expression surrounding the template.
+                yield ("opaque", None)
+                index = yield from scan_template(index, nesting + 1)
+                token = ("opaque", None)
+            elif char == "/" and after_ambiguous_brace_close:
+                raise _JavaScriptLexError(
+                    "slash after an ambiguous brace; import scan incomplete"
+                )
+            elif char == "/" and _regex_can_start_after(
+                previous,
+                after_control_paren=after_control_paren,
+                after_block_close=after_block_close,
+            ):
+                index = _skip_javascript_regex(source, index)
+                token = ("opaque", None)
+            elif char.isalpha() or char in {"_", "$"} or ord(char) >= 128:
+                end = index + 1
+                while end < len(source) and (
+                    source[end].isalnum()
+                    or source[end] in {"_", "$"}
+                    or ord(source[end]) >= 128
+                ):
+                    end += 1
+                token = ("identifier", source[index:end])
+                index = end
+            elif char.isdigit():
+                end = index + 1
+                while end < len(source) and (
+                    source[end].isalnum() or source[end] in {"_", "."}
+                ):
+                    end += 1
+                token = ("other", None)
+                index = end
+            else:
+                operator = next(
+                    (
+                        candidate
+                        for candidate in operators
+                        if source.startswith(candidate, index)
+                    ),
+                    char,
+                )
+                token = ("punctuation", operator)
+                index += len(operator)
+
+                if operator == "(":
+                    paren_stack.append(
+                        previous is not None
+                        and previous[0] == "identifier"
+                        and previous[1] in control_keywords
+                    )
+                elif operator == ")":
+                    this_after_control_paren = (
+                        paren_stack.pop() if paren_stack else False
+                    )
+                elif operator == "{":
+                    previous_value = previous[1] if previous is not None else None
+                    is_block: bool | None
+                    if (
+                        (previous is None and not template_expression)
+                        or after_control_paren
+                        or previous_value in {")", "=>", ";", "{", "}"}
+                        or (
+                            previous is not None
+                            and previous[0] == "identifier"
+                            and previous[1] in {"do", "else", "finally", "try"}
+                        )
+                    ):
+                        is_block = True
+                    elif (
+                        previous is None
+                        or previous_value in {"=", "(", "[", ",", "?"}
+                        or (
+                            previous is not None
+                            and previous[0] == "identifier"
+                            and previous[1] in {"return", "yield"}
+                        )
+                    ):
+                        is_block = False
+                    else:
+                        is_block = None
+                    brace_stack.append(is_block)
+                elif operator == "}":
+                    if brace_stack:
+                        closed_brace = brace_stack.pop()
+                        this_after_block_close = closed_brace is True
+                        this_after_ambiguous_brace_close = closed_brace is None
+
+            yield token
+            previous = token
+            after_control_paren = this_after_control_paren
+            after_block_close = this_after_block_close
+            after_ambiguous_brace_close = this_after_ambiguous_brace_close
+
+        if template_expression:
+            raise _JavaScriptLexError("unterminated template interpolation")
+
+    def scan_template(index: int, nesting: int):
+        if nesting > MAX_JS_TEMPLATE_NESTING:
+            raise _JavaScriptLexError(
+                f"template nesting exceeds {MAX_JS_TEMPLATE_NESTING} levels"
+            )
+        index += 1
+        while index < len(source):
+            char = source[index]
+            if char == "\\":
+                index += 1
+                if index >= len(source):
+                    raise _JavaScriptLexError("unterminated template escape")
+                escaped = source[index]
+                index += 1
+                if (
+                    escaped == "\r"
+                    and index < len(source)
+                    and source[index] == "\n"
+                ):
+                    index += 1
+            elif char == "`":
+                return index + 1
+            elif source.startswith("${", index):
+                yield ("opaque", None)
+                index = yield from scan_code(index + 2, True, nesting)
+                yield ("opaque", None)
+            else:
+                index += 1
+        raise _JavaScriptLexError("unterminated template literal")
+
+    yield from scan_code(0, False, 0)
+
+
+class _JavaScriptTokenStream:
+    def __init__(self, source: str):
+        self._tokens = iter(_javascript_tokens(source))
+        self._buffer: deque[tuple[str, str | None]] = deque()
+
+    def peek(self, offset: int = 0) -> tuple[str, str | None] | None:
+        while len(self._buffer) <= offset:
+            try:
+                self._buffer.append(next(self._tokens))
+            except StopIteration:
+                return None
+        return self._buffer[offset]
+
+    def pop(self) -> tuple[str, str | None] | None:
+        token = self.peek()
+        return self._buffer.popleft() if token is not None else None
+
+    def push(self, token: tuple[str, str | None]) -> None:
+        self._buffer.appendleft(token)
+
+
+def extract_javascript_imports(
+    source: str,
+    max_imports: int = MAX_JS_IMPORTS_PER_MODULE,
+) -> tuple[list[str], str | None]:
+    """Find literal static, re-export, and dynamic imports without evaluating JavaScript."""
+    tokens = _JavaScriptTokenStream(source)
+    imports: list[str] = []
+    seen: set[str] = set()
+    scan_issue: str | None = None
+
+    def record(specifier: str | None) -> None:
+        nonlocal scan_issue
+        if not specifier or specifier in seen:
+            return
+        if len(imports) >= max_imports:
+            scan_issue = f"import count exceeds the {max_imports}-import limit"
+            return
+        seen.add(specifier)
+        imports.append(specifier)
+
+    previous: tuple[str, str | None] | None = None
+    try:
+        while (token := tokens.pop()) is not None:
+            kind, value = token
+            if kind != "identifier" or value not in {"import", "export"}:
+                previous = token
+                continue
+            if previous is not None and previous[1] in {".", "?."}:
+                previous = token
+                continue
+
+            if value == "import":
+                following = tokens.peek()
+                if following is not None and following[1] in {".", "?."}:
+                    previous = token
+                    continue
+                if following is not None and following[0] == "string":
+                    record(tokens.pop()[1])
+                    previous = ("string", None)
+                    if scan_issue:
+                        break
+                    continue
+                if (
+                    following == ("punctuation", "(")
+                    and tokens.peek(1) is not None
+                    and tokens.peek(1)[0] == "string"
+                    and tokens.peek(2) is not None
+                    and tokens.peek(2)[1] in {")", ","}
+                ):
+                    tokens.pop()
+                    record(tokens.pop()[1])
+                    # Do not consume the rest of import(...): an options object
+                    # can itself contain executable literal import() expressions.
+                    previous = ("string", None)
+                    if scan_issue:
+                        break
+                    continue
+                if following == ("punctuation", "("):
+                    # A computed import() is deliberately outside this literal-only scan.
+                    previous = token
+                    continue
+            elif tokens.peek() is None or tokens.peek()[1] not in {"*", "{"}:
+                previous = token
+                continue
+
+            depth = 0
+            last_token = token
+            found = False
+            for _ in range(MAX_JS_IMPORT_CLAUSE_TOKENS):
+                clause_token = tokens.pop()
+                if clause_token is None:
+                    break
+                last_token = clause_token
+                clause_kind, clause_value = clause_token
+                if clause_kind == "punctuation":
+                    if clause_value in {"{", "[", "("}:
+                        depth += 1
+                    elif clause_value in {"}", "]", ")"}:
+                        depth = max(0, depth - 1)
+                    elif clause_value == ";" and depth == 0:
+                        break
+                if (
+                    clause_kind == "identifier"
+                    and clause_value in {"import", "export"}
+                    and depth == 0
+                ):
+                    tokens.push(clause_token)
+                    last_token = token
+                    break
+                if (
+                    clause_kind == "identifier"
+                    and clause_value == "from"
+                    and depth == 0
+                ):
+                    source_token = tokens.peek()
+                    if source_token is not None and source_token[0] == "string":
+                        source_token = tokens.pop()
+                        last_token = source_token
+                        record(source_token[1])
+                        found = True
+                        break
+            else:
+                scan_issue = (
+                    "static import/export clause exceeds the "
+                    f"{MAX_JS_IMPORT_CLAUSE_TOKENS}-token limit"
+                )
+            previous = last_token
+            if scan_issue:
+                break
+            if found:
+                continue
+    except _JavaScriptLexError as exc:
+        scan_issue = scan_issue or str(exc)
+
+    return imports, scan_issue
+
+
+def _same_http_origin(left: str, right: str) -> bool:
+    try:
+        left_parts = urllib.parse.urlsplit(left)
+        right_parts = urllib.parse.urlsplit(right)
+        left_port = left_parts.port or (443 if left_parts.scheme.lower() == "https" else 80)
+        right_port = right_parts.port or (443 if right_parts.scheme.lower() == "https" else 80)
+    except ValueError:
+        return False
+    return (
+        left_parts.scheme.lower() in {"http", "https"}
+        and left_parts.scheme.lower() == right_parts.scheme.lower()
+        and (left_parts.hostname or "").lower() == (right_parts.hostname or "").lower()
+        and left_port == right_port
+    )
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject a JavaScript dependency redirect before urllib opens its target."""
+
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> Any:
+        if not _same_http_origin(req.full_url, newurl):
+            raise urllib.error.HTTPError(
+                req.full_url,
+                code,
+                "cross-origin redirect rejected for JavaScript dependency",
+                headers,
+                fp,
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def resolve_javascript_import(base: str, referrer: str, specifier: str) -> str | None:
+    """Resolve only same-origin JS modules under /assets; ignore bare and external imports."""
+    specifier = specifier.strip()
+    if not specifier:
+        return None
+    if not (
+        specifier.startswith(("/", "./", "../"))
+        or specifier.startswith("//")
+        or re.match(r"^https?://", specifier, re.I)
+    ):
+        return None
+
+    referrer_url = urllib.parse.urljoin(base.rstrip("/") + "/", referrer.lstrip("/"))
+    resolved = urllib.parse.urljoin(referrer_url, specifier)
+    if not _same_http_origin(base, resolved):
+        return None
+    parsed = urllib.parse.urlsplit(resolved)
+    decoded_path = urllib.parse.unquote(parsed.path)
+    if (
+        not decoded_path.startswith("/assets/")
+        or "\\" in decoded_path
+        or any(part in {".", ".."} for part in decoded_path.split("/"))
+        or Path(decoded_path).suffix.lower() not in JAVASCRIPT_SUFFIXES
+    ):
+        return None
+    return urllib.parse.urlunsplit(("", "", parsed.path, parsed.query, ""))
+
 
 def path_from_url(url: str) -> str:
     parsed = urllib.parse.urlparse(url)
@@ -775,13 +1431,112 @@ def main() -> int:
             report.append(result("sitemap cache policy", cache_status, GITHUB_PAGES_POLICY_NOTE if args.hosting == "github-pages" else (cache or "Cache-Control absent")))
         check_headers(report, f"generated {kind}", response, args.hosting)
 
-    # Check availability and MIME types for discovered first-party assets.
-    # CSS/JS require fingerprints; verify hashes and cache policy whenever a
-    # discovered asset supplies a fingerprint.
+    # Check first-party assets and walk literal same-origin JavaScript imports.
+    # Module sources are read as text only; this verifier never evaluates JS.
     assets: dict[str, str] = {}
-    for body in bodies.values():
+    html_javascript_entrypoints: set[str] = set()
+    js_asset_urls: set[str] = set()
+    js_limit_reported = False
+
+    def report_js_limit(evidence: str) -> None:
+        nonlocal js_limit_reported
+        if not js_limit_reported:
+            report.append(
+                result("JavaScript dependency discovery", "BLOCKED", evidence)
+            )
+            js_limit_reported = True
+
+    def add_asset(
+        asset_url: str, source: str, *, html_entrypoint: bool = False
+    ) -> None:
+        asset_url = asset_url.split("#", 1)[0]
+        if not asset_url:
+            return
+        suffix = Path(urllib.parse.urlsplit(asset_url).path).suffix.lower()
+        if html_entrypoint and suffix in JAVASCRIPT_SUFFIXES:
+            html_javascript_entrypoints.add(asset_url)
+        if asset_url in assets:
+            return
+        if suffix in JAVASCRIPT_SUFFIXES:
+            if len(js_asset_urls) >= MAX_JS_MODULES:
+                report_js_limit(
+                    f"stopped after {MAX_JS_MODULES} JavaScript assets; "
+                    f"additional dependency {asset_url} referenced by {source}"
+                )
+                return
+            js_asset_urls.add(asset_url)
+        assets[asset_url] = asset_url
+
+    inline_import_cache: dict[bytes, tuple[list[str], str | None]] = {}
+    js_source_bytes = 0
+    inline_module_count = 0
+    for route, body in bodies.items():
+        script_blocks = list(HTML_SCRIPT_BLOCK_RE.finditer(body))
+        script_source_spans = [
+            (match.start("source"), match.end("source"))
+            for match in script_blocks
+        ]
         for match in HTML_ASSET_RE.finditer(body):
-            assets[match.group("url").split("#", 1)[0]] = match.group("url")
+            if any(
+                start <= match.start("url") < end
+                for start, end in script_source_spans
+            ):
+                continue
+            add_asset(
+                match.group("url"),
+                f"route {route}",
+                html_entrypoint=True,
+            )
+        for match in script_blocks:
+            attributes = match.group("attributes")
+            if (
+                not HTML_MODULE_TYPE_RE.search(attributes)
+                or HTML_SCRIPT_SRC_RE.search(attributes)
+            ):
+                continue
+            inline_module_count += 1
+            if inline_module_count > MAX_JS_MODULES:
+                report_js_limit(
+                    f"stopped after {MAX_JS_MODULES} inline module blocks"
+                )
+                break
+            source = match.group("source")
+            source_bytes = len(source.encode("utf-8"))
+            source_key = hashlib.sha256(source.encode("utf-8")).digest()
+            parsed_imports = inline_import_cache.get(source_key)
+            if parsed_imports is None:
+                if source_bytes > MAX_JS_SOURCE_BYTES:
+                    report.append(
+                        result(
+                            f"JavaScript imports inline {route}",
+                            "BLOCKED",
+                            f"inline module exceeds the {MAX_JS_SOURCE_BYTES}-byte source limit",
+                        )
+                    )
+                    continue
+                if js_source_bytes + source_bytes > MAX_JS_GRAPH_SOURCE_BYTES:
+                    report_js_limit(
+                        f"stopped parsing after the "
+                        f"{MAX_JS_GRAPH_SOURCE_BYTES}-byte JavaScript source budget"
+                    )
+                    continue
+                js_source_bytes += source_bytes
+                parsed_imports = extract_javascript_imports(source)
+                inline_import_cache[source_key] = parsed_imports
+            imports, scan_issue = parsed_imports
+            if scan_issue:
+                report.append(
+                    result(
+                        f"JavaScript imports inline {route}",
+                        "BLOCKED",
+                        f"module import scan incomplete: {scan_issue}",
+                    )
+                )
+            for specifier in imports:
+                dependency = resolve_javascript_import(args.base, route, specifier)
+                if dependency:
+                    add_asset(dependency, f"inline module on {route}")
+
     if not assets:
         report.append(result("first-party assets", "FAIL", "no first-party asset references found in fetched HTML"))
 
@@ -798,20 +1553,126 @@ def main() -> int:
                 if local_path.is_file()
                 else None
             )
-            response = fetch(args.base, asset_url, args.timeout)
+            suffix = Path(path).suffix.lower()
+            is_javascript = suffix in JAVASCRIPT_SUFFIXES
+            if is_javascript:
+                remaining_js_budget = MAX_JS_GRAPH_SOURCE_BYTES - js_source_bytes
+                if remaining_js_budget <= 0:
+                    report_js_limit(
+                        f"stopped fetching after the "
+                        f"{MAX_JS_GRAPH_SOURCE_BYTES}-byte JavaScript source budget"
+                    )
+                    report.append(
+                        result(
+                            f"asset {path}",
+                            "BLOCKED",
+                            "not fetched because the JavaScript source budget is exhausted",
+                        )
+                    )
+                    continue
+                max_source_bytes = min(
+                    MAX_JS_SOURCE_BYTES, remaining_js_budget
+                )
+            else:
+                max_source_bytes = None
+            response = fetch(
+                args.base,
+                asset_url,
+                args.timeout,
+                max_bytes=max_source_bytes,
+                same_origin_redirects_only=is_javascript,
+            )
+            if is_javascript:
+                js_source_bytes += len(response.get("body", b""))
+            mime_ok = True
             if response.get("ok") and response.get("status") == 200:
-                check_asset_content_type(report, path, response)
-                if Path(path).suffix.lower() == ".css":
+                mime_ok = check_asset_content_type(report, path, response)
+                if suffix == ".css":
                     css_body = response["body"].decode("utf-8", errors="replace")
                     for match in CSS_ASSET_RE.finditer(css_body):
-                        discovered_url = match.group("url").split("#", 1)[0]
-                        assets[discovered_url] = match.group("url")
+                        add_asset(match.group("url"), f"stylesheet {path}")
+                if is_javascript and mime_ok and not response.get("truncated"):
+                    module_source = response["body"].decode(
+                        "utf-8", errors="replace"
+                    )
+                    imports, scan_issue = extract_javascript_imports(
+                        module_source
+                    )
+                    if scan_issue:
+                        report.append(
+                            result(
+                                f"JavaScript imports {path}",
+                                "BLOCKED",
+                                f"module import scan incomplete: {scan_issue}",
+                            )
+                        )
+                    for specifier in imports:
+                        dependency = resolve_javascript_import(
+                            args.base, asset_url, specifier
+                        )
+                        if dependency:
+                            add_asset(dependency, f"module {path}")
+            if response.get("truncated"):
+                if max_source_bytes < MAX_JS_SOURCE_BYTES:
+                    truncation_evidence = (
+                        f"JavaScript source exceeds the remaining "
+                        f"{max_source_bytes}-byte graph budget"
+                    )
+                else:
+                    truncation_evidence = (
+                        f"JavaScript source exceeds the per-module "
+                        f"{MAX_JS_SOURCE_BYTES}-byte fetch limit"
+                    )
+                report.append(
+                    result(
+                        f"asset {path}",
+                        "BLOCKED",
+                        truncation_evidence,
+                    )
+                )
+                continue
             if not fingerprint:
-                if Path(path).suffix.lower() in FINGERPRINTED_ASSET_SUFFIXES:
+                fingerprint_required = suffix in FINGERPRINTED_ASSET_SUFFIXES and (
+                    not is_javascript
+                    or asset_url in html_javascript_entrypoints
+                )
+                if fingerprint_required:
                     report.append(result(f"asset {path}", "FAIL", "missing 8-character ?v= fingerprint"))
                 elif not response.get("ok") or response.get("status") != 200:
                     report.append(result(f"asset {path}", transport_status(response),
                                          response.get("error", f"HTTP {response.get('status')}")))
+                elif is_javascript:
+                    if not local_path.is_file():
+                        report.append(
+                            result(
+                                f"asset {path}",
+                                "FAIL",
+                                f"local JavaScript module missing: {local_path}",
+                            )
+                        )
+                    else:
+                        local_bytes = canonical_text_bytes(local_path)
+                        remote_bytes = response["body"].replace(b"\r\n", b"\n")
+                        local_sha256 = hashlib.sha256(local_bytes).hexdigest()
+                        remote_sha256 = hashlib.sha256(remote_bytes).hexdigest()
+                        if local_sha256 != remote_sha256:
+                            report.append(
+                                result(
+                                    f"asset {path}",
+                                    "FAIL",
+                                    "live JavaScript module SHA-256 "
+                                    f"{remote_sha256[:12]} differs from local "
+                                    f"{local_sha256[:12]}",
+                                )
+                            )
+                        else:
+                            report.append(
+                                result(
+                                    f"asset {path}",
+                                    "PASS",
+                                    f"HTTP 200; SHA-256 {local_sha256[:12]} matches local module",
+                                )
+                            )
                 continue
             if expected_hash and fingerprint.group(1).lower() != expected_hash.lower():
                 report.append(result(f"asset {path}", "FAIL", f"URL fingerprint {fingerprint.group(1)} != local {expected_hash}"))
@@ -840,6 +1701,15 @@ def main() -> int:
 
     failures = sum(item["status"] == "FAIL" for item in report)
     blocked = sum(item["status"] == "BLOCKED" for item in report)
+    unaccepted_blocks = [
+        item
+        for item in report
+        if item["status"] == "BLOCKED"
+        and not (
+            args.accept_blocked
+            and is_accepted_hosting_block(item, args.hosting)
+        )
+    ]
     warnings = sum(item["status"] == "WARN" for item in report)
     payload = {
         "verifier": "verify-live-edge.py",
@@ -858,7 +1728,7 @@ def main() -> int:
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(encoded, encoding="utf-8")
-    return 1 if failures or (blocked and not args.accept_blocked) or not routes else 0
+    return 1 if failures or unaccepted_blocks or not routes else 0
 
 
 if __name__ == "__main__":
