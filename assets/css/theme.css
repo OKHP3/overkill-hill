@@ -8256,3 +8256,43 @@ section[data-status-presentation="disclosure"] .project-card { border-top: 2px s
  .a14-editorial-hero .hero-inner { padding-top: 1.25rem; padding-bottom: 1.25rem; }
  .a14-editorial-hero .hero-grid { gap: .75rem; }
 }
+
+/* OverKill Hill capability transition: native modal and persistent notices. */
+.capability-transition-notice {
+  margin-block: 1.25rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border-subtle);
+  border-left: 4px solid var(--color-accent);
+  background: var(--color-surface-soft);
+}
+.capability-transition-notice h2 { font-size: 1.1rem; margin: 0 0 .35rem; }
+.capability-transition-notice p { margin: 0 0 .5rem; }
+.capability-transition-dialog {
+  box-sizing: border-box;
+  width: min(42rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border: 1px solid var(--color-accent);
+  border-radius: .75rem;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  box-shadow: 0 1.5rem 5rem #0008;
+}
+.capability-transition-dialog::backdrop { background: #000b; }
+.capability-transition-dialog h2 { font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.15; clear: both; }
+.capability-transition-dialog p { margin-block: 1rem; }
+html .capability-transition-dialog .hero-eyebrow { color: var(--color-muted); }
+.transition-close {
+  float: right;
+  padding: .5rem .75rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: .25rem;
+  color: var(--color-fg);
+  background: var(--color-surface-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.transition-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+.transition-actions .btn { white-space: normal; text-align: center; }
+@media (max-width: 480px) { .transition-actions .btn { width: 100%; } }
