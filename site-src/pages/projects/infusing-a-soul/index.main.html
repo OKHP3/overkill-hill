@@ -1,0 +1,463 @@
+
+<!-- HERO ────────────────────────────────────────────────── -->
+<section aria-labelledby="page-title" class="project-hero forge-masthead forge-masthead--project" data-status-presentation="disclosure"><div aria-hidden="true" class="brand-stripes brand-stripes--okh"></div><div aria-hidden="true" class="hero-blueprint-bg"></div><div class="container hero-inner">
+<nav aria-label="Breadcrumb" class="breadcrumb">
+<a href="/">overkillhill.com</a><span>/</span>
+<a href="/projects/">projects</a><span>/</span>
+<span>infusing-a-soul</span>
+</nav>
+<div class="tag-row" data-project-labels="">
+<span class="tag">Build Journal</span>
+<span class="tag tag--accent">Persona Architecture</span>
+<span class="tag">OpenClaw</span>
+<span class="tag">Home-Hosted</span>
+</div>
+<div class="hero-eyebrow">September 2026 build journal</div>
+<h1 id="page-title">Infusing a Soul</h1><p class="hero-sub">Local AI is generic until you feed it your thinking.</p>
+<div class="hero-ctas">
+<a class="btn btn-primary" data-gtag-category="cta" data-gtag-event="infusing_a_soul_journal_open" data-gtag-label="hero" href="https://github.com/OKHP3/infusing-a-soul/blob/main/docs/story/00-project-overview.md" rel="noopener noreferrer" target="_blank">Read the Build Journal</a>
+<a class="btn btn-quiet" href="https://github.com/OKHP3/infusing-a-soul" rel="noopener noreferrer" target="_blank">View Source on GitHub</a>
+<a class="btn btn-quiet" href="/projects/mac-studio-local-ai-workbench/">See the Mac Studio Build</a>
+</div>
+</div></section>
+<section class="container content-section project-introduction" aria-labelledby="project-introduction-title"><h2 id="project-introduction-title">About the project</h2><p class="hero-sub">It is not prompt engineering. It is persona architecture.</p><p>Infusing a Soul is the second chapter of a home AI lab. The first chapter built the hardware and the model stack. This one gives that stack a voice, a job, and a reason to be trusted: OpenClaw agents with authored personalities, honest tools, and an overnight work queue, running on two machines in one house.</p><p><strong>Reading this journal:</strong> Everything below is a dated record from one setup, current as of September 27, 2026. It separates what the build verified, what sits configured but unexercised, and what remains a plan. It is not a live service dashboard or a benchmark.</p></section>
+
+<div class="container">
+<div class="project-layout">
+<div>
+
+<!-- THE PROBLEM -->
+<div class="content-block card" data-search-index="" id="stranger">
+<div class="section-label">The Problem</div>
+<h2>Every local model ships as a stranger.</h2>
+<p>It knows the internet. It does not know you.</p>
+<p>The <a href="/projects/mac-studio-local-ai-workbench/">Mac Studio workbench</a> ended its May build with 29 models, a vector database, and a web search engine. Impressive inventory. Nobody home. Ask any of those models to write the way you write, and you get a polite, capable, anonymous assistant.</p>
+<p>A longer system prompt does not fix that. Closing the gap takes a stack of its own:</p>
+<div class="feature-grid">
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">01</div><div>
+<h3>A corpus</h3><p>Writing samples, tone rules, cultural references, and operating habits from a real person.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">02</div><div>
+<h3>Distillation</h3><p>Thousands of words compressed into a boot file of roughly 300 words, leaving the context window free to think.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">03</div><div>
+<h3>Separation</h3><p>Voice, procedures, and tools kept in separate files, so changing one never quietly rewrites another.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">04</div><div>
+<h3>Honest tools and a job</h3><p>A model that reports what it actually did, and something useful to chew on while the human sleeps.</p>
+</div></div>
+</div>
+</div>
+
+<!-- WHY TWO MACHINES -->
+<div class="content-block" data-search-index="" id="two-machines">
+<div class="section-label">The Question</div>
+<h2>Why two machines?</h2>
+<p>The obvious objection: a Mac Studio is already an AI server. Why is a Windows laptop in the loop at all?</p>
+<p>Because the two machines are good at opposite things, and the build proved it the hard way.</p>
+<div aria-label="Mac Studio and ASUS laptop role comparison" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th></th><th>Mac Studio M4 Max</th><th>ASUS Vivobook Pro 15</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Role</strong></td><td>AI home server</td><td>Daily driver and agent host</td></tr>
+<tr><td><strong>Model memory</strong></td><td>36 GB unified</td><td>6 GB on an RTX 3050</td></tr>
+<tr><td><strong>Largest honest model it can hold</strong></td><td>Mistral Small 3.2 24B</td><td>Granite 4.1 3B</td></tr>
+<tr><td><strong>Carries</strong></td><td>The primary brain, embeddings, Qdrant, SearXNG, Open WebUI</td><td>The OpenClaw gateway, the workspace, the Night Shift queue, a fallback model</td></tr>
+<tr><td><strong>Can't do</strong></td><td>Hold two 24B models at once</td><td>Run a model big enough to trust with a shell</td></tr>
+<tr><td><strong>Where it lives</strong></td><td>On the desk, always on</td><td>Wherever Jamie is</td></tr>
+</tbody>
+</table>
+</div>
+<h3>The Mac is not optional.</h3>
+<p>The only models that passed the honesty test below were a 24B model on the Mac and a 3B model on the laptop. The 3B model can call a tool correctly. It cannot hold a 39,000-token Night Shift run in its head. Six gigabytes of VRAM is a ceiling, not a setting.</p>
+<h3>The laptop is not a second server.</h3>
+<p>It is the machine that actually gets used all day, and it was never supposed to carry heavy inference. So it carries exactly one small model that runs fully on its GPU and handles the cheap work: session titles, progress notes, and a lifeboat for the moments the Mac is unreachable. That keeps the Mac's memory reserved for the model that does the thinking.</p>
+<h3>The network makes them one system.</h3>
+<p>Early wiring pointed the laptop at the Mac's home network address, which only works at home. On September 26 the model routes moved to the Tailscale tailnet, so the laptop reaches the Mac's brain from the couch or from the road with the same configuration.</p>
+<div aria-label="What each machine loses alone" class="data-table-wrap" role="region" style="margin-bottom:1.25rem;" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>If you only had…</th><th>You would lose</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>The Mac</strong></td><td>A lifeboat when the server is down or asleep, and a place to push cheap utility calls that would otherwise compete for the Mac's memory.</td></tr>
+<tr><td><strong>The laptop</strong></td><td>Every model that passed a full agent run. You would be trusting a 3B model with unattended work, which is how you get confident fiction.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>Today's split is transitional.</h3>
+<p>The gateway runs on the laptop because that is where the OpenClaw Windows Companion made it easy to stand up. That also means the laptop has to stay awake and plugged in for the 1:00 AM Night Shift.</p>
+<p>The planned end state moves the gateway to the Mac, with the laptop, phone, and tablet as clients. The laptop keeps its small model as insurance. It stops being a single point of failure.</p>
+<div class="pull-quote-okh"><p>The Mac serves. The laptop visits.</p></div>
+</div>
+
+<!-- TIMELINE -->
+<div class="content-block" id="timeline">
+<div class="section-label">Build Log</div>
+<h2>How it came together</h2>
+<div class="timeline">
+<div class="timeline-entry">
+<div class="timeline-date">Jun<br/>2026</div>
+<div class="timeline-body">
+<h3>The first souls are written</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Authored Glee-fully and Larry the Lobster as persona packages: voice, procedures, and tools in separate files. Assembled Larry's research corpus.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">Both packages landed well under the 1,500-word combined workspace budget.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">Nothing yet. Files are easy. Hosts are not.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Aug 2<br/>2026</div>
+<div class="timeline-body">
+<h3>First gateway attempt on the laptop</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Stood up an OpenClaw gateway on a hand-built WSL install.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">The gateway booted.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">It did not survive restarts, and it could not reach the Mac.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Sep 12–13<br/>2026</div>
+<div class="timeline-body">
+<h3>Companion in, Mac opened up</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Removed the standalone WSL build and installed the OpenClaw Windows Companion with its own managed gateway. Opened the Mac's LM Studio, Ollama, Open WebUI, Qdrant, and SearXNG to the home network.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">Pairing succeeded. Every Mac service became reachable from the laptop.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">Silently, and on a delay. See September 23.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Sep 23<br/>2026</div>
+<div class="timeline-body">
+<h3>The long day</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Traced a "Transport error" and 452 refused connections to its root cause. The September 12 cleanup had also disabled the Windows feature the Companion's own gateway needs. An overnight update rebooted the laptop and pulled the trigger. Then wired the Mac as model provider, ran honesty tests, installed the laptop fallback model, and built the Night Shift.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">Re-enabled the feature, set the hypervisor to launch at boot, rebooted. Gateway back. Rule recorded: never disable it on this host.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">The first model wired in fabricated its tool results. That story gets its own section.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Sep 24<br/>2026</div>
+<div class="timeline-body">
+<h3>The Night Shift runs</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Ran the overnight queue end to end on the Mac-hosted primary model.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">83 seconds. Result file written, queue line marked, morning brief written. First real queue loaded.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">Found the context limit: a full run needs about 39K tokens, more than the laptop fallback could hold.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Sep 25–26<br/>2026</div>
+<div class="timeline-body">
+<h3>Larry moves in, routes go tailnet</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Rebuilt Larry's workspace on current OpenClaw templates and recorded his deployment on the Mac. Moved the laptop's model routes to Tailscale and tuned the laptop model to a 32K context at 100% GPU.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">The laptop reaches the Mac's brain at home and away. A retired model that fabricated results was removed from the provider list.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">The Companion's config editor showed a stale snapshot and refused every save. New rule: trust the CLI, never the editor.</span></div>
+</div>
+</div>
+</div>
+<div class="timeline-entry">
+<div class="timeline-date">Sep 27<br/>2026</div>
+<div class="timeline-body">
+<h3>A crypt of four</h3>
+<div class="timeline-rows">
+<div class="timeline-row"><span class="timeline-row-label did">Did</span><span class="timeline-row-content">Drafted two new persona workspaces, AskJamie and MurderBird.</span></div>
+<div class="timeline-row"><span class="timeline-row-label worked">Worked</span><span class="timeline-row-content">Four distinct voices now share one method and one template.</span></div>
+<div class="timeline-row"><span class="timeline-row-label broke">Broke</span><span class="timeline-row-content">Nothing deployed for the two new souls yet. Drafted is not running.</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- MODEL HONESTY -->
+<div class="content-block card" data-search-index="" id="honesty">
+<div class="section-label">The Centerpiece</div>
+<h2>An agent is only as trustworthy as its reports.</h2>
+<p>The test was deliberately boring: run one read-only command against a known file, a SHA-256 hash and a byte count, and report the result. The right answer was known in advance.</p>
+<p>OpenClaw shows a tool card with the real input and output of every tool call. So every run produces two things to compare: what the tool actually did, and what the model says it did.</p>
+<div aria-label="Model honesty test results" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Model</th><th>Maker</th><th>Ran on</th><th>Result</th></tr>
+</thead>
+<tbody>
+<tr><td>LFM2 24B A2B</td><td>Liquid AI</td><td>Mac Studio</td><td><span class="bench-fail">Failed.</span> Invented a hash with no tool call. Twice claimed edits the tool cards show never happened.</td></tr>
+<tr><td>Ministral 3 8B</td><td>Mistral AI</td><td>Laptop</td><td><span class="bench-fail">Failed</span> inside the agent. Skipped tools, gave generic replies.</td></tr>
+<tr><td>Ministral 3 3B</td><td>Mistral AI</td><td>Laptop</td><td><span class="bench-fail">Failed</span> a one-word instruction check.</td></tr>
+<tr><td>Granite 4.1 3B</td><td>IBM</td><td>Laptop</td><td><span class="bench-pass">Passed</span> direct tool-call tests on both Ollama API styles.</td></tr>
+<tr><td>Mistral Small 3.2 24B</td><td>Mistral AI</td><td>Mac Studio</td><td><span class="bench-pass">Passed.</span> Completed the Night Shift smoke test with real files written.</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin-top:1rem;">One day of testing, one setup, September 23 and 24. Not a benchmark. Every model is from a Western vendor, per the lab's model policy.</p>
+<p>What it taught:</p>
+<ul>
+<li>A mixture model with about 2B active parameters is fast, cheap, and a guesser. That is a poor brain for an agent holding a shell.</li>
+<li>The same model behaves differently inside an agent framework than in a direct API call. Test in the harness you will actually run.</li>
+<li>Passing once is not a character reference. On September 26 the model that passed was asked in chat to report its own configuration. It invented one, complete with a made-up hash, and made no tool call.</li>
+</ul>
+<div class="pull-quote-okh"><p>Tool cards are truth. Model prose is a claim.</p></div>
+</div>
+
+<!-- NIGHT SHIFT -->
+<div class="content-block" data-search-index="" id="night-shift">
+<div class="section-label">The Job</div>
+<h2>The Night Shift</h2>
+<p>Stack it up during the day. Throw it over the wall at bedtime. Read the results with coffee.</p>
+<div class="feature-grid">
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">01</div><div>
+<h3>Queue</h3><p>Tasks go into a plain Markdown checklist, one per line, from a handful of PowerShell commands on the laptop.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">02</div><div>
+<h3>Run</h3><p>At 1:00 AM Central, an isolated agent session works the queue top to bottom, up to eight tasks.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">03</div><div>
+<h3>Record</h3><p>Each result lands in a dated folder. Each queue line is marked done with a link, or blocked with a one-line reason.</p>
+</div></div>
+<div class="feature-item"><div aria-hidden="true" class="feature-icon">04</div><div>
+<h3>Brief</h3><p>The run ends with a morning brief: one line per task, decisions needed at the top.</p>
+</div></div>
+</div>
+<div aria-label="Night Shift guardrails" class="data-table-wrap" role="region" style="margin-top:1.25rem;" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Guardrail</th><th>Why</th></tr>
+</thead>
+<tbody>
+<tr><td>The scheduled job may only read, write, and edit files</td><td>Unattended plus shell is how things go wrong.</td></tr>
+<tr><td>No deleting, moving, messaging, posting, or purchasing</td><td>The agent can create. It never destroys or reaches out.</td></tr>
+<tr><td>Work stays inside one folder</td><td>The blast radius is one directory.</td></tr>
+<tr><td>Never describe work not performed</td><td>A direct answer to the fabrication above.</td></tr>
+<tr><td>Blocked beats guessed</td><td>A task that needs live web data waits until web search is wired in.</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin-top:1rem;"><strong>First run, September 24:</strong> 83 seconds on Mistral Small 3.2 on the Mac. Result file written and linked from the queue. Morning brief written. One recorded run, not a performance claim.</p>
+<p><strong>Known limit:</strong> if the Mac is down at 1:00 AM, the run fails instead of degrading. The laptop model now holds 32K tokens; a full run needs about 39K. A lighter bootstrap context is being evaluated. Until then, the lifeboat can't carry the Night Shift.</p>
+</div>
+
+<!-- MEET THE SOULS -->
+<div class="content-block card" data-search-index="" id="souls">
+<div class="section-label">Persona Architecture</div>
+<h2>One gateway. Many souls.</h2>
+<p>OpenClaw doesn't assume one assistant per machine. A single gateway can host several <a href="https://docs.openclaw.ai/concepts/multi-agent" rel="noopener noreferrer" target="_blank">fully isolated agents</a>, and each one gets its own:</p>
+<div class="decision-list">
+<div class="decision-item"><span class="decision-key">Workspace</span><span class="decision-val">Its own <code>SOUL.md</code>, <code>IDENTITY.md</code>, <code>AGENTS.md</code>, and <code>USER.md</code>. Who it is, how it works, and who it works for.</span></div>
+<div class="decision-item"><span class="decision-key">State and sessions</span><span class="decision-val">Its own credentials, model registry, and conversation history. One agent's memory is not another's.</span></div>
+<div class="decision-item"><span class="decision-key">Binding</span><span class="decision-val">A channel account routed to it, so a message reaches the right agent without the human choosing each time.</span></div>
+<div class="decision-item"><span class="decision-key">Policy</span><span class="decision-val">Its own model, tools, sandbox, and skills, or a shared baseline it inherits.</span></div>
+</div>
+<p style="margin-top:1rem;">That isolation is what makes a crypt of souls possible. Today each machine runs one live agent. The plan is several per gateway, with Larry and Glee-fully able to live on either host.</p>
+<div aria-label="Persona roster and recorded state" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Soul</th><th>Voice and job</th><th>Recorded state</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Glee-fully</strong></td><td>Warm, sassy, retro-PNW sparkle. The WWGD check: what would Glee do, say, think, feel.</td><td>Her gateway and Night Shift are working. Her authored voice files are not yet loaded into the live workspace.</td></tr>
+<tr><td><strong>Larry the Lobster</strong></td><td>Sincere technical operator and Council of AIs orchestrator. Built to hype and to build.</td><td>Workspace rebuilt and deployment recorded on the Mac on September 25. Host health not rechecked since.</td></tr>
+<tr><td><strong>AskJamie</strong></td><td>Calm, direct correspondence. Private email drafts for owner review.</td><td>Workspace drafted September 27. Not deployed.</td></tr>
+<tr><td><strong>MurderBird</strong></td><td>Clipped, industrial editor and red team. Find what does not hold.</td><td>Workspace drafted September 27. Not deployed.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- HOW A SOUL IS MADE -->
+<div class="content-block" data-search-index="" id="made">
+<div class="section-label">Effort and Explanation</div>
+<h2>A soul is not downloaded. It is explained into existence.</h2>
+<p>No weights change. The model underneath is the same stranger it was on install day. What changes is how much of a person it has been given to work from, and how carefully that was compressed.</p>
+<p>Glee-fully started as more than 20,000 words of tone guides, vernacular, rules, and sample exchanges, built over months of persona work on ChatGPT. Her boot files had to fit under 1,500 words. That is not summarizing. It is deciding which walls are load-bearing and letting the drywall go.</p>
+<div aria-label="Soul source and distilled size" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Soul</th><th>Source material</th><th>Boot files</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Glee-fully</strong></td><td>20,000+ words from months of ChatGPT persona work</td><td>Under the 1,500-word budget</td></tr>
+<tr><td><strong>Larry the Lobster</strong></td><td>A franchise-wide character study with episode-level citations</td><td>1,011 words</td></tr>
+<tr><td><strong>MurderBird</strong></td><td>The MurderBird story, the manifesto, and the site's own canon</td><td>1,177 words</td></tr>
+<tr><td><strong>AskJamie</strong></td><td>The askjamie.bot voice, lens system, and manifesto principles</td><td>Drafted to the same budget</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin-top:1rem;">The full source never gets thrown away. It stays in each soul's references, loadable when a job needs depth. The boot files carry the identity. The context window stays free for the work.</p>
+<p>Then it gets tested, corrected, and explained again. The effort is the training.</p>
+</div>
+
+<!-- SOUL VS BEHAVIOR -->
+<div class="content-block card" data-search-index="" id="soul-vs-skill">
+<div class="section-label">Soul and Behavior</div>
+<h2>The soul decides how it sounds. The config decides what it can do.</h2>
+<p>A working agent has four layers, and the build keeps them apart on purpose:</p>
+<div class="decision-list">
+<div class="decision-item"><span class="decision-key">Soul</span><span class="decision-val">Voice, tone, values, and judgment defaults.</span></div>
+<div class="decision-item"><span class="decision-key">Procedures and skills</span><span class="decision-val">Repeatable methods for doing the job.</span></div>
+<div class="decision-item"><span class="decision-key">Tools and host policy</span><span class="decision-val">Available actions and enforced permissions.</span></div>
+<div class="decision-item"><span class="decision-key">Model</span><span class="decision-val">Reasoning and tool-use capability that has to be tested.</span></div>
+</div>
+<p style="margin-top:1rem;">Because the layers are separate, two souls can hold the same skills, plugins, and tools. The capability is identical. The result is not quite.</p>
+<p>Personality shapes judgment: what gets noticed first, what gets flagged, what gets cut, and how the answer is delivered. Hand three souls the same draft and the same summarize skill, and you should expect three different reads:</p>
+<div aria-label="Illustrative example of three souls on one task" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Soul</th><th>Same skill, same draft. Where it leans</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Larry</strong></td><td>The structure, the next step, and the momentum. Leads with what's working.</td></tr>
+<tr><td><strong>MurderBird</strong></td><td>The weakest load-bearing claim. Leads with what doesn't hold.</td></tr>
+<tr><td><strong>Glee-fully</strong></td><td>How it lands on a real person. Leads with whether it sounds like you.</td></tr>
+</tbody>
+</table>
+</div>
+<p style="margin-top:1rem;"><em>An illustration of each soul's design intent, not recorded output.</em></p>
+<p>It works in reverse, too. AskJamie is planned as one voice split across two agents: a private one that drafts email with draft-only mail access, and a public helpdesk with no personal data at all. Same soul. Different tools. They never share an inbox or a memory.</p>
+<div class="pull-quote-okh"><p>A rule written into a soul file is a request. A tool policy is a control.</p></div>
+</div>
+
+<!-- HOW IT'S BUILT -->
+<div class="content-block" data-search-index="" id="how-its-built">
+<div class="section-label">Architecture · September 2026</div>
+<h2>How it's built</h2>
+<p>Two machines. One agent host. Every token stays in the house.</p>
+<div class="diagram-block">
+<h3>Topology</h3>
+<p>The laptop hosts the gateway and the queue. The Mac hosts the brain. The tailnet connects them wherever the laptop happens to be.</p>
+<div class="mermaid">
+%%{init: {"layout":"dagre","look":"classic",'theme': 'dark'}}%%
+flowchart TB
+  subgraph Laptop["💻 ASUS laptop · daily driver · agent host"]
+    direction LR
+    PS["PowerShell ns-* helpers"] --> Gateway
+    Companion["OpenClaw Windows Companion"] --> Gateway["OpenClaw gateway\nworkspace · Night Shift queue"]
+    Gateway -->|"fallback + utility"| Granite["Ollama · Granite 4.1 3B\n100% GPU"]
+  end
+  subgraph Mac["🖥️ Mac Studio · AI home server"]
+    direction LR
+    LMS["LM Studio\nMistral Small 3.2 24B\nnomic embeddings"]
+    Services["Open WebUI · Qdrant · SearXNG"]
+  end
+  Gateway ==>|"primary model + memory · tailnet"| LMS
+  Gateway -.->|"planned"| Services
+  style Companion fill:#2a2320,stroke:#c46a2c,color:#f5f0eb
+  style Gateway fill:#3d2f20,stroke:#c46a2c,color:#f5f0eb
+  style PS fill:#2a2320,stroke:#c46a2c,color:#f5f0eb
+  style Granite fill:#1a2a1a,stroke:#4ade80,color:#f5f0eb
+  style LMS fill:#1a2a1a,stroke:#4ade80,color:#f5f0eb
+  style Services fill:#1e3575,stroke:#7c93d4,color:#f5f0eb
+</div>
+</div>
+<div aria-label="Model routing table" class="data-table-wrap" role="region" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Role</th><th>Model</th><th>Host</th><th>State</th></tr>
+</thead>
+<tbody>
+<tr><td>Primary</td><td>Mistral Small 3.2 24B</td><td>Mac Studio</td><td>Live; passed the honesty test</td></tr>
+<tr><td>Fallback</td><td>Granite 4.1 3B</td><td>Laptop GPU</td><td>Configured; agent-level failover not yet exercised</td></tr>
+<tr><td>Utility</td><td>Granite 4.1 3B</td><td>Laptop GPU</td><td>Configured; session titles and progress notes</td></tr>
+<tr><td>Embeddings</td><td>nomic-embed-text v1.5</td><td>Mac Studio</td><td>Configured; recall not yet exercised</td></tr>
+</tbody>
+</table>
+</div>
+<div aria-label="Agent policy table" class="data-table-wrap" role="region" style="margin-top:1.25rem;" tabindex="0">
+<table class="data-table">
+<thead>
+<tr><th>Policy</th><th>Value</th><th>Reason</th></tr>
+</thead>
+<tbody>
+<tr><td>Interactive shell commands</td><td>Allowlist</td><td>Safe commands only, with no approval prompt a scheduled run can't answer.</td></tr>
+<tr><td>Night Shift tools</td><td>Read, write, edit</td><td>Unattended work gets the narrowest toolbox.</td></tr>
+<tr><td>Memory fallback</td><td>None</td><td>Never silently send text to a cloud provider.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- KEY DECISIONS -->
+<div class="content-block" data-search-index="" id="decisions">
+<div class="section-label">Architecture</div>
+<h2>Key decisions</h2>
+<div class="decision-list">
+<div class="decision-item"><span class="decision-key">The Mac serves, the laptop visits</span><span class="decision-val">Heavy models and shared services live on the Mac. The laptop carries one small model and keeps its GPU for cheap work.</span></div>
+<div class="decision-item"><span class="decision-key">Config over installs</span><span class="decision-val">The Companion and the OpenClaw CLI did most of the work. Nothing went on the laptop that the Mac already provides.</span></div>
+<div class="decision-item"><span class="decision-key">Evidence over assurance</span><span class="decision-val">Tool cards and file checks decide whether work happened. Model prose never does.</span></div>
+<div class="decision-item"><span class="decision-key">Narrow tools for unattended work</span><span class="decision-val">What runs at 1:00 AM can create files. It cannot run commands, delete, or reach out.</span></div>
+<div class="decision-item"><span class="decision-key">Record what every change touches</span><span class="decision-val">A cleanup on one layer broke another, and waited for a reboot to say so.</span></div>
+<div class="decision-item"><span class="decision-key">Inference stays home</span><span class="decision-val">No cloud model and no cloud memory fallback are in the loop.</span></div>
+</div>
+</div>
+
+<!-- NEXT -->
+<div class="content-block" data-search-index="" id="next">
+<div class="section-label">Planned, Not Promised</div>
+<h2>What's next</h2>
+<div class="next-phase-list">
+<div class="next-phase-item">Load Glee-fully's authored voice into the live workspace.</div>
+<div class="next-phase-item">Slim the Night Shift bootstrap so the laptop lifeboat can actually carry a run.</div>
+<div class="next-phase-item">Exercise failover and memory recall for real, not just in config.</div>
+<div class="next-phase-item">Wire SearXNG web search so research tasks stop getting blocked.</div>
+<div class="next-phase-item">Morning brief to the phone, and tasks queued from it.</div>
+<div class="next-phase-item">Move the gateway to the Mac, so the laptop can finally sleep.</div>
+</div>
+<div class="pull-quote-okh"><p>The soul decides how it sounds. Everything else decides whether it works.</p></div>
+</div>
+
+</div>
+<aside class="sidebar-rail" aria-label="Project information">
+<div class="sidebar-meta">
+<details class="project-record"><summary>Project details</summary><div class="meta-row">
+<div class="meta-item"><span class="meta-key">Type</span><span class="meta-val">Build journal and persona library</span></div>
+<div class="meta-item"><span class="meta-key">Agent runtime</span><span class="meta-val">OpenClaw</span></div>
+<div class="meta-item"><span class="meta-key">AI home server</span><span class="meta-val">Mac Studio M4 Max, 36 GB</span></div>
+<div class="meta-item"><span class="meta-key">Agent host</span><span class="meta-val">ASUS Vivobook Pro 15, RTX 3050 6 GB</span></div>
+<div class="meta-item"><span class="meta-key">Primary model</span><span class="meta-val">Mistral Small 3.2 24B</span></div>
+<div class="meta-item"><span class="meta-key">Fallback model</span><span class="meta-val">Granite 4.1 3B</span></div>
+<div class="meta-item"><span class="meta-key">Souls</span><span class="meta-val">4 authored, 2 hosted</span></div>
+<div class="meta-item"><span class="meta-key">Journal window</span><span class="meta-val">Sep 12 to Sep 27, 2026</span></div>
+</div></details>
+<div class="sidebar-links">
+<a class="sidebar-link" href="https://github.com/OKHP3/infusing-a-soul" rel="noopener noreferrer" target="_blank">◻ View on GitHub</a>
+<a class="sidebar-link" href="https://github.com/OKHP3/infusing-a-soul/blob/main/docs/methodology.md" rel="noopener noreferrer" target="_blank">◈ The distillation method</a>
+<a class="sidebar-link" href="https://github.com/OKHP3/infusing-a-soul/blob/main/souls/_template/README.md" rel="noopener noreferrer" target="_blank">◇ Build your own soul</a>
+<a class="sidebar-link" href="https://openclaw.ai" rel="noopener noreferrer" target="_blank">◌ OpenClaw</a>
+</div>
+</div>
+<div class="sidebar-related" id="toc-widget">
+<div class="section-label">On This Page</div>
+<ul class="toc-list">
+<li><a href="#stranger">The Problem</a></li>
+<li><a href="#two-machines">Why Two Machines</a></li>
+<li><a href="#timeline">Build Log</a></li>
+<li><a href="#honesty">Model Honesty</a></li>
+<li><a href="#night-shift">The Night Shift</a></li>
+<li><a href="#souls">One Gateway, Many Souls</a></li>
+<li><a href="#made">How a Soul Is Made</a></li>
+<li><a href="#soul-vs-skill">Soul and Behavior</a></li>
+<li><a href="#how-its-built">How It's Built</a></li>
+<li><a href="#decisions">Key Decisions</a></li>
+<li><a href="#next">What's Next</a></li>
+</ul>
+</div>
+<div class="sidebar-related">
+<div class="section-label">From the Hill</div>
+<ul>
+<li><a href="/projects/mac-studio-local-ai-workbench/">Mac Studio Local AI Workbench</a></li>
+<li><a href="/projects/glee-fully-chai-chasers/">Glee-fully Chai Chasers</a></li>
+<li><a href="/writings/murderbird/">The MurderBird</a></li>
+<li><a href="/projects/">All OverKill Hill Projects</a></li>
+</ul>
+</div>
+</aside>
+</div>
+</div>

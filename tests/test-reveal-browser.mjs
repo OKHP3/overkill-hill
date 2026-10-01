@@ -61,6 +61,9 @@ try {
       await page.waitForFunction(() => [...document.querySelectorAll('.reveal-on-scroll')].every(el => Number(getComputedStyle(el).opacity) === 1), null, { timeout: 2500 });
       assert.ok(await page.locator('main h1').innerText());
       const art = page.locator('main .reveal-on-scroll img').first();
+      // The load event can precede completion of this lazy image request.
+      await page.waitForFunction(image => image.complete && image.naturalWidth > 0,
+        await art.elementHandle(), { timeout: 5000 });
       assert.ok(await art.evaluate(el => el.complete && el.naturalWidth > 0), 'Hero art loads');
       if (scenario === 'normal') {
         const pending = page.locator('.reveal-on-scroll:not(.is-visible)').last();

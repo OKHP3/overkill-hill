@@ -175,6 +175,25 @@
       }
     },
     {
+      "id": "infusing-a-soul",
+      "title": "Infusing a Soul",
+      "route": "/projects/infusing-a-soul/",
+      "kind": "detail",
+      "availability": "Published build journal",
+      "maturity": "Agent online; Night Shift live; persona voice pending",
+      "reviewed": "2026-09-27",
+      "shelf": false,
+      "shelf_exception": "New build journal, held off the main shelf and menu until the pilot locale pages are refreshed.",
+      "evidence": {
+        "tier": "source-described",
+        "summary": "Night Shift smoke test recorded 2026-09-24 on a home-hosted model; laptop failover and memory recall configured but not exercised.",
+        "source": "site-src/pages/projects/infusing-a-soul/index.main.html",
+        "delivery": "unknown",
+        "revision": "f38799d6b631857592d4ee8fccabb1894cf644df",
+        "url": "https://github.com/OKHP3/infusing-a-soul/blob/f38799d6b631857592d4ee8fccabb1894cf644df/README.md"
+      }
+    },
+    {
       "id": "mermaid-theme-builder",
       "title": "Mermaid Theme Builder",
       "route": "/projects/mermaid-theme-builder/",
