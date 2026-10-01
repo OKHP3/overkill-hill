@@ -48,6 +48,22 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `verify-live-edge.py` | active | Live-edge deployment verification |
 | `write-actions-summary.py` | active | Compact Actions summaries from existing live-edge and external-runtime JSON; first-party failures remain distinct |
 
+### Live-edge archive coverage
+
+`python3 tests/test-actions-summary.py` defaults to clean-checkout compatibility
+mode. If an ignored retained report is absent, the tracked fixture still checks
+the registry contract, report shape, and renderer compatibility; that fixture-only
+compatibility does not establish actual retained archive coverage. Whenever a
+registered source is present, the test resolves both paths inside their permitted
+directories and requires the source bytes to match the tracked fixture exactly.
+
+For an operator audit that requires every registered source to be present, set
+the repository Actions variable `OKHP3_STRICT_LIVE_EDGE_ARCHIVE_AUDIT` to `1`.
+The main validation workflow passes this variable to the test. Strict mode fails
+with the missing source path and remedy instead of falling back to a fixture.
+Unset the variable or set it to `0` for fixture-only compatibility on clean
+checkouts.
+
 The following scripts are **reference-only**. They may still be useful for a
 deliberately scoped maintenance or migration task, but they are not part of
 the current validation or release pipeline: `apply-modern-baseline.py`,
