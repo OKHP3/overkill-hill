@@ -16,3 +16,4 @@
 - [Generated head editing](generated-head-editing.md) — generated pages may pack CSP and metadata into one very long line; preserve it with narrowly scoped literal edits.
 - [External health CSP merge](external-health-csp-merge.md) — browser CSP request failures must not mask HTTP outage evidence when dependency results merge across routes.
 - [Banner release parity](banner-release-parity.md) — compare source and generated featured-article releases before any banner repair mode can write.
+- [Publishing target](github-pages-only-deployment.md) — this repository is intended for GitHub Pages, not Replit application publishing.

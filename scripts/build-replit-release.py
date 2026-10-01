@@ -26,9 +26,10 @@ def accepted_commit() -> str:
         raise RuntimeError("REPLIT_RELEASE_SHA must be the accepted full 40-character SHA")
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if actual != value.lower():
-        raise RuntimeError("REPLIT_RELEASE_SHA does not match HEAD")
-    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=ROOT, text=True).strip():
-        raise RuntimeError("checkout must be clean before static publication")
+        raise RuntimeError(f"REPLIT_RELEASE_SHA does not match HEAD: expected {value.lower()}, actual {actual}")
+    dirty = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=ROOT, text=True).strip()
+    if dirty:
+        raise RuntimeError("checkout must be clean before static publication: " + dirty)
     return value.lower()
 
 
