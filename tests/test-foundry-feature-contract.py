@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "site-src/pages/projects/found-ry/index.main.html"
 RENDERED = ROOT / "projects/found-ry/index.html"
-LIVE_APP = "https://okhp3.github.io/OverKill-Hill-FoundRy/"
+LIVE_APP = "https://okhp3.github.io/overkill-hill-foundry/"
 GITHUB = "https://github.com/OKHP3/OverKill-Hill-FoundRy"
 PARITY = os.environ.get("FOUNDRY_EXPECTED_PARITY") == "1"
 
