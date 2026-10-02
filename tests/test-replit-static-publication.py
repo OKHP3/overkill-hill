@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -16,12 +17,43 @@ BUILDER = ROOT / "scripts" / "build-release.py"
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
-class ReplitStaticPublicationTests(unittest.TestCase):
-    def test_static_public_dir_is_the_staged_release(self) -> None:
-        config = (ROOT / ".replit").read_text(encoding="utf-8")
-        self.assertRegex(config, r'(?m)^deploymentTarget\s*=\s*"static"\s*$')
-        self.assertRegex(config, r'(?m)^publicDir\s*=\s*"\.local/site-release"\s*$')
-        self.assertRegex(config, r'(?m)^build\s*=\s*"python3 scripts/build-replit-release\.py"\s*$')
+class ReplitPreviewBoundaryTests(unittest.TestCase):
+    def test_preview_only_config_retains_modules_workflows_and_port_5000(self) -> None:
+        config = tomllib.loads((ROOT / ".replit").read_text(encoding="utf-8"))
+        self.assertNotIn("deployment", config)
+        self.assertEqual(config["modules"], ["web", "nodejs-24", "python-3.11"])
+        self.assertEqual(
+            config["ports"],
+            [{"localPort": 5000, "externalPort": 80, "exposeLocalhost": True}],
+        )
+
+        workflows = config["workflows"]["workflow"]
+        self.assertEqual(config["workflows"]["runButton"], "Project")
+        self.assertEqual(
+            [workflow["name"] for workflow in workflows],
+            ["Project", "Start application", "contrast", "locale-links"],
+        )
+        by_name = {workflow["name"]: workflow for workflow in workflows}
+        self.assertEqual(
+            [task["args"] for task in by_name["Project"]["tasks"]],
+            ["Start application", "contrast", "locale-links"],
+        )
+        self.assertEqual(
+            by_name["Start application"]["tasks"][0]["args"],
+            "python3 server.py",
+        )
+        self.assertEqual(
+            by_name["Start application"]["tasks"][0]["waitForPort"],
+            5000,
+        )
+        self.assertEqual(
+            by_name["contrast"]["tasks"][0]["args"],
+            "python3 assets/scripts/check-contrast.py",
+        )
+        self.assertEqual(
+            by_name["locale-links"]["tasks"][0]["args"],
+            "python3 scripts/check-locale-links.py",
+        )
 
     def test_replit_builder_replaces_release_only_after_success(self) -> None:
         spec = importlib.util.spec_from_file_location("replit_builder", ROOT / "scripts" / "build-replit-release.py")

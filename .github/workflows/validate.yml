@@ -174,7 +174,7 @@ jobs:
       - name: Test the Pages release boundary
         run: python3 tests/test-release-package.py
 
-      - name: Test Replit static publication boundary
+      - name: Test Replit preview-only configuration and release safeguards
         run: python3 -m unittest tests/test-replit-static-publication.py
 
       - name: Test preview serving and report storage boundaries
