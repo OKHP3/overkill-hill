@@ -130,6 +130,53 @@ for (const overlayMode of [true, false]) {
   });
 }
 
+test("overlay keyboard selection survives the delayed opener focus after reopening", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  try {
+    await page.clock.install();
+    await page.route("**/assets/data/search-index.json", route => route.fulfill({
+      contentType: "application/json", body: JSON.stringify({ entries: makeSearchEntries().slice(0, 3) }),
+    }));
+    await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
+    await dismissAnnouncement(page);
+
+    const trigger = page.locator(".okh-search-trigger");
+    const overlay = page.locator(".okh-search-overlay");
+    const input = overlay.locator(".okh-search-input");
+    await trigger.click();
+    await input.fill("omega");
+    const first = overlay.locator(".okh-search-result").first();
+    await first.waitFor();
+    await page.clock.fastForward(31);
+
+    await page.keyboard.press("Escape");
+    await overlay.waitFor({ state: "hidden" });
+    await trigger.click();
+    await overlay.waitFor({ state: "visible" });
+    await input.press("ArrowDown");
+    await page.clock.fastForward(31);
+
+    const navigationState = await page.evaluate(() => {
+      const active = document.activeElement;
+      const marked = document.querySelector('.okh-search-result[data-active="true"]');
+      return {
+        focusedHref: active?.matches(".okh-search-result") ? active.getAttribute("href") : null,
+        markedHref: marked?.getAttribute("href") || null,
+      };
+    });
+    assert.deepEqual(navigationState, {
+      focusedHref: "/brand-01/",
+      markedHref: "/brand-01/",
+    });
+
+    await page.keyboard.press("Enter");
+    await page.waitForURL(`${baseUrl}/brand-01/`);
+  } finally {
+    await browser.close();
+  }
+});
+
 test("Enter from the dedicated search input opens its first result", async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -190,6 +237,85 @@ test("shows a retry when the search index fails, then recovers on retry", async 
     await page.locator(".okh-search-retry").click(); await page.waitForTimeout(1000);
     assert.equal(count() >= 2, true); await assert.match(await page.locator("#search-results").innerText(), /Project 61/);
   } finally { await browser.close(); }
+});
+
+test("times out a shared stalled index request and both search views recover on retry", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  let retryRequestCount = 0;
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  try {
+    await page.addInitScript((indexPath) => {
+      const nativeFetch = window.fetch.bind(window);
+      let indexFetchCount = 0;
+      window.__searchIndexFetchCount = () => indexFetchCount;
+      window.fetch = (input, options = {}) => {
+        const requestUrl = typeof input === "string" || input instanceof URL ? input : input.url;
+        const url = new URL(requestUrl, window.location.href);
+        if (url.pathname !== indexPath) return nativeFetch(input, options);
+        indexFetchCount += 1;
+        if (indexFetchCount !== 1) return nativeFetch(input, options);
+        return new Promise((resolve, reject) => {
+          const signal = options.signal;
+          if (!signal) return;
+          const rejectAborted = () => reject(new DOMException("The operation was aborted.", "AbortError"));
+          if (signal.aborted) rejectAborted();
+          else signal.addEventListener("abort", rejectAborted, { once: true });
+        });
+      };
+    }, "/assets/data/search-index.json");
+    await page.route("**/assets/data/search-index.json", async (route) => {
+      retryRequestCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ entries: makeSearchEntries() }),
+      });
+    });
+
+    await page.goto(`${baseUrl}/search/?q=omega&cat=Project`, { waitUntil: "domcontentloaded" });
+    await dismissAnnouncement(page);
+    await page.getByRole("button", { name: "Search" }).click();
+
+    assert.equal(await page.evaluate(() => window.__searchIndexFetchCount()), 1,
+      "the overlay should reuse the page's pending index request");
+    assert.equal(retryRequestCount, 0);
+    await Promise.all([
+      page.locator("#search-results .okh-search-noresults--error").waitFor({ timeout: 15_000 }),
+      page.locator(".okh-search-overlay .okh-search-noresults--error").waitFor({ timeout: 15_000 }),
+    ]);
+    assert.equal(await page.locator("#search-stats").getAttribute("role"), "status");
+    assert.equal(await page.locator(".okh-search-status").getAttribute("role"), "status");
+    assert.match(await page.locator("#search-stats").innerText(), /failed to load/i);
+    assert.match(await page.locator(".okh-search-status").innerText(), /failed to load/i);
+    assert.equal(await page.evaluate(() => window.__searchIndexFetchCount()), 1,
+      "the shared stalled fetch should time out without being duplicated");
+
+    const overlayRetryResponse = page.waitForResponse((response) =>
+      response.url().endsWith("/assets/data/search-index.json") && response.status() === 200);
+    await page.locator(".okh-search-overlay .okh-search-retry").click();
+    await overlayRetryResponse;
+    await page.locator(".okh-search-overlay .okh-search-noresults--error").waitFor({ state: "hidden" });
+    await page.locator(".okh-search-input").fill("project 61");
+    await page.locator(".okh-search-overlay").getByText("Project 61", { exact: true }).waitFor();
+    assert.equal(retryRequestCount, 1);
+    assert.equal(await page.evaluate(() => window.__searchIndexFetchCount()), 2);
+
+    await page.keyboard.press("Escape");
+    await page.locator(".okh-search-overlay").waitFor({ state: "hidden" });
+    const pageRetryResponse = page.waitForResponse((response) =>
+      response.url().endsWith("/assets/data/search-index.json") && response.status() === 200);
+    await page.locator("#search-results .okh-search-retry").click();
+    await pageRetryResponse;
+    await page.locator("#search-results").getByText("Project 61", { exact: true }).waitFor();
+    assert.equal(retryRequestCount, 2);
+    assert.equal(await page.evaluate(() => window.__searchIndexFetchCount()), 3);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await browser.close();
+  }
 });
 
 test("filters before the global cap and restores URL state", async () => {

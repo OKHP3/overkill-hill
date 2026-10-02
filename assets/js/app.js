@@ -691,6 +691,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const SEARCH_INDEXES = { fr: "/assets/data/search-index.fr.json" };
   const pageLocale = (document.documentElement.lang || "en").toLowerCase().split("-", 1)[0];
   const INDEX_URL = SEARCH_INDEXES[pageLocale] || "/assets/data/search-index.json";
+  const SEARCH_INDEX_TIMEOUT_MS = 10_000;
   const usesEnglishFallback = pageLocale === "de" || pageLocale === "es";
   const scopeNotice = usesEnglishFallback ? " Search English content." : "";
   const isGlee = () => document.body.classList.contains("glee-main");
@@ -717,7 +718,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let _indexPromise = null;
   function loadIndex(forceRetry) {
     if (!_indexPromise || forceRetry) {
-      _indexPromise = fetch(INDEX_URL, { credentials: "same-origin" })
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SEARCH_INDEX_TIMEOUT_MS);
+      _indexPromise = fetch(INDEX_URL, { credentials: "same-origin", signal: controller.signal })
         .then((r) => {
           if (!r.ok) throw new Error("Index fetch failed: " + r.status);
           return r.json();
@@ -727,6 +730,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!Array.isArray(entries)) throw new Error("Invalid search index schema");
           return entries.map((entry) => ({ ...entry, category: entry.category || entry.section || "Page" }));
         })
+        .finally(() => clearTimeout(timeoutId))
         .catch((err) => {
           console.warn("[okh-search] index load failed:", err);
           throw err;
@@ -968,7 +972,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (document.activeElement === input) {
           if (event.key === "ArrowDown") {
             focusResult(0);
-            if (links().length > 1) setActive(1);
           } else {
             focusResult(current > 0 ? current - 1 : links().length - 1);
           }
@@ -1060,7 +1063,7 @@ document.addEventListener("DOMContentLoaded", () => {
         render();
       }).catch(setLoadError);
       focusTimer = setTimeout(() => {
-        if (overlay.dataset.open === "true") input.focus();
+        if (overlay.dataset.open === "true" && !overlay.contains(document.activeElement)) input.focus();
       }, 30);
     }
     function close() {
