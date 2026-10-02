@@ -1,0 +1,141 @@
+{
+  "review_status": "ai-reviewed",
+  "native_or_human_approval": false,
+  "release_acceptance": false,
+  "reviewer": {
+    "agent": "Replit Agent",
+    "method": "Exact parent-main to PR-head HTML comparison plus checker-matched SHA-256 verification",
+    "native_or_human_certification": false
+  },
+  "baseline_revision": "git:f64e4f6faef69fdabe0fac88928ba1dfa536cd9f",
+  "source_revision": "git:984ef5aa91eb2b9c98e162e25fbcbb0db71ec6bb",
+  "reviewed_on": "2026-10-01",
+  "review_scope": "Runtime and generated metadata only. Across 63 changed HTML files, 43 contain exactly one replacement of the early theme initializer with the storage-guarded form, and 20 localized pages differ only in the generated CSP meta tag. After those exact changes are accounted for, no HTML differences remain. This does not review or certify translation quality, change publication approval, or authorize a locale status change.",
+  "hash_method": {
+    "regional_source_profile": "SHA-256 after CRLF-to-LF normalization, generated CSP meta removal, and asset fingerprint query removal, matching scripts/check-regional-drafts.py:27-31.",
+    "page_comparison": "Compare exact Git bytes after CRLF-to-LF normalization; remove the exact generated CSP meta tag. For canonical source pages, replace only the exact parent initializer with the exact guarded PR initializer before comparison.",
+    "target_hash_profile": "SHA-256 after CRLF-to-LF normalization, matching scripts/check-i18n-release.py:57-59."
+  },
+  "routes": [
+    {
+      "route": "/",
+      "source_path": "index.html",
+      "baseline_normalized_source_sha256": "c094d6a0efab3c3ca24a0479fb269b4e9f7a0902cdb4304931f082068551fe0a",
+      "current_normalized_source_sha256": "654307cbf66983eb199a3a9227d5187cfd5f6a2b902f0d95b6bff2b575a15fb4",
+      "baseline_source_sha256": "cde0d3095233ae4835ad745815dce10e8c27bfb94d3e315017f2f2df2c488a78",
+      "current_source_sha256": "931cc7bea83e11656bc7d7bab6224b8a5e050b974759b62a83556a927275c6cb",
+      "exact_guard_replacement": true,
+      "remaining_source_bytes_identical": true
+    },
+    {
+      "route": "/about/",
+      "source_path": "about/index.html",
+      "baseline_normalized_source_sha256": "9c52ce0611d1d655de073aeea64478af406c17c6ec45aac18d4645a53d6be79a",
+      "current_normalized_source_sha256": "c979d9c7daa4979d2593ac9004993742fc2b546f3287ab35f2a2b577ab07d9fc",
+      "baseline_source_sha256": "b79fde134e7badf91c3287f051ff66fe8a3d8075e65d7319afc44225c1571261",
+      "current_source_sha256": "22253fbd507b2f81db1d740d0af3ef67b75d8241663cced89354c02f317dabb3",
+      "exact_guard_replacement": true,
+      "remaining_source_bytes_identical": true
+    },
+    {
+      "route": "/projects/",
+      "source_path": "projects/index.html",
+      "baseline_normalized_source_sha256": "2d57e0d64b739cd0c23d4e2ec2ca5ae7c5cb8bc6e943b7b13eb67617e31b4487",
+      "current_normalized_source_sha256": "a10bf44701a1051b84230167316530061d36f590029b8d92ec58045e3d6f3e89",
+      "baseline_source_sha256": "e0c01588885b678b831e3b5d31b5fbbf4ea5e57264ac410a1657348960a7c7ce",
+      "current_source_sha256": "eee916fe76952384fa38be469f83dc0410b1834bbf971f8fd2dbe153c025b9fa",
+      "exact_guard_replacement": true,
+      "remaining_source_bytes_identical": true
+    },
+    {
+      "route": "/contact/",
+      "source_path": "contact/index.html",
+      "baseline_normalized_source_sha256": "6c6e06bab12ea506772655a31f0bff46b5365dba503528412a5b0fef3efc92da",
+      "current_normalized_source_sha256": "c20cc36ae87e238a7e331a3c13f0988a77a1a5c8795ac8a7a0e207816826ec98",
+      "baseline_source_sha256": "368620d831ffc6cece125c934cf2b990126aba16f73bf9ac94027e6e8741f43a",
+      "current_source_sha256": "34cf2cb6ec87d41825df626e3c9d49bbf0b5d0ef3720c3f8119e49d240641830",
+      "exact_guard_replacement": true,
+      "remaining_source_bytes_identical": true
+    }
+  ],
+  "regional_targets": [
+    {
+      "locale": "en-gb",
+      "route": "/",
+      "target_path": "en-gb/index.html",
+      "baseline_target_sha256": "5c7f2a6b05df02d222075d8f9bac706f6b84fbcadc10e8234a130ccc4d7dddd0",
+      "current_target_sha256": "499442c5c6d98c6bc5a33445b1ddd393dab60b858d67f98665b92bd7d38f4dda",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "en-gb",
+      "route": "/about/",
+      "target_path": "en-gb/about/index.html",
+      "baseline_target_sha256": "e90d37b4651b82fdf268b8392139035c4f83c2a9ef5989cd417b59535ede5a1d",
+      "current_target_sha256": "c2a63776e2b2c359b5b84759348477f9dcbfb30e479ada93e06cd803c0cf56b8",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "en-gb",
+      "route": "/contact/",
+      "target_path": "en-gb/contact/index.html",
+      "baseline_target_sha256": "c6834d5d0f03514579558302da9c4e19ccce2f7c90b702833e7c93f276bf0e2e",
+      "current_target_sha256": "c586148c58915e00e472217111716a792175b060b820424bde14b89914785604",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "en-gb",
+      "route": "/projects/",
+      "target_path": "en-gb/projects/index.html",
+      "baseline_target_sha256": "04b481a1164e77b50d44c1206286c91e24dfe763d9ba600ad3bf11dc43e2c4c1",
+      "current_target_sha256": "589515f33b8e00874c5d30aebea32943dba428f67b5032991ec1d6eda690dce3",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "es-mx",
+      "route": "/",
+      "target_path": "es-mx/index.html",
+      "baseline_target_sha256": "44bdc933f8aad67d4a5ce052371866f3b9dfe8d631ead50f364b0dc38f8f6724",
+      "current_target_sha256": "ff4222f7a2740b1181663babc28a7bd2023191266825d7de4cc82b4bd36beb99",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "es-mx",
+      "route": "/about/",
+      "target_path": "es-mx/about/index.html",
+      "baseline_target_sha256": "59570a7c09e02f153a06f23dae4a6dc250c607a2caf4e2db467236470e5d5344",
+      "current_target_sha256": "3135c3a590cf93be3d01ddd69fbaa27f0a969a14b239cba4c11c83eae64ffaf4",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "es-mx",
+      "route": "/contact/",
+      "target_path": "es-mx/contact/index.html",
+      "baseline_target_sha256": "389bb7ccb22b031abf7ce4d49372a415df5023ea1a9e84e660df7aeccc731ca8",
+      "current_target_sha256": "02170cef5776d12c58257206fbb47673c256f73fb9303b3eee1c678b275e023f",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    },
+    {
+      "locale": "es-mx",
+      "route": "/projects/",
+      "target_path": "es-mx/projects/index.html",
+      "baseline_target_sha256": "6a19db2d503c272bf64ad908c938393e296c9790263c1a854cd9cfe84861ca3b",
+      "current_target_sha256": "3ac4a4e54851d44ae4ece2bcad8be6cce0767d9a91e506465946686056bd1461",
+      "csp_only": true,
+      "remaining_target_bytes_identical": true
+    }
+  ],
+  "limitations": [
+    "No translated prose was edited or regenerated.",
+    "No human or native-language approval was performed or inferred.",
+    "Existing regional draft and publication statuses remain unchanged.",
+    "This is not release, publication, or translation-quality acceptance."
+  ]
+}

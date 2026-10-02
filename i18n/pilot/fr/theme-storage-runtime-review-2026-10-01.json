@@ -1,0 +1,65 @@
+{
+  "language_pair": "en-US -> fr-FR",
+  "skill": "okhp3-translation-en-us-fr-fr",
+  "review_status": "ai-reviewed",
+  "native_or_human_approval": false,
+  "source_revision": "git:984ef5aa91eb2b9c98e162e25fbcbb0db71ec6bb",
+  "baseline_revision": "git:f64e4f6faef69fdabe0fac88928ba1dfa536cd9f",
+  "reviewed_on": "2026-10-01",
+  "review_scope": "No-semantic-delta review for the current four-route source/target baseline only. The canonical source changes only by the exact guarded early theme initializer and generated CSP meta; the French targets change only by generated CSP meta. After accounting for those exact changes, source and target bytes are identical to parent main. Existing French translation quality, release status, indexability, and approval status are not re-reviewed or changed. No human/native approval or release acceptance is implied.",
+  "hash_method": {
+    "formula": "SHA-256 after CRLF-to-LF normalization, matching scripts/check-i18n-release.py:57-59.",
+    "source_comparison": "Remove the exact generated CSP meta and replace the exact parent initializer with the exact guarded PR initializer; remaining bytes are identical.",
+    "target_comparison": "Remove only the exact generated CSP meta; remaining bytes are identical."
+  },
+  "routes": [
+    {
+      "route": "/",
+      "locale": "fr",
+      "source_path": "index.html",
+      "baseline_source_sha256": "cde0d3095233ae4835ad745815dce10e8c27bfb94d3e315017f2f2df2c488a78",
+      "source_sha256": "931cc7bea83e11656bc7d7bab6224b8a5e050b974759b62a83556a927275c6cb",
+      "target_path": "fr/index.html",
+      "baseline_target_sha256": "ce0ec14df68941fca70a47d6258e09dd8306b801c980ecd478719b3b31eee222",
+      "target_sha256": "e2d0d0cebe0d3db7aa76712a897a52f2817052bcbc4ccba17d06cdbc82ddc5c3",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_and_target_comparison_identical_after_exact_metadata_changes": true
+    },
+    {
+      "route": "/about/",
+      "locale": "fr",
+      "source_path": "about/index.html",
+      "baseline_source_sha256": "b79fde134e7badf91c3287f051ff66fe8a3d8075e65d7319afc44225c1571261",
+      "source_sha256": "22253fbd507b2f81db1d740d0af3ef67b75d8241663cced89354c02f317dabb3",
+      "target_path": "fr/about/index.html",
+      "baseline_target_sha256": "5e73fb8703af5b0f06194c1df11f5a689941d92640142b3bd9ed364ddb4680ce",
+      "target_sha256": "0528b3e93747c65a3261ed49ee3539bf129fcb61039ee7391d71f44113616e63",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_and_target_comparison_identical_after_exact_metadata_changes": true
+    },
+    {
+      "route": "/contact/",
+      "locale": "fr",
+      "source_path": "contact/index.html",
+      "baseline_source_sha256": "368620d831ffc6cece125c934cf2b990126aba16f73bf9ac94027e6e8741f43a",
+      "source_sha256": "34cf2cb6ec87d41825df626e3c9d49bbf0b5d0ef3720c3f8119e49d240641830",
+      "target_path": "fr/contact/index.html",
+      "baseline_target_sha256": "b6c53122281315dc8cb0c1f17dc9b3a65603a048a87990a0da9e5d0e9ad25adf",
+      "target_sha256": "98ba23dbc3ac167ffdb38359f52fce71cf45bd4241cceb8b29811479ebd884d1",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_and_target_comparison_identical_after_exact_metadata_changes": true
+    },
+    {
+      "route": "/projects/",
+      "locale": "fr",
+      "source_path": "projects/index.html",
+      "baseline_source_sha256": "e0c01588885b678b831e3b5d31b5fbbf4ea5e57264ac410a1657348960a7c7ce",
+      "source_sha256": "eee916fe76952384fa38be469f83dc0410b1834bbf971f8fd2dbe153c025b9fa",
+      "target_path": "fr/projects/index.html",
+      "baseline_target_sha256": "7b83f9921ce9be2acee1126966e0ffd989732925b03d6557236861de4e3b7372",
+      "target_sha256": "c028e3a016d1138723814ab3950bddf487175690364784690a86245cd79afbc1",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_and_target_comparison_identical_after_exact_metadata_changes": true
+    }
+  ]
+}

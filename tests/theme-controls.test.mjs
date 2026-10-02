@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -117,6 +118,71 @@ async function readState(page, selector) {
 async function clickAndRead(page, selector) {
   await page.locator(selector).click();
   return readState(page, selector);
+}
+
+async function serveGeneratedHomepage() {
+  const server = createServer((request, response) => {
+    const pathname = new URL(request.url || "/", "http://theme-controls.test").pathname;
+    const resolvedPath = resolve(repositoryRoot, `.${pathname.endsWith("/") ? `${pathname}index.html` : pathname}`);
+    if (resolvedPath !== repositoryRoot && !resolvedPath.startsWith(`${repositoryRoot}${sep}`)) {
+      response.writeHead(403);
+      response.end("forbidden");
+      return;
+    }
+    const contentType = {
+      ".css": "text/css; charset=utf-8",
+      ".html": "text/html; charset=utf-8",
+      ".ico": "image/x-icon",
+      ".js": "text/javascript; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".png": "image/png",
+      ".svg": "image/svg+xml",
+      ".webp": "image/webp",
+    }[extname(resolvedPath).toLowerCase()] || "application/octet-stream";
+    readFile(resolvedPath).then((body) => {
+      response.writeHead(200, { "content-type": contentType });
+      response.end(body);
+    }).catch(() => {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("missing");
+    });
+  });
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  return {
+    server,
+    url: `http://127.0.0.1:${server.address().port}/`,
+  };
+}
+
+async function openGeneratedHomepage({ storageMode, storedTheme, colorScheme }) {
+  const { server, url } = await serveGeneratedHomepage();
+  const page = await browser.newPage();
+  const pageErrors = [];
+  let appScriptRequests = 0;
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.emulateMedia({ colorScheme });
+  await page.addInitScript(({ mode, preference }) => {
+    if (location.origin === "null") return;
+    if (mode === "blocked") {
+      Object.defineProperty(window, "localStorage", {
+        configurable: true,
+        get() {
+          throw new DOMException("Storage is disabled", "SecurityError");
+        },
+      });
+    } else {
+      window.localStorage.setItem("okh-theme", preference);
+    }
+  }, { mode: storageMode, preference: storedTheme });
+  await page.route(/\/assets\/js\/app\.js(?:\?.*)?$/, (route) => {
+    appScriptRequests += 1;
+    return route.abort();
+  });
+  const response = await page.goto(url, { waitUntil: "domcontentloaded" });
+  return { appScriptRequests, page, pageErrors, response, server };
 }
 
 test("OKH supports system, light, and dark transitions", async () => {
@@ -250,6 +316,37 @@ test("all three theme controls survive disabled storage", async () => {
     }
   }
 });
+
+const GENERATED_HEAD_SCENARIOS = [
+  { name: "uses the dark system preference when storage is blocked", storageMode: "blocked", colorScheme: "dark", expectedTheme: "dark" },
+  { name: "uses the light system preference when storage is blocked", storageMode: "blocked", colorScheme: "light", expectedTheme: "light" },
+  { name: "keeps a stored dark preference without app.js", storageMode: "available", storedTheme: "dark", colorScheme: "light", expectedTheme: "dark" },
+  { name: "keeps a stored light preference without app.js", storageMode: "available", storedTheme: "light", colorScheme: "dark", expectedTheme: "light" },
+];
+
+for (const scenario of GENERATED_HEAD_SCENARIOS) {
+  test(`generated homepage head initializer ${scenario.name}`, async () => {
+    const { appScriptRequests, page, pageErrors, response, server } = await openGeneratedHomepage(scenario);
+    try {
+      assert.equal(response.status(), 200);
+      assert.equal(appScriptRequests, 1, "the external app.js request should be blocked");
+      assert.equal(
+        await page.locator("head script").evaluateAll((scripts) =>
+          scripts.some((script) => script.textContent.includes('getItem("okh-theme")')),
+        ),
+        true,
+        "the actual generated homepage must include the early theme initializer",
+      );
+      assert.equal(await page.locator("html").getAttribute("data-theme"), scenario.expectedTheme);
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await page.close();
+      await new Promise((resolveClose, rejectClose) => {
+        server.close((error) => error ? rejectClose(error) : resolveClose());
+      });
+    }
+  });
+}
 
 const DEFAULT_SITE_ROOTS = [
   { name: "OKH", expectedRoot: ".", root: join(repositoryRoot, "..", "overkill-hill"), bodyClass: "", selector: ".theme-toggle" },
