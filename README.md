@@ -69,14 +69,26 @@ intentional, reviewed step -- it only makes sure the gap gets noticed the
 same day instead of weeks later. The identical VERSION-pin + watcher
 mechanism is also deployed on askjamie.bot and glee-fully.tools.
 
-The shared initializer uses `securityLevel: "strict"` by default. The two v2
-heat-guide pages opt into `loose` with a body data attribute because their
-outbound diagram links are part of the published artifact. The Universe page
-has its own inline Mermaid configuration and is the only other approved
-loose-security page; its links are constrained to documented partner and site
-path prefixes. Before rendering, every heat-guide click target must match an
-exact HTTPS origin and path allowlist in `assets/js/mermaid-init.js`;
-unlisted targets are removed.
+The shared initializer selects Mermaid's `securityLevel` from the page body's
+`data-mermaid-security` attribute. The published v2 heat-guide pages currently
+omit `data-mermaid-security="loose"`, so the initializer uses `strict` and does
+not call its site-specific `sanitizeClickableLinks()` filter. That filter
+checks source `click NODE "URL"` directives against the exact HTTPS
+origin-and-path list in `assets/js/mermaid-init.js`. It is separate from
+Mermaid's own URL-link and callback handling. Strict mode alone does not mean
+that outbound SVG anchors are absent or that this site's exact allowlist was
+applied. The Mermaid 12.0.0 preparation baseline reported keyboard-focusable SVG
+URL anchors on v2-B; its focused inspection found five unique targets in the
+allowlist. That observation does not show that the custom filter ran.
+
+The approved policy boundary remains the curated click destinations on the two
+v2 heat pages, limited to the exact origin-and-path entries in
+`ALLOWED_CLICK_TARGETS`. The current published pages do not apply that policy
+through `sanitizeClickableLinks()` because their body opt-ins are absent.
+Universe is not another loose-security Mermaid page: its module configures
+strict mode and adds same-origin links from the visible outline after rendering.
+Whether the intended policy and current configuration should be reconciled
+remains unresolved; this description does not change either one.
 
 CSP / Mermaid style alignment: `scripts/csp.py` computes the `style-src` /
 `style-src-attr` allowlists by statically hashing inline styles in the built
@@ -90,10 +102,12 @@ all three OKHP3 sites the same way. `scripts/validate-site.py` flags any
 page that renders a live diagram under a CSP class without this allowance,
 so a future page can't silently regress.
 
-Residual risk: the two v2 pages still require Mermaid's looser interaction
-mode, and the vendored JavaScript remains a large third-party dependency even
-though it is now reviewed and served from this repository. The allowlist is
-not a substitute for reviewing diagram source changes.
+Residual risk: the site-specific source allowlist is inactive on the published
+v2 pages in their current configuration. Mermaid's URL links and callbacks use
+separate renderer paths, so this allowlist is not a general URL-safety control
+or a substitute for reviewing diagram source changes. The vendored JavaScript
+remains a large third-party dependency even though it is reviewed and served
+from this repository.
 
 ### Hosting and preview
 
