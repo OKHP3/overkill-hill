@@ -39,11 +39,20 @@ storage returns 507; restart clears it. Reports are deleted at shutdown and
 `CSP_REPORT_FILE` is no longer used. This is a local diagnostic receiver, not a
 persistent report service. Requests have a five-second socket inactivity timeout.
 
-The checked-in `.replit` still declares `publicDir = "."`. No connected Replit
-checkout or live exposure was verified for A18. External Replit publication
-requires an allowlisted release directory or retirement of that route; the local
-preview fix does not validate that separate publication path. These checks assume
-a trusted local checkout, not concurrent malicious filesystem replacement.
+Replit is for Free development and preview only. GitHub Pages, through
+`.github/workflows/pages.yml`, is the only authorized publication destination.
+
+The checked-in `.replit` currently configures a static-release capability:
+`deploymentTarget = "static"`, build command
+`python3 scripts/build-replit-release.py`, and
+`publicDir = ".local/site-release"`. This is an existing configuration, not an
+active Replit deployment or authorization to publish through Replit. Do not use
+Replit Deploy or Publish for this site.
+
+The prior A18 audit did not verify a connected Replit checkout or live exposure.
+That historical finding does not change the current publication boundary above.
+The preview and report checks assume a trusted local checkout, not concurrent
+malicious filesystem replacement.
 
 ## Architecture
 
@@ -134,8 +143,10 @@ exact SHA-bound release artifact, then runs the read-only live-edge verifier.
 
 ## GitHub publication contract
 
-GitHub `main` is the canonical release branch and is protected. Replit work
-must follow this publication contract:
+GitHub Pages, through `.github/workflows/pages.yml`, is the only authorized
+publication destination. Replit is for Free development and preview only.
+GitHub `main` is the canonical release branch and is protected. Replit-authored
+work must follow this publication contract; Replit itself is not the publisher:
 
 1. Work on a named branch. Never push directly to `origin/main`.
 2. Batch related generated and static changes into one coherent commit.

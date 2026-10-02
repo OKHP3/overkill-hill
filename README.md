@@ -13,13 +13,15 @@ The public site and source materials for **OverKill Hill P³™** — the digita
 
 ## What this repo is
 
-A static HTML/CSS/JS site, hand-authored, hosted on GitHub Pages with an
-intended Cloudflare-fronted custom domain (`overkillhill.com`). No framework.
-No tracking beyond the analytics declared on the relevant pages.
+A static HTML/CSS/JS site, hand-authored and hosted on GitHub Pages. GitHub
+Pages is the only authorized publication destination. Replit is for Free
+development and preview only, not publication. No framework. No tracking
+beyond the analytics declared on the relevant pages.
 
 There is a build step. `scripts/build-site.py` generates page content from
-`site-src/pages.json`, and `.replit` defines a separate release build
-(`scripts/build-replit-release.py`, output `.local/site-release`). Check
+`site-src/pages.json`. The checked-in `.replit` also configures a static-release
+capability (`scripts/build-replit-release.py`, output `.local/site-release`).
+That configuration does not establish an active deployment or authorize publication. Check
 `build-site.py` before hand-editing generated page HTML, or a later build may
 overwrite the edit.
 
@@ -91,7 +93,13 @@ Residual risk: the two v2 pages still require Mermaid's looser interaction
 mode, and the vendored JavaScript remains a large third-party dependency even
 though it is now reviewed and served from this repository. The allowlist is
 not a substitute for reviewing diagram source changes.
-| Hosting | GitHub Pages with `CNAME` + Cloudflare |
+
+### Hosting and preview
+
+| Purpose | Current arrangement |
+|---|---|
+| Publication | GitHub Pages only, using the accepted direct-host strategy documented in `docs/publishing.md` |
+| Replit | Free development and preview only; its static-release configuration does not establish an active deployment or authorize publication |
 | Local preview | `python3 server.py` (port 5000, no-cache headers) |
 
 ## Local development
@@ -101,7 +109,12 @@ python3 server.py
 # then open http://localhost:5000
 ```
 
-The server is dev-only. It serves the repo root with no caching so edits are immediately visible. Production routing (404, redirects) is handled by GitHub Pages and Cloudflare, not by this script.
+The server is dev-only. It serves the repo root with no caching so edits are
+immediately visible. Production routing (404 and redirects) is handled by
+GitHub Pages, not by this script. The September 3, 2026 live-edge check found
+direct GitHub Pages and no Cloudflare edge marker. It recorded a PARTIAL result
+because host-controlled security and cache headers remained blocked. See
+`docs/publishing.md` for the dated evidence.
 
 ## Repository layout
 
@@ -311,22 +324,20 @@ VoiceOver+Safari) session on the home, article, project, and utility pages.
 ## Known limitations
 
 - Image-format optimization is **not currently running**. The PNG-to-WebP and picture-upgrade scripts are in `scripts/archive/`, and `assets/img/` still holds PNGs above 1 MB with no WebP sibling. Restore the scripts to `scripts/` and run them, or drop the optimization claim.
-- `_headers` declares a report-only CSP and related security/cache headers for
-  the intended edge. The August 22, 2026 live check found those headers absent
-  and observed `Cache-Control: max-age=600` on the canonical domain, so
-  production enforcement is **not confirmed**. See
-  `assets/audit/live-edge-report-2026-08-22.json` and
-  `docs/publishing.md`; do not treat `_headers` as active on GitHub Pages.
+- The September 3, 2026 live-edge check recorded direct GitHub Pages and a
+  **PARTIAL** result. Route and artifact checks passed, but host-controlled
+  security and cache headers remained blocked; the check observed
+  `Cache-Control: max-age=600` and no Cloudflare edge marker. The August 22
+  report remains as earlier historical evidence in
+  `assets/audit/live-edge-report-2026-08-22.json`. See `docs/publishing.md`;
+  do not treat `_headers` as active on direct GitHub Pages.
 - Search index (`assets/data/search-index.json`) is committed. Refresh it after
   searchable content changes, then use `build-search-index.py --check` to
   verify the generated file without rewriting it.
-- Publishing authentication: use the GitHub Actions Pages workflow for normal
-  releases. If a controlled API publish is required from Replit, store a
-  fine-grained GitHub credential as the `GITHUB_PAT` workspace secret and run
-  `GITHUB_TOKEN="$GITHUB_PAT" python3 scripts/push-to-github.py`. Never put the
-  credential in a remote URL, repository file, shell history, or chat. The
-  helper sends it only in an HTTPS Authorization header and exits on any API
-  failure. See `docs/publishing.md`.
+- Publishing: use the GitHub Actions Pages workflow
+  (`.github/workflows/pages.yml`). GitHub Pages is the only authorized
+  publication destination. Replit is for Free development and preview only;
+  do not publish this site through Replit.
 
 ## Contact
 
