@@ -1,0 +1,21 @@
+{
+  "evaluation_status": "limited-independent-context",
+  "evaluated_skill_version": "1.0.0",
+  "runner": "fresh-delegation-context",
+  "context": "Independent fresh context received SKILL.md and evals.json only; benchmark and prior grading files were excluded.",
+  "fixtures": "Three public fixture cases from evals/evals.json.",
+  "passed": 9,
+  "failed": 0,
+  "total": 9,
+  "pass_rate": 1.0,
+  "expectation_results": [
+    {"case": "validated-commit", "expectations": ["sha", "dirty", "no-write"], "status": "PASS"},
+    {"case": "credential-and-trust", "expectations": ["fork", "scope", "secret"], "status": "PASS"},
+    {"case": "post-deploy", "expectations": ["cache", "partial", "evidence"], "status": "PASS"}
+  ],
+  "limitations": [
+    "This is an independent context, not a second model/provider or production client.",
+    "Fixture reasoning only; no deployment or credential access was attempted.",
+    "No model, latency, token, or client telemetry was available."
+  ]
+}

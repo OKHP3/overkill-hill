@@ -1,0 +1,39 @@
+{
+  "evaluation_status": "limited-independent-client",
+  "evaluated_skill_version": "1.0.0",
+  "runner": "queryWithLLM",
+  "client": "independent-provider-backed-query-client",
+  "provenance": "A separate queryWithLLM client evaluated SKILL.md and evals.json only; benchmark files, prior grading, authoring notes, repository state, and deployment credentials were excluded.",
+  "fixtures": {
+    "source": "Three public fixture cases from evals/evals.json.",
+    "case_count": 3,
+    "expectation_count": 9
+  },
+  "passed": 9,
+  "failed": 0,
+  "total": 9,
+  "pass_rate": 1.0,
+  "expectation_results": [
+    {
+      "case": "validated-commit",
+      "expectations": ["sha", "dirty", "no-write"],
+      "status": "PASS"
+    },
+    {
+      "case": "credential-and-trust",
+      "expectations": ["fork", "scope", "secret"],
+      "status": "PASS"
+    },
+    {
+      "case": "post-deploy",
+      "expectations": ["cache", "partial", "evidence"],
+      "status": "PASS"
+    }
+  ],
+  "limitations": [
+    "This is an independent client interface, not a separately identified model or provider; provider and model telemetry were unavailable.",
+    "Fixture reasoning only; no deployment, credential access, or repository mutation was attempted.",
+    "The public fixtures are visible to package authors and do not establish holdout performance.",
+    "The 9/9 versus 9/9 result is a cross-client observation, not evidence of causal skill uplift."
+  ]
+}

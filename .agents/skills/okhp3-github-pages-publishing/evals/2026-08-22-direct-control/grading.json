@@ -1,0 +1,21 @@
+{
+  "evaluation_status": "limited-control",
+  "evaluated_skill_version": "1.0.0",
+  "runner": "direct-agent-control",
+  "context": "Current agent context; skill instructions intentionally not consulted during scoring.",
+  "fixtures": "Three public fixture cases from evals/evals.json.",
+  "passed": 9,
+  "failed": 0,
+  "total": 9,
+  "pass_rate": 1.0,
+  "expectation_results": [
+    {"case": "validated-commit", "expectations": ["sha", "dirty", "no-write"], "status": "PASS"},
+    {"case": "credential-and-trust", "expectations": ["fork", "scope", "secret"], "status": "PASS"},
+    {"case": "post-deploy", "expectations": ["cache", "partial", "evidence"], "status": "PASS"}
+  ],
+  "limitations": [
+    "The control was not blinded and was run by the same agent session; it is a comparison point, not a causal experiment.",
+    "Fixture reasoning only; no deployment or credential access was attempted.",
+    "No model, latency, token, or client telemetry was available."
+  ]
+}
