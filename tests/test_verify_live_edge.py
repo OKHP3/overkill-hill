@@ -1231,6 +1231,45 @@ import(bareSpecifier);
                 self.assertNotIn("asset /assets/js/app.js", checks)
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_missing_or_blank_content_type_fails_for_each_script_entry_asset(self) -> None:
+        asset_paths = {
+            "css": "/assets/css/theme.css",
+            "js": "/assets/js/app.js",
+            "module": "/assets/js/mermaid-init.js",
+        }
+        expected_types = {
+            "css": "text/css",
+            "js": "text/javascript",
+            "module": "text/javascript",
+        }
+
+        for kind, path in asset_paths.items():
+            for header_state, content_type in (("absent", None), ("blank", "")):
+                with self.subTest(kind=kind, header_state=header_state):
+                    return_code, report = self.run_live_edge_fixture(
+                        asset_kinds=("css", "js", "module"),
+                        asset_content_types={kind: content_type},
+                    )
+
+                    self.assertEqual(return_code, 1)
+                    self.assertEqual(report["status"], "FAILED")
+                    checks = {item["check"]: item for item in report["checks"]}
+                    content_type_check = checks[f"asset {path} content type"]
+                    self.assertEqual(content_type_check["status"], "FAIL")
+                    self.assertIn("received ''", content_type_check["evidence"])
+                    self.assertIn(expected_types[kind], content_type_check["evidence"])
+
+                    for unaffected_kind, unaffected_path in asset_paths.items():
+                        if unaffected_kind == kind:
+                            continue
+                        unaffected_check = checks[
+                            f"asset {unaffected_path} content type"
+                        ]
+                        self.assertEqual(unaffected_check["status"], "PASS")
+
+                    # The fixture runs with --accept-blocked for Pages policies.
+                    self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_module_accepts_explicit_javascript_media_types(self) -> None:
         for content_type in (
             "application/javascript; charset=utf-8",
