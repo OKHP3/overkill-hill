@@ -4,11 +4,13 @@ import importlib.util
 import json
 import os
 import re
+import stat
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,15 +90,26 @@ def path_is_within(path, directory):
         return False
 
 
+def is_symlink_or_reparse_point(path):
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    reparse_attribute = getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400)
+    attributes = getattr(metadata, 'st_file_attributes', 0)
+    return stat.S_ISLNK(metadata.st_mode) or bool(attributes & reparse_attribute)
+
+
 def resolve_allowed_root(repo_root, relative_parts, label):
     repo = Path(repo_root).resolve(strict=True)
     candidate = repo
-    for part in relative_parts:
+    for index, part in enumerate(relative_parts, start=1):
         candidate = candidate / part
-        if candidate.is_symlink():
+        if is_symlink_or_reparse_point(candidate):
+            ancestor = PurePosixPath(*relative_parts[:index]).as_posix()
             raise ValueError(
-                f'{label} root {PurePosixPath(*relative_parts).as_posix()} contains a symlink; '
-                'required action: keep the permitted root as a real directory.'
+                f'{label} root ancestor {ancestor} is a symbolic link or Windows reparse point; '
+                'required action: keep every permitted-root ancestor as a real directory.'
             )
     resolved = candidate.resolve(strict=False)
     if not path_is_within(resolved, repo):
@@ -110,6 +123,15 @@ def resolve_allowed_root(repo_root, relative_parts, label):
 def resolve_contained_path(repo_root, allowed_parts, relative_path, label):
     relative = canonical_posix_relative_path(relative_path, label)
     repo, allowed_root = resolve_allowed_root(repo_root, allowed_parts, label)
+    ancestor = repo.joinpath(*allowed_parts)
+    for part in relative.parts[:-1]:
+        ancestor = ancestor / part
+        if is_symlink_or_reparse_point(ancestor):
+            relative_ancestor = ancestor.relative_to(repo).as_posix()
+            raise ValueError(
+                f'{label} directory ancestor {relative_ancestor} is a symbolic link or Windows reparse point; '
+                'required action: use real directories inside the permitted root.'
+            )
     candidate = (repo.joinpath(*allowed_parts, *relative.parts)).resolve(strict=False)
     if not path_is_within(candidate, allowed_root):
         raise ValueError(
@@ -210,40 +232,46 @@ def discover_archived_live_edge_reports(root):
             'restore assets/audit as a directory before running the archive audit.'
         )
 
-    def raise_walk_error(error):
-        raise error
-
     discovered = []
-    for current, directories, filenames in os.walk(
-        archive_root,
-        followlinks=False,
-        onerror=raise_walk_error,
-    ):
-        current_path = Path(current)
-        for directory in directories:
-            symlink_directory = current_path / directory
-            if not symlink_directory.is_symlink():
-                continue
-            resolved = symlink_directory.resolve(strict=False)
-            relative = symlink_directory.relative_to(repo).as_posix()
-            if not path_is_within(resolved, archive_root):
-                raise ValueError(
-                    f'Archive directory {relative} resolves outside permitted assets/audit; '
-                    'required action: replace the symlink with a real directory inside assets/audit.'
-                )
-            raise ValueError(
-                f'Archive directory {relative} is a symlink, so recursive report discovery is incomplete; '
-                'required action: replace it with a real directory inside assets/audit.'
-            )
+    pending_directories = [archive_root]
+    while pending_directories:
+        current_path = pending_directories.pop()
+        with os.scandir(current_path) as entries:
+            for entry in entries:
+                candidate = Path(entry.path)
+                metadata = candidate.lstat()
+                if is_symlink_or_reparse_point(candidate):
+                    resolved = candidate.resolve(strict=False)
+                    relative = candidate.relative_to(repo).as_posix()
+                    if not path_is_within(resolved, archive_root):
+                        raise ValueError(
+                            f'Archive entry {relative} is a symbolic link or Windows reparse point '
+                            'that resolves outside permitted assets/audit; required action: replace '
+                            'it with a regular file or directory inside assets/audit.'
+                        )
+                    raise ValueError(
+                        f'Archive entry {relative} is a symbolic link or Windows reparse point, '
+                        'so recursive report discovery is incomplete; required action: replace it '
+                        'with a regular file or directory inside assets/audit.'
+                    )
 
-        if current_path.name != 'delivery' or 'live-edge.json' not in filenames:
-            continue
-        report = current_path / 'live-edge.json'
-        relative_in_archive = report.relative_to(archive_root).as_posix()
-        report_path = PurePosixPath(*ARCHIVE_ROOT_PARTS, *PurePosixPath(relative_in_archive).parts).as_posix()
-        resolved_report = resolve_archive_source(root, report_path)
-        if resolved_report.is_file():
-            discovered.append(report_path)
+                if stat.S_ISDIR(metadata.st_mode):
+                    pending_directories.append(candidate)
+                    continue
+                if (
+                    current_path.name != 'delivery'
+                    or candidate.name != 'live-edge.json'
+                    or not stat.S_ISREG(metadata.st_mode)
+                ):
+                    continue
+                relative_in_archive = candidate.relative_to(archive_root).as_posix()
+                report_path = PurePosixPath(
+                    *ARCHIVE_ROOT_PARTS,
+                    *PurePosixPath(relative_in_archive).parts,
+                ).as_posix()
+                resolved_report = resolve_archive_source(root, report_path)
+                if resolved_report.is_file():
+                    discovered.append(report_path)
     return sorted(discovered)
 
 
@@ -261,8 +289,7 @@ def archive_registry_issues(
     try:
         discovered = set(discover_archived_live_edge_reports(root))
     except (OSError, RuntimeError, ValueError) as exc:
-        discovered = set()
-        issues.append(str(exc))
+        return [str(exc)]
 
     registered = set()
     for report_path, entry in registry.items():
@@ -338,6 +365,23 @@ VERIFY_SPEC.loader.exec_module(VERIFY)
 
 
 class SummaryTests(unittest.TestCase):
+    def create_symlink_or_skip_when_windows_privilege_is_missing(
+        self,
+        link,
+        target,
+        *,
+        target_is_directory=False,
+    ):
+        try:
+            link.symlink_to(target, target_is_directory=target_is_directory)
+        except OSError as exc:
+            if os.name == 'nt' and getattr(exc, 'winerror', None) == 1314:
+                self.skipTest(
+                    'Windows symlink creation requires privileges unavailable to this runner; '
+                    'the separate junction regression remains active.'
+                )
+            raise
+
     def load_fixture(self, name):
         fixture_path = resolve_compatibility_fixture(ROOT, name)
         if not fixture_path.is_file():
@@ -652,17 +696,24 @@ class SummaryTests(unittest.TestCase):
 
             source_link = root / 'assets/audit/escaped'
             source_link.parent.mkdir(parents=True, exist_ok=True)
-            source_link.symlink_to(outside, target_is_directory=True)
+            self.create_symlink_or_skip_when_windows_privilege_is_missing(
+                source_link,
+                outside,
+                target_is_directory=True,
+            )
             linked_report_path = (
                 'assets/audit/escaped/assessment-2026-09-07/delivery/live-edge.json'
             )
             source_entry = dict(entry)
 
-            fixture_root = root
+            fixture_root = root / 'fixture-case'
             fixture_directory = fixture_root / 'tests/fixtures/actions-summary'
             fixture_directory.mkdir(parents=True)
             fixture_link = fixture_directory / 'outside.json'
-            fixture_link.symlink_to(outside_report)
+            self.create_symlink_or_skip_when_windows_privilege_is_missing(
+                fixture_link,
+                outside_report,
+            )
             fixture_entry = dict(entry, fixture='outside.json')
 
             original_read_bytes = Path.read_bytes
@@ -679,14 +730,18 @@ class SummaryTests(unittest.TestCase):
                     fixture_root=ROOT,
                 )
                 fixture_issues = archive_registry_issues(
-                    root,
+                    fixture_root,
                     {report_path: fixture_entry},
                     fixture_root=fixture_root,
                 )
 
         self.assertTrue(
             any(
-                linked_report_path in issue and 'outside permitted assets/audit' in issue
+                'assets/audit/escaped' in issue
+                and (
+                    'outside permitted assets/audit' in issue
+                    or 'symbolic link or Windows reparse point' in issue
+                )
                 for issue in source_issues
             ),
             '\n'.join(source_issues),
@@ -698,6 +753,160 @@ class SummaryTests(unittest.TestCase):
                 for issue in fixture_issues
             ),
             '\n'.join(fixture_issues),
+        )
+
+    def test_synthetic_windows_reparse_root_marker_is_rejected_before_reading(self):
+        report_path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / report_path
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(b'{"synthetic":"report"}\n')
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(b'{"synthetic":"report"}\n')
+
+            root_ancestor = root / 'assets'
+            original_lstat = Path.lstat
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def mark_as_reparse_point(path):
+                metadata = original_lstat(path)
+                if path == root_ancestor:
+                    return SimpleNamespace(
+                        st_mode=metadata.st_mode,
+                        st_file_attributes=0x400,
+                    )
+                return metadata
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, 'lstat', mark_as_reparse_point):
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        ARCHIVED_LIVE_EDGE_REPORTS,
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+
+        self.assertTrue(
+            any('Windows reparse point' in issue and 'assets' in issue for issue in issues),
+            '\n'.join(issues),
+        )
+        self.assertEqual(read_attempts, [], 'source or fixture content was read before rejecting the root')
+
+    def test_synthetic_windows_reparse_archive_directory_stops_discovery_before_reading(self):
+        report_path = 'assets/audit/redirect/delivery/live-edge.json'
+        entry = {
+            'classification': 'current',
+            'fixture': 'synthetic.json',
+            'required_action': 'validate_report_shape',
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / report_path
+            source.parent.mkdir(parents=True)
+            source_bytes = b'{"synthetic":"reparse directory"}\n'
+            source.write_bytes(source_bytes)
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(source_bytes)
+
+            reparse_directory = root / 'assets/audit/redirect'
+            original_lstat = Path.lstat
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def mark_as_reparse_point(path):
+                metadata = original_lstat(path)
+                if path == reparse_directory:
+                    return SimpleNamespace(
+                        st_mode=metadata.st_mode,
+                        st_file_attributes=0x400,
+                    )
+                return metadata
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, 'lstat', mark_as_reparse_point):
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+
+        self.assertTrue(
+            any(
+                'assets/audit/redirect' in issue
+                and 'Windows reparse point' in issue
+                for issue in issues
+            ),
+            '\n'.join(issues),
+        )
+        self.assertEqual(
+            read_attempts,
+            [],
+            'archive or fixture content was read before recursive discovery rejected the reparse point',
+        )
+
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows junction semantics')
+    def test_windows_assets_junction_to_private_is_rejected_before_reading(self):
+        report_path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / 'private'
+            source = private / 'audit/assessment-2026-09-07/delivery/live-edge.json'
+            source.parent.mkdir(parents=True)
+            source_bytes = b'{"synthetic":"junction target"}\n'
+            source.write_bytes(source_bytes)
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(source_bytes)
+
+            assets_junction = root / 'assets'
+            created = subprocess.run(
+                ['cmd', '/c', 'mklink', '/J', str(assets_junction), str(private)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            try:
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+            finally:
+                assets_junction.rmdir()
+
+        self.assertTrue(
+            any(
+                'Windows reparse point' in issue and 'assets' in issue
+                for issue in issues
+            ),
+            '\n'.join(issues),
+        )
+        self.assertEqual(
+            read_attempts,
+            [],
+            'the strict registry audit read the in-repository private junction target before rejecting it',
         )
 
     def test_strict_archive_audit_switch_accepts_documented_values(self):
