@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AUTHORING = ROOT / "site-src/pages/projects/found-ry/index.main.html"
 CANONICAL = ROOT / "projects/found-ry/index.html"
 LEGACY = ROOT / "found-ry/index.html"
-APP_URL = "https://okhp3.github.io/OverKill-Hill-FoundRy/"
+APP_URL = "https://okhp3.github.io/overkill-hill-foundry/"
 CANONICAL_ROUTE = "/projects/found-ry/"
 LEGACY_ROUTE = "/found-ry/"
 

@@ -10,7 +10,7 @@ const { chromium } = require("playwright");
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const pagePath = "/projects/found-ry/";
-const liveAppUrl = "https://okhp3.github.io/OverKill-Hill-FoundRy/";
+const liveAppUrl = "https://okhp3.github.io/overkill-hill-foundry/";
 let server;
 let baseUrl;
 

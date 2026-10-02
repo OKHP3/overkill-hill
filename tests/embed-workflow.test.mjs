@@ -49,7 +49,7 @@ after(async () => {
 const embeds = [
   ["/projects/abrahamic-reference-engine/", "are-tool-iframe", "are-reload-btn", "https://okhp3.github.io/abrahamic-reference-engine/"],
   ["/projects/bpmn-for-mermaid/", "bpmn-tool-iframe", "bpmn-reload-btn", "https://okhp3.github.io/mermaid-diagram-bpmn/"],
-  ["/projects/found-ry/", "foundry-tool-iframe", "foundry-reload-btn", "https://okhp3.github.io/OverKill-Hill-FoundRy/"],
+  ["/projects/found-ry/", "foundry-tool-iframe", "foundry-reload-btn", "https://okhp3.github.io/overkill-hill-foundry/"],
   ["/projects/mermaid-theme-builder/", "tool-iframe", "reload-btn", "https://okhp3.github.io/mermaid-theme-builder/?embed=1"],
   ["/skillz-forge/", "tool-iframe", "reload-btn", "https://okhp3.github.io/skillz/"],
   ["/skillz-forge/skillz-shield/", "tool-iframe", "reload-btn", "https://okhp3.github.io/skillz-shield/"],
