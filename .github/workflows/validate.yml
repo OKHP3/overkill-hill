@@ -184,6 +184,8 @@ jobs:
         run: python3 tests/test-murderbird-review-boundary.py
 
       - name: Test Actions reporting and concurrency contracts
+        env:
+          OKHP3_STRICT_LIVE_EDGE_ARCHIVE_AUDIT: ${{ vars.OKHP3_STRICT_LIVE_EDGE_ARCHIVE_AUDIT || '0' }}
         run: |
           python3 tests/test-actions-summary.py
           python3 tests/test-ci-concurrency.py
