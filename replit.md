@@ -42,12 +42,12 @@ persistent report service. Requests have a five-second socket inactivity timeout
 Replit is for Free development and preview only. GitHub Pages, through
 `.github/workflows/pages.yml`, is the only authorized publication destination.
 
-The checked-in `.replit` currently configures a static-release capability:
-`deploymentTarget = "static"`, build command
-`python3 scripts/build-replit-release.py`, and
-`publicDir = ".local/site-release"`. This is an existing configuration, not an
-active Replit deployment or authorization to publish through Replit. Do not use
-Replit Deploy or Publish for this site.
+The checked-in `.replit` retains the Free webview preview, Node/Python runtime,
+and QA workflows, but has no `[deployment]` table, `deploymentTarget`,
+`publicDir`, or release build command. The standalone
+`scripts/build-replit-release.py` helper and its allowlist, dirty-check, recovery
+path, and regression tests remain in the repository; `.replit` does not invoke
+them for Replit publication. Do not use Replit Deploy or Publish for this site.
 
 The prior A18 audit did not verify a connected Replit checkout or live exposure.
 That historical finding does not change the current publication boundary above.

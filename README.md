@@ -19,9 +19,10 @@ development and preview only, not publication. No framework. No tracking
 beyond the analytics declared on the relevant pages.
 
 There is a build step. `scripts/build-site.py` generates page content from
-`site-src/pages.json`. The checked-in `.replit` also configures a static-release
-capability (`scripts/build-replit-release.py`, output `.local/site-release`).
-That configuration does not establish an active deployment or authorize publication. Check
+`site-src/pages.json`. The checked-in `.replit` retains the Free preview
+workflows but has no Replit publication configuration. The standalone
+`scripts/build-replit-release.py` helper and its allowlist and recovery tests
+remain independent of Replit publishing. Check
 `build-site.py` before hand-editing generated page HTML, or a later build may
 overwrite the edit.
 
@@ -99,7 +100,7 @@ not a substitute for reviewing diagram source changes.
 | Purpose | Current arrangement |
 |---|---|
 | Publication | GitHub Pages only, using the accepted direct-host strategy documented in `docs/publishing.md` |
-| Replit | Free development and preview only; its static-release configuration does not establish an active deployment or authorize publication |
+| Replit | Free development and preview only; `.replit` has no Replit publication route |
 | Local preview | `python3 server.py` (port 5000, no-cache headers) |
 
 ## Local development
@@ -216,7 +217,7 @@ Retired one-shot scripts live in `scripts/archive/` and are not part of any pipe
 | Script | Purpose |
 |---|---|
 | `build-site.py` | Generates page content from `site-src/pages.json` |
-| `build-replit-release.py` | Assembles the Replit static release into `.local/site-release` |
+| `build-replit-release.py` | Stages an allowlisted release package; it is not wired to Replit publication |
 | `validate-site.py` | Editorial + structural validator (run before every commit) |
 | `cache-bust.py` | Appends `?v=<sha256[:8]>` to local CSS/JS refs in HTML |
 | `build-search-index.py` | Refreshes `/assets/data/search-index.json` from live HTML. `--check` compares the expected index in memory and exits non-zero when stale without writing the JSON. |

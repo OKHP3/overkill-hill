@@ -22,9 +22,10 @@ For this repository:
 - GitHub Pages publication is handled by `.github/workflows/pages.yml`, which
   consumes the validated artifact for the exact commit. Observe that pipeline
   when an authorized merge triggers it.
-- `.replit` defines a separate static publication route built by
-  `scripts/build-replit-release.py` into `.local/site-release`. Its presence
-  does not make it the requested production target or prove its live state.
+- `.replit` retains the Free webview preview, Node/Python runtime, and QA
+  workflows, but defines no Replit publication route. The standalone
+  `scripts/build-replit-release.py` helper and its release/recovery safeguards
+  remain tested without being wired to Replit publishing.
 - Reconcile Replit's local commits explicitly before synchronizing it. Keep
   Windows source parity, Replit source parity, connector authentication, task
   disposition, CI, and live deployment evidence separate.
