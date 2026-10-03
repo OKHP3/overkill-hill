@@ -6,9 +6,19 @@
     if (!dialog || typeof dialog.showModal !== "function") return;
     const key = "okh-capability-transition-2026-09-29";
     const previousFocus = document.activeElement;
+    const canRestoreFocus = target => {
+      if (!target || target === document.body || target === document.documentElement
+          || target === dialog || dialog.contains(target) || !target.isConnected
+          || typeof target.focus !== "function"
+          || target.matches(":disabled, [hidden], [inert], [aria-hidden='true']")
+          || target.closest("[hidden], [inert], [aria-hidden='true']")) return false;
+      const style = getComputedStyle(target);
+      return style.display !== "none" && style.visibility !== "hidden" && target.getClientRects().length > 0;
+    };
     const remember = () => {
       try { sessionStorage.setItem(key, "dismissed"); } catch (_) { /* Storage is optional. */ }
-      if (previousFocus && previousFocus !== document.body) previousFocus.focus();
+      const target = canRestoreFocus(previousFocus) ? previousFocus : document.querySelector(".okh-skip-link");
+      if (target) target.focus();
     };
     dialog.addEventListener("close", remember);
     dialog.addEventListener("keydown", event => {
