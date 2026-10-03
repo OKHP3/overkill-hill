@@ -1,0 +1,60 @@
+{
+  "language_pair": "en-US -> fr-FR",
+  "skill": "okhp3-translation-en-us-fr-fr",
+  "review_status": "ai-reviewed",
+  "native_or_human_approval": false,
+  "baseline_revision": "git:25ee8da0c62d8137731322b9b12a60688e8cb382",
+  "reviewed_on": "2026-10-03",
+  "review_scope": "Metadata-only page comparison: the single app.js cache fingerprint changes from da256d7a to fa9635f9. Source and localized page bytes otherwise remain identical to the reviewed baseline. No translated copy, approval status, indexability, or language quality is changed or newly certified. Runtime focus behavior is reviewed separately by the transition keyboard regression; this record establishes only unchanged page semantics.",
+  "hash_method": "SHA-256 after CRLF-to-LF normalization. Exact old-to-new app.js fingerprint substitution must reproduce each whole page. Prior ledger hashes must match baseline pages.",
+  "routes": [
+    {
+      "route": "/",
+      "locale": "fr",
+      "source_path": "index.html",
+      "target_path": "fr/index.html",
+      "baseline_source_sha256": "931cc7bea83e11656bc7d7bab6224b8a5e050b974759b62a83556a927275c6cb",
+      "baseline_target_sha256": "e2d0d0cebe0d3db7aa76712a897a52f2817052bcbc4ccba17d06cdbc82ddc5c3",
+      "source_sha256": "fb25eb8ad1cc65a20b44ada4478342bffafd61f7c4a152f4da891369e91ad84b",
+      "target_sha256": "7e215a2e6f686e7246114eb6107e5c6c89a085b8c2b393b7f01f5db805d8e17d",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "whole_page_identical_after_exact_fingerprint_substitution": true
+    },
+    {
+      "route": "/about/",
+      "locale": "fr",
+      "source_path": "about/index.html",
+      "target_path": "fr/about/index.html",
+      "baseline_source_sha256": "22253fbd507b2f81db1d740d0af3ef67b75d8241663cced89354c02f317dabb3",
+      "baseline_target_sha256": "0528b3e93747c65a3261ed49ee3539bf129fcb61039ee7391d71f44113616e63",
+      "source_sha256": "66dd58fcce7ee12dce344129ab6cd145d96eb71f496f778f15c554d7875882e8",
+      "target_sha256": "1e81c9aaf392916012c44b107f22dc1305ef1cea6932579c54fbed895b2686e7",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "whole_page_identical_after_exact_fingerprint_substitution": true
+    },
+    {
+      "route": "/contact/",
+      "locale": "fr",
+      "source_path": "contact/index.html",
+      "target_path": "fr/contact/index.html",
+      "baseline_source_sha256": "34cf2cb6ec87d41825df626e3c9d49bbf0b5d0ef3720c3f8119e49d240641830",
+      "baseline_target_sha256": "98ba23dbc3ac167ffdb38359f52fce71cf45bd4241cceb8b29811479ebd884d1",
+      "source_sha256": "d2ed9bd2c8326439eca420480602deb6fc5bea03f329ed1330a6f7557319f6d4",
+      "target_sha256": "0ec53c4be9d2420be0f6dcc537d3919eb4a4fbbda31c06acf389dd09d9c77fb1",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "whole_page_identical_after_exact_fingerprint_substitution": true
+    },
+    {
+      "route": "/projects/",
+      "locale": "fr",
+      "source_path": "projects/index.html",
+      "target_path": "fr/projects/index.html",
+      "baseline_source_sha256": "eee916fe76952384fa38be469f83dc0410b1834bbf971f8fd2dbe153c025b9fa",
+      "baseline_target_sha256": "c028e3a016d1138723814ab3950bddf487175690364784690a86245cd79afbc1",
+      "source_sha256": "cbe5d614aae8fe29b61e58b59955389103f3f92e8c45f135e98b6a2053033dce",
+      "target_sha256": "ef2801cf3972e294955109780d14419b169c79c1078c35f400869fa33c9f9c55",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "whole_page_identical_after_exact_fingerprint_substitution": true
+    }
+  ]
+}
