@@ -53,6 +53,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         *,
         expected_commit: str | None = None,
         manifest_commit: str = "a" * 40,
+        manifest_body: bytes | None = None,
         manifest_content_type: str | None = "application/json",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
@@ -79,17 +80,19 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         javascript_missing_paths = javascript_missing_paths or set()
         sitemap = verify_live_edge.canonical_text_bytes(verify_live_edge.SITEMAP)
         search_index = verify_live_edge.canonical_text_bytes(verify_live_edge.SEARCH_INDEX)
-        manifest = json.dumps(
-            {
-                "commit": manifest_commit,
-                "artifacts": {
-                    "/sitemap.xml": {"sha256": hashlib.sha256(sitemap).hexdigest()},
-                    "/assets/data/search-index.json": {
-                        "sha256": hashlib.sha256(search_index).hexdigest()
+        manifest = manifest_body
+        if manifest is None:
+            manifest = json.dumps(
+                {
+                    "commit": manifest_commit,
+                    "artifacts": {
+                        "/sitemap.xml": {"sha256": hashlib.sha256(sitemap).hexdigest()},
+                        "/assets/data/search-index.json": {
+                            "sha256": hashlib.sha256(search_index).hexdigest()
+                        },
                     },
-                },
-            }
-        ).encode("utf-8")
+                }
+            ).encode("utf-8")
         html_headers = {
             "content-type": "text/html; charset=utf-8",
             "cache-control": "max-age=600",
@@ -978,6 +981,44 @@ import(bareSpecifier);
         self.assertGreater(report["summary"]["failures"], 0)
         checks = {item["check"]: item for item in report["checks"]}
         self.assertEqual(checks["release manifest"]["status"], "FAIL")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_invalid_release_manifest_json_fails_before_artifact_comparison(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            expected_commit="b" * 40,
+            manifest_body=b'{"commit":',
+            manifest_content_type="application/json",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest content type"]["status"], "PASS")
+        release_manifest = checks["release manifest"]
+        self.assertEqual(release_manifest["status"], "FAIL")
+        self.assertIn("invalid JSON:", release_manifest["evidence"])
+        self.assertNotIn("expected validated commit", release_manifest["evidence"])
+        self.assertNotIn("SHA-256", release_manifest["evidence"])
+        self.assertFalse(any(name.startswith("release manifest /") for name in checks))
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_non_object_release_manifest_json_fails_before_artifact_comparison(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            expected_commit="b" * 40,
+            manifest_body=b"[]",
+            manifest_content_type="application/json",
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest content type"]["status"], "PASS")
+        release_manifest = checks["release manifest"]
+        self.assertEqual(release_manifest["status"], "FAIL")
+        self.assertIn("expected a JSON object", release_manifest["evidence"])
+        self.assertNotIn("expected validated commit", release_manifest["evidence"])
+        self.assertNotIn("SHA-256", release_manifest["evidence"])
+        self.assertFalse(any(name.startswith("release manifest /") for name in checks))
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_wrong_release_manifest_content_type_fails_before_json_parsing(self) -> None:
