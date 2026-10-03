@@ -279,13 +279,20 @@ def find_html_files() -> list[Path]:
     return sorted(files)
 
 
-def _sitemap_entries_from_path(sitemap_path: Path) -> list[tuple[str, str | None]]:
-    """Read sitemap location/date pairs without collapsing duplicate locations."""
+def _sitemap_entries_with_positions_from_path(
+    sitemap_path: Path,
+) -> list[tuple[int, str, str | None]]:
+    """Read usable sitemap entries with their one-based source positions."""
     if not sitemap_path.exists():
         return []
     text = sitemap_path.read_text(encoding="utf-8")
-    entries: list[tuple[str, str | None]] = []
-    for block in re.findall(r"<url\b[^>]*>(.*?)</url>", text, flags=re.IGNORECASE | re.DOTALL):
+    entries: list[tuple[int, str, str | None]] = []
+    blocks = re.findall(
+        r"<url\b[^>]*>(.*?)</url>",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for position, block in enumerate(blocks, start=1):
         loc_match = re.search(r"<loc\b[^>]*>([^<]+)</loc>", block, flags=re.IGNORECASE)
         if not loc_match:
             continue
@@ -296,12 +303,21 @@ def _sitemap_entries_from_path(sitemap_path: Path) -> list[tuple[str, str | None
         )
         loc = unescape(loc_match.group(1).strip())
         entries.append((
+            position,
             loc,
             unescape(lastmod_match.group(1).strip())
             if lastmod_match is not None
             else None,
         ))
     return entries
+
+
+def _sitemap_entries_from_path(sitemap_path: Path) -> list[tuple[str, str | None]]:
+    """Read sitemap location/date pairs without collapsing duplicate locations."""
+    return [
+        (loc, lastmod)
+        for _, loc, lastmod in _sitemap_entries_with_positions_from_path(sitemap_path)
+    ]
 
 
 def load_sitemap_entries(sitemap_path: Path = SITEMAP) -> dict[str, str | None]:
@@ -319,25 +335,36 @@ def load_sitemap_entries(sitemap_path: Path = SITEMAP) -> dict[str, str | None]:
 
 def validate_sitemap_duplicates(sitemap_path: Path = SITEMAP) -> list[Finding]:
     """Reject duplicate sitemap locations before consumers build a date map."""
-    occurrences: dict[str, list[str | None]] = {}
-    for loc, lastmod in _sitemap_entries_from_path(sitemap_path):
-        occurrences.setdefault(loc, []).append(lastmod)
+    occurrences: dict[str, list[tuple[int, str | None]]] = {}
+    for position, loc, lastmod in _sitemap_entries_with_positions_from_path(sitemap_path):
+        occurrences.setdefault(loc, []).append((position, lastmod))
 
     findings: list[Finding] = []
     for loc in sorted(occurrences):
-        values = occurrences[loc]
-        if len(values) < 2:
+        entries = occurrences[loc]
+        if len(entries) < 2:
             continue
+        positions = ", ".join(str(position) for position, _ in entries)
         findings.append(Finding(
             "ERROR",
             "sitemap.xml",
-            f"duplicate sitemap location: {loc} appears {len(values)} times",
+            (
+                f"duplicate sitemap location: {loc} appears {len(entries)} times "
+                f"at sitemap entry positions {positions}"
+            ),
         ))
-        if len(set(values)) > 1:
+        if len({lastmod for _, lastmod in entries}) > 1:
+            dated_entries = "; ".join(
+                f"position {position}: {lastmod!r}"
+                for position, lastmod in entries
+            )
             findings.append(Finding(
                 "ERROR",
                 "sitemap.xml",
-                f"conflicting duplicate sitemap lastmod values for {loc}: {values!r}",
+                (
+                    f"conflicting duplicate sitemap lastmod values for {loc}: "
+                    f"{dated_entries}"
+                ),
             ))
     return findings
 
