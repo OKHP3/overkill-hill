@@ -751,6 +751,112 @@ class SEOFixtureTests(unittest.TestCase):
         )
         self.assertIn('"@type": "Article"', source_path.read_text(encoding="utf-8"))
 
+    def test_rendered_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
+        index_path = GENERATED_FIXTURE / "index.html.fixture"
+        index_page = self.pages_by_route["/"]
+        index_raw = index_path.read_text(encoding="utf-8")
+        draft_page = self.pages_by_route["/writings/biases-as-constants/"]
+        draft_path = ROOT / draft_page["path"]
+        draft_raw = draft_path.read_text(encoding="utf-8")
+
+        within_tag_conflict = mutate_meta(
+            draft_raw,
+            "meta:robots",
+            "NoIndex, INDEX, Follow",
+        )
+        across_tags_conflict = index_raw.replace(
+            "</head>",
+            '<meta name="robots" content="NOINDEX, follow"></head>',
+            1,
+        )
+        conflict_cases = (
+            (
+                "across tags on a noindex page",
+                draft_path,
+                draft_page,
+                draft_raw.replace(
+                    "</head>",
+                    '<meta name="robots" content="INDEX, follow"></head>',
+                    1,
+                ),
+                ("INDEX, follow",),
+            ),
+            (
+                "within one noindex tag",
+                draft_path,
+                draft_page,
+                within_tag_conflict,
+                ("NoIndex, INDEX, Follow",),
+            ),
+            (
+                "across tags",
+                index_path,
+                index_page,
+                across_tags_conflict,
+                ("index, follow", "NOINDEX, follow"),
+            ),
+        )
+        for case, path, page, raw, expected_values in conflict_cases:
+            with self.subTest(case=case):
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(raw),
+                    page,
+                )
+                conflicts = [
+                    finding for finding in findings
+                    if "conflicting robots index/noindex directives" in finding.msg
+                ]
+                self.assertEqual(len(conflicts), 1, findings_text(findings))
+                conflict = conflicts[0]
+                self.assertEqual(
+                    conflict.page,
+                    path.relative_to(ROOT).as_posix(),
+                )
+                for value in expected_values:
+                    self.assertIn(value, conflict.msg)
+
+        consistent_cases = (
+            (
+                "duplicate index tags",
+                index_path,
+                index_page,
+                index_raw.replace(
+                    "</head>",
+                    '<meta name="robots" content="INDEX, FOLLOW"></head>',
+                    1,
+                ),
+            ),
+            (
+                "duplicate noindex tags",
+                draft_path,
+                draft_page,
+                draft_raw.replace(
+                    "</head>",
+                    '<meta name="robots" content="NOINDEX, NOFOLLOW"></head>',
+                    1,
+                ),
+            ),
+            (
+                "directive lookalikes are not indexing tokens",
+                index_path,
+                index_page,
+                mutate_meta(
+                    index_raw,
+                    "meta:robots",
+                    "indexifembedded, noindexing",
+                ),
+            ),
+        )
+        for case, path, page, raw in consistent_cases:
+            with self.subTest(case=case):
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(raw),
+                    page,
+                )
+                self.assertFalse(findings, findings_text(findings))
+
     def test_draft_article_promotion_requires_article_metadata(self) -> None:
         mutation = self.fixture_data["draft_article_promotion"]
         draft_page = page_for_route(self.source_pages, mutation["route"])
