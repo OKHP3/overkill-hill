@@ -160,6 +160,17 @@ EXPECTED_ORGANIZATION = {
 # Em dash in all three forms: literal U+2014, named entity, numeric entity
 EM_DASH_RE = re.compile(r"\u2014|&mdash;|&#8212;")
 
+ROBOTS_INDEXING_TOKENS = frozenset({"index", "noindex"})
+
+
+def robots_indexing_tokens(content: str) -> set[str]:
+    """Return exact index/noindex directives from a robots content value."""
+    return {
+        token.lower()
+        for token in re.split(r"[\s,]+", content.strip())
+        if token.lower() in ROBOTS_INDEXING_TOKENS
+    }
+
 
 class TagCounter(HTMLParser):
     """Collect everything we need for one HTML page in a single pass."""
@@ -210,7 +221,7 @@ class TagCounter(HTMLParser):
                 )
             if name == "description" and content.strip():
                 self.has_meta_description = True
-            if name == "robots" and "noindex" in content.lower():
+            if name == "robots" and "noindex" in robots_indexing_tokens(content):
                 self.is_noindex = True
         elif tag == "link":
             rel = attrs.get("rel", "").lower()
@@ -1163,6 +1174,20 @@ def validate_generated_seo(
         for key, entries in parser.meta.items()
     }
     findings = validate_organization_nodes(rel, parser)
+    robots_values = parser.meta.get("robots", [])
+    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
+    if {"index", "noindex"}.issubset(set().union(*robots_tokens)):
+        conflicting_values = [
+            value
+            for value, tokens in zip(robots_values, robots_tokens)
+            if tokens.intersection(ROBOTS_INDEXING_TOKENS)
+        ]
+        findings.append(Finding(
+            "ERROR",
+            rel,
+            "conflicting robots index/noindex directives in rendered content values: "
+            f"{conflicting_values!r}",
+        ))
     manifest_boundary = "indexable" if is_indexable_page(manifest_page) else "noindex"
     rendered_boundary = "noindex" if parser.is_noindex else "indexable"
     if rendered_boundary != manifest_boundary:
