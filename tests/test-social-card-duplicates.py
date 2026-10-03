@@ -170,6 +170,7 @@ class SocialCardDuplicateTests(unittest.TestCase):
     def test_noindex_locale_page_does_not_enter_social_card_contract(self):
         parser = MODULE.TagCounter()
         parser.feed(
+            '<meta name="robots" content="noindex, follow">'
             '<meta property="og:image" content="https://example.test/old.png">'
             '<meta property="og:image" content="https://example.test/new.png">'
         )
