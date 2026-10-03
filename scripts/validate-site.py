@@ -114,6 +114,7 @@ MERMAID_HEAT_TARGETS = {
 # partial. Keep the non-editorial contract here so a content edit cannot
 # silently weaken the published head.
 RETIRED_SOCIAL_IMAGE = "/assets/img/over-kill-hill-p3-sentinel-waiting-square-1024.png"
+SHARED_BRAND_SOCIAL_IMAGE = "/assets/img/og/murderbird-v2-brand-share-1200x630.png"
 SOCIAL_CARD_META_KEYS = (
     "og:image",
     "og:image:alt",
@@ -592,6 +593,25 @@ def validate_indexable_social_card(
             findings.append(Finding("ERROR", location, f"{label} page uses retired social image: {key}"))
     findings.extend(validate_social_card_consistency(location, values))
     findings.extend(validate_image_contract(location, values))
+    return findings
+
+
+def validate_article_social_image(
+    location: str,
+    values: dict[str, str],
+    page_label: str,
+) -> list[Finding]:
+    """Require indexable Articles to use an Article-specific social image."""
+    shared_asset = (ROOT / SHARED_BRAND_SOCIAL_IMAGE.lstrip("/")).resolve()
+    findings: list[Finding] = []
+    for key in ("meta:og:image", "meta:twitter:image"):
+        asset = _image_asset_path(values.get(key, ""))
+        if asset is not None and asset.resolve() == shared_asset:
+            findings.append(Finding(
+                "ERROR",
+                location,
+                f"indexable {page_label} Article uses shared brand social image: {key}",
+            ))
     return findings
 
 
@@ -1121,6 +1141,8 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
 
         if is_indexable_page(page):
             findings.extend(validate_indexable_social_card(rel, metadata, "source"))
+            if is_article_page(page):
+                findings.extend(validate_article_social_image(rel, metadata, "source"))
 
         if is_article_page(page):
             if metadata.get("meta:og:type", "").lower() != "article":
@@ -1202,6 +1224,8 @@ def validate_generated_seo(
     if is_indexable_page(manifest_page):
         findings.extend(validate_duplicate_social_card_metadata(rel, parser.meta))
         findings.extend(validate_indexable_social_card(rel, values, "generated"))
+        if is_article_page(manifest_page):
+            findings.extend(validate_article_social_image(rel, values, "generated"))
         findings.extend(validate_article_jsonld_dates(
             rel,
             parser,

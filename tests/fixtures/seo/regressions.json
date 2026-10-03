@@ -142,6 +142,13 @@
       "expected_generated": "article generated page must use og:type=article"
     }
   },
+  "article_shared_social_image": {
+    "control_route": "/writings/first-diagram-is-a-liar/",
+    "local_url": "/assets/img/og/murderbird-v2-brand-share-1200x630.png",
+    "absolute_url": "https://overkillhill.com/assets/img/og/murderbird-v2-brand-share-1200x630.png",
+    "expected_source": "indexable source Article uses shared brand social image",
+    "expected_generated": "indexable generated Article uses shared brand social image"
+  },
   "organization_same_as_drift": {
     "from": "https://www.linkedin.com/company/overkillhillp3",
     "to": "https://example.com/not-the-verified-profile"
