@@ -947,6 +947,97 @@ class SEOFixtureTests(unittest.TestCase):
             og_type["expected_generated"],
         )
 
+    def _promoted_article_social_image_case(self) -> tuple[dict, dict, dict]:
+        fixture = self.fixture_data["article_shared_social_image"]
+        draft_route = self.fixture_data["draft_article_promotion"]["route"]
+        draft_page = page_for_route(self.source_pages, draft_route)
+        article_page = self.pages_by_route[fixture["control_route"]]
+        promoted_page = copy.deepcopy(draft_page)
+        promoted_page["meta:robots"] = "index, follow"
+        for key in (
+            "meta:og:type",
+            "meta:article:published_time",
+            "meta:og:image",
+            "meta:og:image:alt",
+            "meta:og:image:width",
+            "meta:og:image:height",
+            "meta:og:image:type",
+            "meta:twitter:image",
+            "meta:twitter:image:alt",
+        ):
+            promoted_page[key] = article_page[key]
+        return fixture, draft_page, promoted_page
+
+    def test_article_specific_image_control_and_noindex_exemption(self) -> None:
+        _, draft_page, promoted_page = self._promoted_article_social_image_case()
+        draft_path = ROOT / draft_page["path"]
+        draft_parser = parse_html(draft_path.read_text(encoding="utf-8"))
+
+        self.assertFalse(validator.is_indexable_page(draft_page))
+        self.assertFalse(
+            validator.validate_source_seo_contract([draft_page]),
+            "noindex Article drafts using the shared brand image remain exempt",
+        )
+        self.assertFalse(
+            validator.validate_generated_seo(draft_path, draft_parser, draft_page),
+            "generated noindex Article drafts using the shared brand image remain exempt",
+        )
+
+        source_findings = validator.validate_source_seo_contract([promoted_page])
+        self.assertFalse(
+            source_findings,
+            findings_text(source_findings),
+        )
+
+        generated_path = GENERATED_FIXTURE / "article.html.fixture"
+        generated_parser = parse_html(generated_path.read_text(encoding="utf-8"))
+        generated_findings = validator.validate_generated_seo(
+            generated_path,
+            generated_parser,
+            promoted_page,
+        )
+        self.assertFalse(
+            generated_findings,
+            findings_text(generated_findings),
+        )
+
+    def test_promoted_article_shared_brand_image_rejected_in_source(self) -> None:
+        fixture, _, promoted_page = self._promoted_article_social_image_case()
+        for field in ("meta:og:image", "meta:twitter:image"):
+            for url_kind in ("absolute_url", "local_url"):
+                with self.subTest(field=field, url_kind=url_kind):
+                    mutated_page = copy.deepcopy(promoted_page)
+                    mutated_page[field] = fixture[url_kind]
+                    findings = validator.validate_source_seo_contract(
+                        [mutated_page]
+                    )
+                    self.assert_rejected(
+                        findings,
+                        f"{fixture['expected_source']}: {field}",
+                    )
+
+    def test_promoted_article_shared_brand_image_rejected_in_generated_html(self) -> None:
+        fixture, _, promoted_page = self._promoted_article_social_image_case()
+        generated_path = GENERATED_FIXTURE / "article.html.fixture"
+        original_raw = generated_path.read_text(encoding="utf-8")
+        for field in ("meta:og:image", "meta:twitter:image"):
+            for url_kind in ("absolute_url", "local_url"):
+                with self.subTest(field=field, url_kind=url_kind):
+                    mutated_raw = mutate_meta(
+                        original_raw,
+                        field,
+                        fixture[url_kind],
+                    )
+                    findings = validator.validate_generated_seo(
+                        generated_path,
+                        parse_html(mutated_raw),
+                        promoted_page,
+                    )
+                    self.assert_rejected(
+                        findings,
+                        f"{fixture['expected_generated']}: {field}",
+                    )
+
     def assert_rejected(self, findings: list, expected: str) -> None:
         self.assertTrue(findings, "mutation unexpectedly passed")
         self.assertIn(expected, findings_text(findings))
