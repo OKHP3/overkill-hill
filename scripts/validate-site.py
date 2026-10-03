@@ -279,29 +279,59 @@ def find_html_files() -> list[Path]:
     return sorted(files)
 
 
-def _sitemap_entries_with_positions_from_path(
+def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
+    """Return one plain-text sitemap location or its structural problem."""
+    loc_openings = list(re.finditer(r"<loc\b[^>]*>", block, flags=re.IGNORECASE))
+    loc_closings = list(re.finditer(r"</loc\s*>", block, flags=re.IGNORECASE))
+    if len(loc_openings) != 1:
+        return None, f"must contain exactly one <loc> element; found {len(loc_openings)}"
+    if len(loc_closings) != 1:
+        return None, "has malformed <loc> element structure"
+
+    loc_opening = loc_openings[0]
+    loc_closing = loc_closings[0]
+    if loc_closing.start() < loc_opening.end():
+        return None, "has malformed <loc> element structure"
+
+    raw_location = block[loc_opening.end():loc_closing.start()]
+    if "<" in raw_location:
+        return None, "has malformed markup inside <loc>"
+    location = unescape(raw_location).strip()
+    if not location:
+        return None, "has an empty <loc> value"
+    return location, None
+
+
+def _sitemap_entries_with_positions_and_findings_from_path(
     sitemap_path: Path,
-) -> list[tuple[int, str, str | None]]:
-    """Read usable sitemap entries with their one-based source positions."""
+) -> tuple[list[tuple[int, str, str | None]], list[Finding]]:
+    """Read valid location/date entries and report unusable URL blocks."""
     if not sitemap_path.exists():
-        return []
+        return [], []
     text = sitemap_path.read_text(encoding="utf-8")
     entries: list[tuple[int, str, str | None]] = []
+    findings: list[Finding] = []
     blocks = re.findall(
         r"<url\b[^>]*>(.*?)</url>",
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
     for position, block in enumerate(blocks, start=1):
-        loc_match = re.search(r"<loc\b[^>]*>([^<]+)</loc>", block, flags=re.IGNORECASE)
-        if not loc_match:
+        loc, location_error = _sitemap_location_from_block(block)
+        if location_error is not None:
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                f"sitemap URL entry at position {position} {location_error}",
+            ))
+            continue
+        if loc is None:
             continue
         lastmod_match = re.search(
             r"<lastmod\b[^>]*>([^<]*)</lastmod>",
             block,
             flags=re.IGNORECASE,
         )
-        loc = unescape(loc_match.group(1).strip())
         entries.append((
             position,
             loc,
@@ -309,6 +339,14 @@ def _sitemap_entries_with_positions_from_path(
             if lastmod_match is not None
             else None,
         ))
+    return entries, findings
+
+
+def _sitemap_entries_with_positions_from_path(
+    sitemap_path: Path,
+) -> list[tuple[int, str, str | None]]:
+    """Read usable sitemap entries with their one-based source positions."""
+    entries, _ = _sitemap_entries_with_positions_and_findings_from_path(sitemap_path)
     return entries
 
 
@@ -335,11 +373,11 @@ def load_sitemap_entries(sitemap_path: Path = SITEMAP) -> dict[str, str | None]:
 
 def validate_sitemap_duplicates(sitemap_path: Path = SITEMAP) -> list[Finding]:
     """Reject duplicate sitemap locations before consumers build a date map."""
+    entries, findings = _sitemap_entries_with_positions_and_findings_from_path(sitemap_path)
     occurrences: dict[str, list[tuple[int, str | None]]] = {}
-    for position, loc, lastmod in _sitemap_entries_with_positions_from_path(sitemap_path):
+    for position, loc, lastmod in entries:
         occurrences.setdefault(loc, []).append((position, lastmod))
 
-    findings: list[Finding] = []
     for loc in sorted(occurrences):
         entries = occurrences[loc]
         if len(entries) < 2:

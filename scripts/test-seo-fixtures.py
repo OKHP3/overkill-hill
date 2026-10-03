@@ -582,6 +582,82 @@ class SEOFixtureTests(unittest.TestCase):
             )
             self.assertNotIn("conflicting duplicate sitemap lastmod values", text)
 
+    def test_sitemap_url_blocks_require_exactly_one_usable_location(self) -> None:
+        valid_before = f"{validator.SITE_ORIGIN}/about/"
+        valid_after = f"{validator.SITE_ORIGIN}/contact/"
+        invalid_blocks = (
+            (
+                "unclosed-location",
+                "<url><loc>https://overkillhill.com/unclosed/</url>",
+                "has malformed <loc> element structure",
+            ),
+            (
+                "reversed-location-tags",
+                "<url></loc><loc>https://overkillhill.com/reversed/</url>",
+                "has malformed <loc> element structure",
+            ),
+            (
+                "missing",
+                "<url><lastmod>2026-05-28</lastmod></url>",
+                "must contain exactly one <loc> element; found 0",
+            ),
+            (
+                "empty",
+                "<url><loc></loc></url>",
+                "has an empty <loc> value",
+            ),
+            (
+                "whitespace-only",
+                "<url><loc> \n\t </loc></url>",
+                "has an empty <loc> value",
+            ),
+            (
+                "duplicate",
+                (
+                    f"<url><loc>{validator.SITE_ORIGIN}/first/</loc>"
+                    f"<loc>{validator.SITE_ORIGIN}/second/</loc></url>"
+                ),
+                "must contain exactly one <loc> element; found 2",
+            ),
+            (
+                "nested-markup",
+                (
+                    f"<url><loc>{validator.SITE_ORIGIN}/nested/"
+                    "<path>malformed</path></loc></url>"
+                ),
+                "has malformed markup inside <loc>",
+            ),
+        )
+
+        for case, invalid_block, expected_detail in invalid_blocks:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                sitemap_path = Path(directory) / "sitemap.xml"
+                sitemap_path.write_text(
+                    "<urlset>"
+                    f"<url><loc>{valid_before}</loc></url>"
+                    f"{invalid_block}"
+                    f"<url><loc>{valid_after}</loc></url>"
+                    "</urlset>",
+                    encoding="utf-8",
+                )
+
+                findings = validator.validate_sitemap_duplicates(sitemap_path)
+                text = findings_text(findings)
+                self.assertEqual(len(findings), 1, text)
+                self.assertIn(
+                    f"sitemap URL entry at position 2 {expected_detail}",
+                    text,
+                )
+                self.assertEqual(
+                    validator._sitemap_entries_from_path(sitemap_path),
+                    [(valid_before, None), (valid_after, None)],
+                    "invalid URL blocks must not enter the usable sitemap inventory",
+                )
+                self.assertEqual(
+                    validator.load_sitemap_entries(sitemap_path),
+                    {valid_before: None, valid_after: None},
+                )
+
     def test_public_inventory_excludes_test_fixtures(self) -> None:
         pages = validator.find_html_files()
         self.assertIn(ROOT / "index.html", pages)
