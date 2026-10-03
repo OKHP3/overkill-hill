@@ -333,9 +333,17 @@ def validate_locale(
             fail(findings, f"{target_path} html lang is {target_meta.lang!r}, expected {locale!r}")
         if source_meta.lang.lower() not in ("", "en"):
             fail(findings, f"{source_path} html lang is {source_meta.lang!r}, expected 'en'")
+        manifest_boundary = "indexable" if page_indexable else "noindex"
+        rendered_boundary = "noindex" if target_meta.is_noindex else "indexable"
+        if manifest_boundary != rendered_boundary:
+            fail(
+                findings,
+                (
+                    f"{target_path}: robots indexing boundary mismatch: "
+                    f"manifest={manifest_boundary}, rendered={rendered_boundary}"
+                ),
+            )
         if page_indexable:
-            if target_meta.is_noindex:
-                fail(findings, f"indexable locale page must not be noindex: {target_path}")
             if site_validator is None:
                 site_validator = load_site_validator()
             duplicate_findings = site_validator.validate_duplicate_social_card_metadata(
@@ -352,8 +360,6 @@ def validate_locale(
             for finding in duplicate_findings + social_findings:
                 fail(findings, f"{finding.page}: {finding.msg}")
         else:
-            if not target_meta.is_noindex:
-                fail(findings, f"draft locale page must be noindex: {target_path}")
             if expected_target in urls:
                 fail(findings, f"draft locale route is in sitemap.xml: {target_route}")
 

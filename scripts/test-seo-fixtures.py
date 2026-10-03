@@ -319,6 +319,51 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_locale_checker_reports_explicit_robots_boundary_values(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+        sitemap_routes = source_routes | promoted_routes
+        cases = (
+            (
+                "fr/index.html",
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                "fr/contact/index.html",
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+
+        for relative_path, robots_value, expected_boundary in cases:
+            with self.subTest(relative_path=relative_path), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                manifest_path, sitemap_path, index_path = self._write_mixed_locale_fixture(
+                    root,
+                    sitemap_routes,
+                    promoted_routes,
+                )
+                target = root / relative_path
+                target.write_text(
+                    mutate_meta(
+                        target.read_text(encoding="utf-8"),
+                        "meta:robots",
+                        robots_value,
+                    ),
+                    encoding="utf-8",
+                )
+                findings = locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    index_path=index_path,
+                    root=root,
+                )
+                self.assertIn(
+                    f"{relative_path}: robots indexing boundary mismatch: {expected_boundary}",
+                    findings,
+                )
+
     def test_locale_search_index_rejects_malformed_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             index_path = Path(directory) / "search-index.fr.json"
@@ -732,6 +777,88 @@ class SEOFixtureTests(unittest.TestCase):
             ),
             "noindex locale pilots should remain exempt until promotion",
         )
+
+    def test_locale_robots_boundary_mismatches_are_rejected_with_valid_controls(self) -> None:
+        controls = (
+            ("fr/index.html", True),
+            ("de/index.html", False),
+            ("es/index.html", False),
+        )
+        for relative_path, expected_indexable in controls:
+            with self.subTest(control=relative_path):
+                path = ROOT / relative_path
+                contract = self.locale_contract[relative_path]
+                parser = parse_html(path.read_text(encoding="utf-8"))
+                self.assertEqual(contract["indexable"], expected_indexable)
+                self.assertEqual(not parser.is_noindex, expected_indexable)
+                self.assertFalse(
+                    validator.validate_generated_seo(path, parser, None, contract),
+                    f"valid locale boundary should pass: {relative_path}",
+                )
+
+        mismatch_cases = (
+            (
+                "fr/index.html",
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                "de/index.html",
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+        for relative_path, robots_value, expected_boundary in mismatch_cases:
+            with self.subTest(mismatch=relative_path):
+                path = ROOT / relative_path
+                raw = mutate_meta(
+                    path.read_text(encoding="utf-8"),
+                    "meta:robots",
+                    robots_value,
+                )
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(raw),
+                    None,
+                    self.locale_contract[relative_path],
+                )
+                self.assertIn(
+                    f"{relative_path}: robots indexing boundary mismatch: {expected_boundary}",
+                    findings_text(findings),
+                )
+
+    def test_indexable_locale_keeps_localized_metadata_ownership(self) -> None:
+        relative_path = "fr/index.html"
+        path = ROOT / relative_path
+        contract = copy.deepcopy(self.locale_contract[relative_path])
+        contract["metadata_source"] = "source-manifest"
+        findings = validator.validate_generated_seo(
+            path,
+            parse_html(path.read_text(encoding="utf-8")),
+            None,
+            contract,
+        )
+        self.assertIn(
+            (
+                f"{relative_path}: indexable locale page must own its social-card "
+                "metadata as localized-page"
+            ),
+            findings_text(findings),
+        )
+
+    def test_unowned_en_gb_and_es_mx_pages_keep_external_boundary_exemption(self) -> None:
+        for relative_path in ("en-gb/index.html", "es-mx/index.html"):
+            with self.subTest(path=relative_path):
+                path = ROOT / relative_path
+                raw = mutate_meta(
+                    path.read_text(encoding="utf-8"),
+                    "meta:robots",
+                    "index, follow",
+                )
+                self.assertFalse(
+                    validator.validate_generated_seo(path, parse_html(raw), None),
+                    f"unowned external locale path should keep its existing exemption: {relative_path}",
+                )
 
     def test_noindex_article_jsonld_date_contract_remains_exempt(self) -> None:
         page = self.pages_by_route["/writings/biases-as-constants/"]

@@ -1170,12 +1170,26 @@ def validate_generated_seo(
     rel = path.relative_to(ROOT).as_posix()
     if manifest_page is None:
         if locale_page is not None:
+            manifest_boundary = (
+                "indexable" if locale_page.get("indexable") else "noindex"
+            )
+            rendered_boundary = "noindex" if parser.is_noindex else "indexable"
+            findings = []
+            if manifest_boundary != rendered_boundary:
+                findings.append(Finding(
+                    "ERROR",
+                    rel,
+                    (
+                        "robots indexing boundary mismatch: "
+                        f"manifest={manifest_boundary}, rendered={rendered_boundary}"
+                    ),
+                ))
             if locale_page.get("indexable"):
                 values = {
                     "meta:" + key: entries[0] if entries else ""
                     for key, entries in parser.meta.items()
                 }
-                findings = validate_duplicate_social_card_metadata(rel, parser.meta)
+                findings.extend(validate_duplicate_social_card_metadata(rel, parser.meta))
                 findings.extend(validate_indexable_social_card(rel, values))
                 if locale_page.get("metadata_source") != "localized-page":
                     findings.append(Finding(
@@ -1184,7 +1198,7 @@ def validate_generated_seo(
                         "indexable locale page must own its social-card metadata as localized-page",
                     ))
                 return findings
-            return []
+            return findings
         # The source manifest intentionally covers the English build surface;
         # localized pilot pages are maintained separately and must not acquire
         # new SEO or indexing boundaries from this check.
