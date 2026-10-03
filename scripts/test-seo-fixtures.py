@@ -510,20 +510,41 @@ class SEOFixtureTests(unittest.TestCase):
             sitemap_path.write_text(
                 "<urlset>"
                 f"<url><loc>{location}</loc><lastmod>2026-05-24</lastmod></url>"
+                "<url><lastmod>2026-05-25</lastmod></url>"
+                "<url><loc>https://overkillhill.com/about/</loc></url>"
                 f"<url><loc>{location}</loc><lastmod>2026-05-28</lastmod></url>"
-                f"<url><loc>{location}</loc><lastmod>2026-05-28</lastmod></url>"
+                "<url><loc>https://overkillhill.com/contact/</loc></url>"
+                f"<url><loc>{location}</loc><lastmod>2026-05-30</lastmod></url>"
                 "</urlset>",
                 encoding="utf-8",
             )
 
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [
+                    (location, "2026-05-24"),
+                    ("https://overkillhill.com/about/", None),
+                    (location, "2026-05-28"),
+                    ("https://overkillhill.com/contact/", None),
+                    (location, "2026-05-30"),
+                ],
+                "the existing sitemap parser contract must remain location/date pairs",
+            )
             findings = validator.validate_sitemap_duplicates(sitemap_path)
             text = findings_text(findings)
             self.assertIn(
-                f"duplicate sitemap location: {location} appears 3 times",
+                (
+                    f"duplicate sitemap location: {location} appears 3 times "
+                    "at sitemap entry positions 1, 4, 6"
+                ),
                 text,
             )
             self.assertIn(
-                f"conflicting duplicate sitemap lastmod values for {location}",
+                (
+                    f"conflicting duplicate sitemap lastmod values for {location}: "
+                    "position 1: '2026-05-24'; position 4: '2026-05-28'; "
+                    "position 6: '2026-05-30'"
+                ),
                 text,
             )
             self.assertIn("2026-05-24", text)
@@ -550,6 +571,13 @@ class SEOFixtureTests(unittest.TestCase):
             text = findings_text(findings)
             self.assertIn(
                 f"duplicate sitemap location: {location} appears 2 times",
+                text,
+            )
+            self.assertIn(
+                (
+                    f"duplicate sitemap location: {location} appears 2 times "
+                    "at sitemap entry positions 1, 2"
+                ),
                 text,
             )
             self.assertNotIn("conflicting duplicate sitemap lastmod values", text)
