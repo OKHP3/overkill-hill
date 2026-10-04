@@ -66,6 +66,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         asset_body: bytes | None = None,
         sitemap_content_type: str | None = "application/xml",
         search_index_content_type: str | None = "application/json",
+        feed_content_type: str | None = "application/xml",
         css_asset_kinds: tuple[str, ...] = (),
         javascript_modules: dict[str, bytes] | None = None,
         javascript_module_content_types: dict[str, str | None] | None = None,
@@ -80,12 +81,14 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         javascript_missing_paths = javascript_missing_paths or set()
         sitemap = verify_live_edge.canonical_text_bytes(verify_live_edge.SITEMAP)
         search_index = verify_live_edge.canonical_text_bytes(verify_live_edge.SEARCH_INDEX)
+        feed = verify_live_edge.canonical_text_bytes(verify_live_edge.ATOM_FEED)
         manifest = manifest_body
         if manifest is None:
             manifest = json.dumps(
                 {
                     "commit": manifest_commit,
                     "artifacts": {
+                        "/feed.xml": {"sha256": hashlib.sha256(feed).hexdigest()},
                         "/sitemap.xml": {"sha256": hashlib.sha256(sitemap).hexdigest()},
                         "/assets/data/search-index.json": {
                             "sha256": hashlib.sha256(search_index).hexdigest()
@@ -261,6 +264,9 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         search_index_headers = {"cache-control": "max-age=300"}
         if search_index_content_type is not None:
             search_index_headers["content-type"] = search_index_content_type
+        feed_headers = {"cache-control": "max-age=600"}
+        if feed_content_type is not None:
+            feed_headers["content-type"] = feed_content_type
         responses = {
             verify_live_edge.RELEASE_MANIFEST: {
                 "ok": True,
@@ -273,6 +279,12 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "status": 200,
                 "headers": sitemap_headers,
                 "body": sitemap,
+            },
+            "/feed.xml": {
+                "ok": True,
+                "status": 200,
+                "headers": feed_headers,
+                "body": feed,
             },
             "/assets/data/search-index.json": {
                 "ok": True,
@@ -1539,6 +1551,47 @@ import(bareSpecifier);
         self.assertIn("application/xml", content_type_check["evidence"])
         self.assertIn("text/xml", content_type_check["evidence"])
 
+    def test_atom_feed_is_bound_to_the_release_manifest_and_live_bytes(self) -> None:
+        return_code, report = self.run_live_edge_fixture()
+
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest /feed.xml"]["status"], "PASS")
+        self.assertEqual(checks["generated Atom feed"]["status"], "PASS")
+        self.assertEqual(
+            checks["generated Atom feed content type"]["status"], "PASS"
+        )
+
+    def test_missing_feed_digest_fails_the_release_manifest_check(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            manifest_body=json.dumps(
+                {"commit": "a" * 40, "artifacts": {}}
+            ).encode("utf-8")
+        )
+
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest /feed.xml"]["status"], "FAIL")
+
+    def test_wrong_or_missing_atom_feed_content_type_fails_explicitly(self) -> None:
+        for content_type in ("text/html; charset=utf-8", None):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    feed_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 1)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks["generated Atom feed content type"]
+                self.assertEqual(content_type_check["status"], "FAIL")
+                self.assertIn("application/atom+xml", content_type_check["evidence"])
+                self.assertIn("application/xml", content_type_check["evidence"])
+                self.assertIn("text/xml", content_type_check["evidence"])
+                if content_type is None:
+                    self.assertIn("received ''", content_type_check["evidence"])
+                else:
+                    self.assertIn(content_type, content_type_check["evidence"])
+
     def test_missing_data_feed_content_types_fail_explicitly(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             sitemap_content_type=None,
@@ -1573,6 +1626,7 @@ import(bareSpecifier);
 
     def test_data_feed_content_types_with_parameters_are_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
+            feed_content_type="application/atom+xml; charset=utf-8",
             sitemap_content_type="application/xml; charset=utf-8",
             search_index_content_type="application/json; charset=utf-8",
         )
@@ -1581,6 +1635,7 @@ import(bareSpecifier);
         checks = {item["check"]: item for item in report["checks"]}
         self.assertEqual(checks["generated sitemap content type"]["status"], "PASS")
         self.assertEqual(checks["generated search index content type"]["status"], "PASS")
+        self.assertEqual(checks["generated Atom feed content type"]["status"], "PASS")
 
     def test_changed_hosting_path_fails_despite_pages_limitations(self) -> None:
         return_code, report = self.run_live_edge_fixture(

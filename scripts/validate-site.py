@@ -35,6 +35,7 @@ import re
 import struct
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
@@ -71,6 +72,7 @@ ROOT = Path(
 SKIP_DIRS = set(PUBLIC_PAGE_EXCLUDED_DIRS)
 SITEMAP = ROOT / "sitemap.xml"
 SITE_ORIGIN = "https://overkillhill.com"
+ATOM = "{http://www.w3.org/2005/Atom}"
 MANIFEST = ROOT / "site-src/pages.json"
 LOCALE_MANIFEST = ROOT / "i18n/pilot/manifest.json"
 HEAD_PARTIAL = ROOT / "assets/partials/head.html"
@@ -195,12 +197,16 @@ class TagCounter(HTMLParser):
         self.theme_colors: list[dict[str, str]] = []
         self.jsonld_blocks: list[str] = []
         self.navigation_links: dict[str, list[str]] = {"prev": [], "next": []}
+        self.html_lang = ""
+        self.atom_feed_links: list[dict[str, str]] = []
         self._in_jsonld = False
         self._jsonld_buf: list[str] = []
 
     def handle_starttag(self, tag: str, attrs_list):
         attrs = {k: (v or "") for k, v in attrs_list}
-        if tag == "title":
+        if tag == "html":
+            self.html_lang = attrs.get("lang", "")
+        elif tag == "title":
             self._in_title = True
         elif tag == "body":
             self.body_classes = set(attrs.get("class", "").split())
@@ -227,6 +233,20 @@ class TagCounter(HTMLParser):
         elif tag == "link":
             rel = attrs.get("rel", "").lower()
             href = attrs.get("href", "")
+            link_type = attrs.get("type", "").strip().casefold()
+            href_path = urlparse(href).path.casefold().rstrip("/")
+            if (
+                "atom+xml" in link_type
+                or href_path == "feed.xml"
+                or href_path.endswith("/feed.xml")
+            ):
+                self.atom_feed_links.append(
+                    {
+                        "href": href,
+                        "rel": rel,
+                        "type": attrs.get("type", "").strip(),
+                    }
+                )
             for navigation_rel in ("prev", "next"):
                 if navigation_rel in rel.split() and href:
                     self.navigation_links[navigation_rel].append(href)
@@ -433,6 +453,15 @@ def validate_sitemap_inventory(sitemap_urls: set[str]) -> list[Finding]:
             findings.append(Finding("ERROR", "sitemap.xml", f"non-production URL in sitemap.xml: {url}"))
             continue
         route = parsed.path or "/"
+        if route == "/feed.xml":
+            findings.append(
+                Finding(
+                    "ERROR",
+                    "sitemap.xml",
+                    "Atom feed must stay outside the sitemap and HTML page inventory",
+                )
+            )
+            continue
         target = ROOT / route.lstrip("/")
         if route == "/":
             target = ROOT / "index.html"
@@ -440,6 +469,139 @@ def validate_sitemap_inventory(sitemap_urls: set[str]) -> list[Finding]:
             target = target / "index.html"
         if not target.is_file():
             findings.append(Finding("ERROR", "sitemap.xml", f"sitemap URL has no HTML page: {url}"))
+    return findings
+
+
+def validate_atom_feed() -> list[Finding]:
+    """Validate the generated Atom document without importing its generator."""
+    location = ROOT / "feed.xml"
+    try:
+        feed = ET.parse(location).getroot()
+    except (OSError, ET.ParseError) as exc:
+        return [
+            Finding(
+                "ERROR",
+                "feed.xml",
+                f"cannot read a well-formed Atom feed: {exc}",
+            )
+        ]
+
+    if feed.tag != ATOM + "feed":
+        return [
+            Finding(
+                "ERROR",
+                "feed.xml",
+                "document root is not an Atom <feed> element",
+            )
+        ]
+
+    findings: list[Finding] = []
+
+    def one_nonempty(parent: ET.Element, name: str, context: str) -> str:
+        elements = parent.findall(ATOM + name)
+        if len(elements) != 1 or not (elements[0].text or "").strip():
+            findings.append(
+                Finding(
+                    "ERROR",
+                    "feed.xml",
+                    f"{context} must contain exactly one non-empty <{name}>",
+                )
+            )
+            return ""
+        return (elements[0].text or "").strip()
+
+    def valid_timestamp(value: str) -> bool:
+        if "T" not in value:
+            return False
+        try:
+            parsed = datetime.fromisoformat(
+                value[:-1] + "+00:00" if value.endswith("Z") else value
+            )
+        except ValueError:
+            return False
+        return parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+    feed_id = one_nonempty(feed, "id", "Atom feed")
+    one_nonempty(feed, "title", "Atom feed")
+    feed_updated = one_nonempty(feed, "updated", "Atom feed")
+    if feed_id and feed_id != SITE_ORIGIN + "/writings/":
+        findings.append(
+            Finding("ERROR", "feed.xml", f"unexpected Atom feed ID: {feed_id!r}")
+        )
+    if feed_updated and not valid_timestamp(feed_updated):
+        findings.append(
+            Finding(
+                "ERROR",
+                "feed.xml",
+                f"Atom feed <updated> is not a timezone-qualified timestamp: {feed_updated!r}",
+            )
+        )
+
+    entries = feed.findall(ATOM + "entry")
+    if not entries:
+        findings.append(Finding("ERROR", "feed.xml", "Atom feed contains no entries"))
+    seen_ids: set[str] = set()
+    site_host = urlparse(SITE_ORIGIN).netloc
+    for index, entry in enumerate(entries, start=1):
+        context = f"Atom entry {index}"
+        identifier = one_nonempty(entry, "id", context)
+        one_nonempty(entry, "title", context)
+        published = one_nonempty(entry, "published", context)
+        updated = one_nonempty(entry, "updated", context)
+        if identifier:
+            if identifier in seen_ids:
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        "feed.xml",
+                        f"duplicate Atom entry ID: {identifier}",
+                    )
+                )
+            seen_ids.add(identifier)
+            parsed_id = urlparse(identifier)
+            if (
+                parsed_id.scheme != "https"
+                or parsed_id.netloc != site_host
+                or not parsed_id.path.startswith("/")
+                or parsed_id.query
+                or parsed_id.fragment
+            ):
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        "feed.xml",
+                        f"Atom entry ID is not a canonical site URL: {identifier!r}",
+                    )
+                )
+        for field, value in (("published", published), ("updated", updated)):
+            if value and not valid_timestamp(value):
+                findings.append(
+                    Finding(
+                        "ERROR",
+                        "feed.xml",
+                        f"{context} <{field}> is not a timezone-qualified timestamp: {value!r}",
+                    )
+                )
+        if not entry.findall(ATOM + "author"):
+            findings.append(
+                Finding("ERROR", "feed.xml", f"{context} has no Atom author")
+            )
+        alternate_links = [
+            link
+            for link in entry.findall(ATOM + "link")
+            if "alternate" in link.get("rel", "").split()
+        ]
+        if (
+            len(alternate_links) != 1
+            or alternate_links[0].get("href") != identifier
+        ):
+            findings.append(
+                Finding(
+                    "ERROR",
+                    "feed.xml",
+                    f"{context} must have one alternate link to its canonical ID",
+                )
+            )
     return findings
 
 
@@ -1967,6 +2129,42 @@ def validate_page(
         findings.append(Finding("WARN", rel, f"HTML parser exception: {exc}"))
         return findings
 
+    page_language = str(
+        (manifest_page or {}).get("lang") or parser.html_lang
+    ).strip().casefold()
+    if manifest_page is not None and page_language in {"en", "en-us"}:
+        if len(parser.atom_feed_links) != 1:
+            findings.append(
+                Finding(
+                    "ERROR",
+                    rel,
+                    "expected exactly one English Atom feed discovery link, "
+                    f"found {len(parser.atom_feed_links)}",
+                )
+            )
+        elif (
+            parser.atom_feed_links[0]["href"] != "/feed.xml"
+            or parser.atom_feed_links[0]["rel"].split() != ["alternate"]
+            or parser.atom_feed_links[0]["type"].casefold()
+            != "application/atom+xml"
+        ):
+            findings.append(
+                Finding(
+                    "ERROR",
+                    rel,
+                    "English Atom feed discovery link must be "
+                    'rel="alternate", type="application/atom+xml", href="/feed.xml"',
+                )
+            )
+    elif page_language not in {"en", "en-us"} and parser.atom_feed_links:
+        findings.append(
+            Finding(
+                "ERROR",
+                rel,
+                "localized page must not advertise the English Atom feed",
+            )
+        )
+
     findings.extend(validate_brand_theme_metadata(rel, parser))
     findings.extend(validate_generated_seo(
         path,
@@ -2199,6 +2397,7 @@ def main() -> int:
             FEATURED_ARTICLE_GENERATED,
         )
     )
+    all_findings.extend(validate_atom_feed())
     all_findings.extend(validate_sitemap_inventory(sitemap_urls))
     all_findings.extend(validate_csp_hashes(pages))
     all_findings.extend(validate_mermaid_runtime(pages))

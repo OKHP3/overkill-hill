@@ -31,6 +31,8 @@ SRC = ROOT / "site-src"
 PARTIALS = ROOT / "assets" / "partials"
 MANIFEST = SRC / "pages.json"
 SITEMAP = ROOT / "sitemap.xml"
+ATOM_FEED = ROOT / "feed.xml"
+ATOM_FEED_GENERATOR = ROOT / "scripts" / "generate-atom-feed.py"
 BANNER_CHECKER = Path(__file__).resolve().with_name("check-banner.py")
 SITE_ORIGIN = "https://overkillhill.com"
 APP_RE = re.compile(r"/assets/js/app\.js(?:\?[^\"']*)?")
@@ -390,6 +392,12 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
     # manifest values are intentionally absent instead of shipping literal
     # template placeholders into the generated document.
     rendered_head = BeautifulSoup(head, "html.parser")
+    if str(page.get("lang", "")).strip().casefold() not in {"en", "en-us"}:
+        for link in rendered_head.find_all(
+            "link", attrs={"type": "application/atom+xml"}
+        ):
+            if "alternate" in (link.get("rel") or []):
+                link.decompose()
     if page.get("redirect_to"):
         refresh = rendered_head.new_tag("meta")
         refresh["http-equiv"] = "refresh"
@@ -706,6 +714,18 @@ def build(check: bool) -> int:
             file=sys.stderr,
         )
         return 1
+
+    feed_command = [
+        sys.executable,
+        str(ATOM_FEED_GENERATOR),
+        "--output",
+        str(ATOM_FEED),
+    ]
+    if check:
+        feed_command.append("--check")
+    feed_result = subprocess.run(feed_command, cwd=ROOT)
+    if feed_result.returncode:
+        return feed_result.returncode
 
     rendered_sitemap = None
     if SITEMAP.exists():

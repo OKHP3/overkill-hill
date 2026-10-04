@@ -31,6 +31,7 @@ ARCHIVE_POLICY = "config/murderbird-source-archive.json"
 ROOT_FILES = (
     ".nojekyll",
     "CNAME",
+    "feed.xml",
     "favicon.ico",
     "favicon.svg",
     "humans.txt",
@@ -250,12 +251,12 @@ def sha256(path: Path) -> str:
 
 def write_manifest(output: Path, commit: str) -> None:
     artifacts = {}
-    for public_path in ("sitemap.xml", "assets/data/search-index.json"):
+    for public_path in ("sitemap.xml", "assets/data/search-index.json", "feed.xml"):
         path = output / public_path
         if not path.is_file():
             fail(f"generated artifact is missing from release package: {public_path}")
         artifacts[f"/{public_path}"] = {"sha256": sha256(path)}
-    # Preserve the two public artifact entries consumed by live-edge monitoring.
+    # Record public artifact entries consumed by live-edge monitoring.
     # Every other released byte is checked locally before upload via integrity;
     # the manifest itself cannot carry its own digest.
     integrity = {}
@@ -311,7 +312,7 @@ def verify(source: Path, output: Path, commit: str) -> None:
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, dict):
         fail("release manifest artifacts map is missing")
-    for public_path in ("sitemap.xml", "assets/data/search-index.json"):
+    for public_path in ("sitemap.xml", "assets/data/search-index.json", "feed.xml"):
         entry = artifacts.get(f"/{public_path}")
         expected_hash = entry.get("sha256") if isinstance(entry, dict) else None
         actual_hash = sha256(output / public_path)
