@@ -1585,6 +1585,8 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertEqual(baseline[sitemap_url], "2026-09-29")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
+            ("", "article sitemap lastmod is missing"),
+            ("not-a-date", "article sitemap lastmod is not ISO 8601"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),
         ):
             with self.subTest(lastmod=lastmod):
@@ -1595,6 +1597,67 @@ class SEOFixtureTests(unittest.TestCase):
                     entries,
                 )
                 self.assert_rejected(findings, expected)
+
+    def test_article_sitemap_date_parity_in_source(self) -> None:
+        fixture = self.fixture_data["article_sitemap_date_parity"]
+        page = self.pages_by_route[fixture["route"]]
+        path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        original_raw = path.read_text(encoding="utf-8")
+        original_parser = parse_html(original_raw)
+        original_articles = article_jsonld_nodes(original_raw)
+        self.assertEqual(len(original_articles), 1)
+        generated_raw = (GENERATED_FIXTURE / "article.html.fixture").read_text(
+            encoding="utf-8"
+        )
+        generated_articles = article_jsonld_nodes(generated_raw)
+        self.assertEqual(len(generated_articles), 1)
+        baseline_sitemap = validator.load_sitemap_entries()
+        self.assertEqual(baseline_sitemap[page["canonical"]], "2026-09-29")
+        self.assertTrue(validator.is_indexable_page(page))
+
+        for case_name, mutation in fixture["cases"].items():
+            with self.subTest(case_name=case_name):
+                self.assertNotIn(
+                    mutation["date_modified"],
+                    {
+                        original_articles[0]["dateModified"],
+                        generated_articles[0]["dateModified"],
+                    },
+                    "shared date fixture must differ from both source and generated baselines",
+                )
+                self.assertNotEqual(
+                    mutation["sitemap_lastmod"],
+                    baseline_sitemap[page["canonical"]],
+                    "sitemap fixture must differ from the committed sitemap baseline",
+                )
+                mutated_raw = mutate_jsonld_field(
+                    original_raw,
+                    "dateModified",
+                    mutation["date_modified"],
+                )
+                expected_articles = copy.deepcopy(original_articles)
+                expected_articles[0]["dateModified"] = mutation["date_modified"]
+                self.assertEqual(expected_articles, article_jsonld_nodes(mutated_raw))
+                mutated_parser = parse_html(mutated_raw)
+                self.assertEqual(original_parser.meta, mutated_parser.meta)
+
+                findings = validator.validate_article_jsonld_dates(
+                    path.relative_to(ROOT).as_posix(),
+                    mutated_parser,
+                    page["meta:article:published_time"],
+                )
+                findings.extend(
+                    validator.validate_article_sitemap_dates(
+                        path.relative_to(ROOT).as_posix(),
+                        mutated_parser,
+                        page["canonical"],
+                        mutation["sitemap_lastmod"],
+                    )
+                )
+                if mutation["valid"]:
+                    self.assertFalse(findings, findings_text(findings))
+                else:
+                    self.assert_rejected(findings, mutation["expected"])
 
     def test_duplicate_article_jsonld_dates_rejected_in_source_extras(self) -> None:
         mutation = self.fixture_data["duplicate_article_date_mismatch"]
@@ -1994,6 +2057,8 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertEqual(baseline[page["canonical"]], "2026-09-29")
         for lastmod, expected in (
             (None, "article sitemap lastmod is missing"),
+            ("", "article sitemap lastmod is missing"),
+            ("not-a-date", "article sitemap lastmod is not ISO 8601"),
             ("2026-05-23", "article JSON-LD dateModified does not match sitemap lastmod"),
         ):
             with self.subTest(lastmod=lastmod):
@@ -2006,6 +2071,73 @@ class SEOFixtureTests(unittest.TestCase):
                     sitemap_entries=entries,
                 )
                 self.assert_rejected(findings, expected)
+
+    def test_article_sitemap_date_parity_in_generated_metadata(self) -> None:
+        fixture = self.fixture_data["article_sitemap_date_parity"]
+        page = self.pages_by_route[fixture["route"]]
+        path = GENERATED_FIXTURE / "article.html.fixture"
+        original_raw = path.read_text(encoding="utf-8")
+        original_parser = parse_html(original_raw)
+        original_articles = article_jsonld_nodes(original_raw)
+        self.assertEqual(len(original_articles), 1)
+        source_path = (
+            ROOT / "site-src" / "pages" / page["path"]
+        ).with_suffix(".extras.html")
+        source_articles = article_jsonld_nodes(
+            source_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(len(source_articles), 1)
+        baseline_sitemap = validator.load_sitemap_entries()
+        self.assertEqual(baseline_sitemap[page["canonical"]], "2026-09-29")
+        self.assertTrue(validator.is_indexable_page(page))
+
+        for case_name, mutation in fixture["cases"].items():
+            with self.subTest(case_name=case_name):
+                self.assertNotIn(
+                    mutation["date_modified"],
+                    {
+                        source_articles[0]["dateModified"],
+                        original_articles[0]["dateModified"],
+                    },
+                    "shared date fixture must differ from both source and generated baselines",
+                )
+                self.assertNotEqual(
+                    mutation["sitemap_lastmod"],
+                    baseline_sitemap[page["canonical"]],
+                    "sitemap fixture must differ from the committed sitemap baseline",
+                )
+                mutated_raw = mutate_jsonld_field(
+                    original_raw,
+                    "dateModified",
+                    mutation["date_modified"],
+                )
+                expected_articles = copy.deepcopy(original_articles)
+                expected_articles[0]["dateModified"] = mutation["date_modified"]
+                self.assertEqual(expected_articles, article_jsonld_nodes(mutated_raw))
+                mutated_parser = parse_html(mutated_raw)
+                self.assertEqual(original_parser.meta, mutated_parser.meta)
+                self.assertEqual(
+                    original_parser.is_noindex,
+                    mutated_parser.is_noindex,
+                    "sitemap date fixture changed the generated indexing boundary",
+                )
+                self.assertIn(
+                    "<article>Fixture article copy remains unchanged.</article>",
+                    mutated_raw,
+                )
+
+                entries = dict(baseline_sitemap)
+                entries[page["canonical"]] = mutation["sitemap_lastmod"]
+                findings = validator.validate_generated_seo(
+                    path,
+                    mutated_parser,
+                    page,
+                    sitemap_entries=entries,
+                )
+                if mutation["valid"]:
+                    self.assertFalse(findings, findings_text(findings))
+                else:
+                    self.assert_rejected(findings, mutation["expected"])
 
     def test_duplicate_article_jsonld_dates_rejected_in_generated_metadata(self) -> None:
         mutation = self.fixture_data["duplicate_article_date_mismatch"]

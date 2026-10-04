@@ -118,6 +118,62 @@
       "expected": "article JSON-LD datePublished does not match article:published_time"
     }
   },
+  "article_sitemap_date_parity": {
+    "route": "/writings/first-diagram-is-a-liar/",
+    "cases": {
+      "matching_instant_different_offsets": {
+        "date_modified": "2026-06-12T00:00:00Z",
+        "sitemap_lastmod": "2026-06-11T20:00:00-04:00",
+        "valid": true
+      },
+      "mismatching_instant_same_calendar_date": {
+        "date_modified": "2026-06-12T00:00:00Z",
+        "sitemap_lastmod": "2026-06-12T00:30:00+00:00",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      },
+      "matching_date_only": {
+        "date_modified": "2026-06-12",
+        "sitemap_lastmod": "2026-06-12",
+        "valid": true
+      },
+      "mismatching_date_only": {
+        "date_modified": "2026-06-12",
+        "sitemap_lastmod": "2026-06-13",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      },
+      "date_only_mixed_with_datetime": {
+        "date_modified": "2026-06-12",
+        "sitemap_lastmod": "2026-06-12T00:00:00Z",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      },
+      "datetime_mixed_with_date_only": {
+        "date_modified": "2026-06-12T00:00:00Z",
+        "sitemap_lastmod": "2026-06-12",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      },
+      "identical_naive_datetime_strings": {
+        "date_modified": "2026-06-12T09:30:00",
+        "sitemap_lastmod": "2026-06-12T09:30:00",
+        "valid": true
+      },
+      "different_naive_datetime_forms": {
+        "date_modified": "2026-06-12T09:30:00",
+        "sitemap_lastmod": "2026-06-12T09:30:00.000",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      },
+      "naive_datetime_mixed_with_timezone_qualified": {
+        "date_modified": "2026-06-12T09:30:00",
+        "sitemap_lastmod": "2026-06-12T09:30:00Z",
+        "valid": false,
+        "expected": "article JSON-LD dateModified does not match sitemap lastmod"
+      }
+    }
+  },
   "duplicate_article_date_mismatch": {
     "route": "/writings/first-diagram-is-a-liar/",
     "value": "2026-04-08",

@@ -759,6 +759,9 @@ def validate_organization_nodes(location: str, parser: TagCounter) -> list[Findi
 def _article_date_values_match(article_date: str, published_time: str) -> bool:
     """Compare Article dates without losing either calendar or instant meaning.
 
+    The same rule applies to both datePublished/publication-time parity and
+    dateModified/sitemap-lastmod parity.
+
     Date-only values are calendar dates and must match as exact contract
     strings.  Timezone-qualified ISO 8601 date-times represent instants, so
     equivalent values with different offsets match after UTC normalization.
@@ -953,7 +956,7 @@ def validate_article_sitemap_dates(
         and article.get("dateModified")
     }
     for structured_date in sorted(structured_dates):
-        if structured_date != sitemap_lastmod:
+        if not _article_date_values_match(structured_date, sitemap_lastmod):
             findings.append(
                 Finding(
                     "ERROR",
