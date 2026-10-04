@@ -21,6 +21,7 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `audit-site.py` | active | Site audit |
 | `build-search-index.py` | active | Rebuild the generated search index |
 | `build-site.py` | active | Regenerate HTML from `site-src/` sources |
+| `generate-atom-feed.py` | pilot | Generate standalone Atom XML from published English Article sources; no public discovery or release integration yet |
 | `generate-theme-controls.py` | active | Generate browser theme constants from the reviewed brand contract |
 | `cache-bust.py` | active | Cache-busting query params |
 | `strip-google-fonts-links.py` | active | Remove legacy font links from tracked pages and authoring inputs; excludes recovery copies |

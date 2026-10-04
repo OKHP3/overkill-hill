@@ -42,6 +42,7 @@ jobs:
         # guard rejects drift; unrelated one-off scripts are not auto-discovered.
         run: |
           python3 tests/test-runtime-alignment.py
+          python3 tests/test-atom-feed-generator.py
           python3 tests/test-technology-inventory.py
           python3 tests/test-universe-integration.py
           python3 .agents/skills/okhp3-universe-map/tests/test-universe-map.py
