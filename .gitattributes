@@ -9,3 +9,6 @@ assets/murderbird/v2/** -text
 
 # Preserve upstream font licenses exactly, including original line endings.
 assets/fonts/*-license.txt -text
+
+# Keep deterministic Atom feed bytes identical across Windows and Linux.
+feed.xml text eol=lf

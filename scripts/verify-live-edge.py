@@ -34,6 +34,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 SITEMAP = ROOT / "sitemap.xml"
 SEARCH_INDEX = ROOT / "assets" / "data" / "search-index.json"
+ATOM_FEED = ROOT / "feed.xml"
 RELEASE_MANIFEST = "/assets/audit/release-manifest.json"
 TIMEOUT = 10.0
 USER_AGENT = "OKHP3-live-edge-verifier/1.0 (read-only)"
@@ -86,6 +87,7 @@ MAX_JS_IMPORTS_PER_MODULE = 256
 MAX_JS_IMPORT_CLAUSE_TOKENS = 512
 FIRST_PARTY_CONTENT_TYPES = {
     RELEASE_MANIFEST: frozenset({"application/json"}),
+    "/feed.xml": frozenset({"application/atom+xml", "application/xml", "text/xml"}),
     "/sitemap.xml": frozenset({"application/xml", "text/xml"}),
     "/assets/data/search-index.json": frozenset({"application/json"}),
 }
@@ -309,6 +311,7 @@ def check_first_party_content_type(
         return True
     label = {
         RELEASE_MANIFEST: "release manifest",
+        "/feed.xml": "generated Atom feed",
         "/sitemap.xml": "generated sitemap",
         "/assets/data/search-index.json": "generated search index",
     }[path]
@@ -1224,6 +1227,7 @@ def check_release_manifest(
         report.append(result(label, "PASS", evidence))
 
     expected_artifacts = {
+        "/feed.xml": ATOM_FEED,
         "/sitemap.xml": SITEMAP,
         "/assets/data/search-index.json": SEARCH_INDEX,
     }
@@ -1359,6 +1363,7 @@ def main() -> int:
     # monitoring intentionally accepts an older deployed release and relies on
     # the manifest-to-live-byte checks above instead.
     for path, local_path, kind in [
+        ("/feed.xml", ATOM_FEED, "Atom feed"),
         ("/sitemap.xml", SITEMAP, "sitemap"),
         ("/assets/data/search-index.json", SEARCH_INDEX, "search index"),
     ]:
@@ -1424,7 +1429,7 @@ def main() -> int:
             if args.hosting == "github-pages":
                 cache_status = "BLOCKED"
             report.append(result("search index cache policy", cache_status, GITHUB_PAGES_POLICY_NOTE if args.hosting == "github-pages" else (cache or "Cache-Control absent")))
-        else:
+        elif kind == "sitemap":
             cache_status = "PASS" if HTML_CACHE_RE.search(cache) and REVALIDATE_RE.search(cache) else "FAIL"
             if args.hosting == "github-pages":
                 cache_status = "BLOCKED"

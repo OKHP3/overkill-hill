@@ -3,9 +3,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
+
+from bs4 import BeautifulSoup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +79,33 @@ def article_html(
 
 
 class AtomFeedGeneratorTests(unittest.TestCase):
+    def test_structural_validator_rejects_corrupted_feed(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "atom_feed_site_validator", ROOT / "scripts" / "validate-site.py"
+        )
+        validator = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = validator
+        spec.loader.exec_module(validator)
+        original = ET.fromstring(atom_feed.generate_atom_feed(ROOT))
+        mutations = {
+            "missing title": lambda tree: tree.remove(tree.find(ATOM + "title")),
+            "naive updated": lambda tree: setattr(tree.find(ATOM + "updated"), "text", "2026-10-04T12:00:00"),
+            "duplicate entry": lambda tree: tree.append(ET.fromstring(ET.tostring(tree.find(ATOM + "entry")))),
+            "missing author": lambda tree: tree.find(ATOM + "entry").remove(tree.find(ATOM + "entry/" + ATOM + "author")),
+            "foreign canonical": lambda tree: setattr(tree.find(ATOM + "entry/" + ATOM + "id"), "text", "https://foreign.example/article/"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "feed.xml"
+            with patch.object(validator, "ROOT", Path(directory)):
+                target.write_bytes(ET.tostring(original))
+                self.assertEqual(validator.validate_atom_feed(), [])
+                for label, mutate in mutations.items():
+                    with self.subTest(label=label):
+                        tree = ET.fromstring(ET.tostring(original))
+                        mutate(tree)
+                        target.write_bytes(ET.tostring(tree))
+                        self.assertTrue(any(f.severity == "ERROR" for f in validator.validate_atom_feed()))
+
     def test_candidate_filter_uses_indexability_english_and_publication_status(self) -> None:
         self.assertTrue(atom_feed.is_feed_candidate(article_page()))
         self.assertTrue(atom_feed.is_feed_candidate(article_page(lang="en-US")))
@@ -217,6 +248,7 @@ class AtomFeedGeneratorTests(unittest.TestCase):
         first = atom_feed.generate_atom_feed(ROOT)
         second = atom_feed.generate_atom_feed(ROOT)
         self.assertEqual(first, second)
+        self.assertEqual((ROOT / "feed.xml").read_bytes(), first)
 
         source_entries = atom_feed.load_entries(ROOT)
         tree = ET.fromstring(first)
@@ -242,6 +274,54 @@ class AtomFeedGeneratorTests(unittest.TestCase):
             key=lambda entry: (entry.updated.instant, entry.canonical),
         )
         self.assertEqual(tree.findtext(ATOM + "updated"), latest.updated.atom_value)
+
+    def test_shared_head_discovery_is_exact_and_english_only(self) -> None:
+        head = BeautifulSoup(
+            (ROOT / "assets" / "partials" / "head.html").read_text(
+                encoding="utf-8"
+            ),
+            "html.parser",
+        )
+        shared_links = head.find_all(
+            "link", attrs={"type": "application/atom+xml"}
+        )
+        self.assertEqual(len(shared_links), 1)
+        self.assertEqual(shared_links[0].get("href"), "/feed.xml")
+        self.assertEqual(shared_links[0].get("rel"), ["alternate"])
+
+        manifest = json.loads(
+            (ROOT / "site-src" / "pages.json").read_text(encoding="utf-8")
+        )
+        for page in manifest["pages"]:
+            language = str(page.get("lang", "")).strip().casefold()
+            rendered = BeautifulSoup(
+                (ROOT / page["path"]).read_text(encoding="utf-8"),
+                "html.parser",
+            )
+            links = rendered.find_all(
+                "link", attrs={"type": "application/atom+xml"}
+            )
+            with self.subTest(path=page["path"], language=language):
+                if language in {"en", "en-us"}:
+                    self.assertEqual(len(links), 1)
+                    self.assertEqual(links[0].get("href"), "/feed.xml")
+                    self.assertEqual(links[0].get("rel"), ["alternate"])
+                else:
+                    self.assertEqual(links, [])
+
+        sitemap = ET.parse(ROOT / "sitemap.xml")
+        self.assertFalse(
+            any(
+                (node.text or "").rstrip("/").endswith("/feed.xml")
+                for node in sitemap.findall(".//{*}loc")
+            )
+        )
+        self.assertFalse(
+            any(
+                page.get("path") == "feed.xml" or page.get("route") == "/feed.xml"
+                for page in manifest["pages"]
+            )
+        )
 
 
 if __name__ == "__main__":

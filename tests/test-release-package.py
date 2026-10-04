@@ -94,6 +94,7 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
             for relative, diagnostic in (
                 ("index.html", "Generated HTML is stale"),
+                ("feed.xml", "Atom feed is stale"),
                 ("assets/data/search-index.json", "Search index is stale"),
             ):
                 with self.subTest(path=relative):
@@ -129,13 +130,17 @@ class ReleasePackageTests(unittest.TestCase):
             self.assertEqual(self.build(output, source).returncode, 0)
             manifest_path = output / "assets/audit/release-manifest.json"
             manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(
+                manifest["artifacts"]["/feed.xml"]["sha256"],
+                hashlib.sha256((output / "feed.xml").read_bytes()).hexdigest(),
+            )
             integrity = manifest.get("integrity", {})
             self.assertEqual(set(integrity), set(manifest["files"]) - {"assets/audit/release-manifest.json"})
             for relative, entry in integrity.items():
                 data = (output / relative).read_bytes()
                 self.assertEqual(entry, {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)})
             self.assertEqual(self.verify(output, source).returncode, 0)
-            for relative in ["index.html", *extra, accepted_murderbird_media()[0]]:
+            for relative in ["index.html", "feed.xml", *extra, accepted_murderbird_media()[0]]:
                 target = output / relative
                 original = target.read_bytes()
                 # Same-length replacement proves the digest, not just size, is checked.
@@ -238,6 +243,7 @@ class ReleasePackageTests(unittest.TestCase):
             "site-src/pages.json": json.dumps({"pages": [{"path": "index.html"}]}),
             "index.html": "<!doctype html><title>Release boundary fixture</title>",
             "sitemap.xml": '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
+            "feed.xml": '<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"><id>https://overkillhill.com/writings/</id></feed>\n',
             "assets/data/search-index.json": "{}",
             "assets/downloads/public-guide.md": "Public download fixture",
         }
