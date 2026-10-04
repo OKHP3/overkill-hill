@@ -796,6 +796,43 @@ def _article_date_values_match(article_date: str, published_time: str) -> bool:
     )
 
 
+def _article_jsonld_identity(article: dict) -> tuple[str, str]:
+    """Return a stable key for duplicate representations of one Article."""
+    article_id = article.get("@id")
+    if isinstance(article_id, str) and article_id.strip():
+        return ("@id", article_id)
+    identity = dict(article)
+    identity.pop("url", None)
+    return (
+        "content",
+        json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")),
+    )
+
+
+def validate_duplicate_article_jsonld_urls(
+    location: str,
+    articles: list[dict],
+) -> list[Finding]:
+    """Reject conflicting non-empty URLs only within duplicate Article identities."""
+    urls_by_identity: dict[tuple[str, str], list[str]] = {}
+    for article in articles:
+        url = article.get("url")
+        if not isinstance(url, str) or not url.strip():
+            continue
+        identity = _article_jsonld_identity(article)
+        urls_by_identity.setdefault(identity, []).append(url)
+
+    findings: list[Finding] = []
+    for urls in urls_by_identity.values():
+        if len(set(urls)) > 1:
+            findings.append(Finding(
+                "ERROR",
+                location,
+                f"conflicting duplicate Article JSON-LD url values: {urls!r}",
+            ))
+    return findings
+
+
 def validate_article_jsonld_dates(
     location: str,
     parser: TagCounter,
@@ -808,6 +845,7 @@ def validate_article_jsonld_dates(
         for error in parse_errors
     ]
     articles = [item for item in objects if item.get("@type") == "Article"]
+    findings.extend(validate_duplicate_article_jsonld_urls(location, articles))
     published_dates = [
         article["datePublished"]
         for article in articles

@@ -16,6 +16,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -109,6 +110,41 @@ def duplicate_article_jsonld(raw: str, field: str, value: str) -> str:
         duplicate = mutate_jsonld_field(block, field, value)
         return raw[:match.end()] + duplicate + raw[match.end():]
     raise AssertionError("fixture Article JSON-LD block not found")
+
+
+def article_jsonld_nodes(raw: str) -> list[dict]:
+    objects, errors = validator._jsonld_objects(parse_html(raw))
+    if errors:
+        raise AssertionError(f"invalid fixture JSON-LD: {errors!r}")
+    return [item for item in objects if item.get("@type") == "Article"]
+
+
+def duplicate_article_jsonld_root_url(raw: str, value: str) -> str:
+    pattern = re.compile(
+        r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>.*?</script>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(raw):
+        block = match.group(0)
+        open_end = block.find(">")
+        close_start = block.lower().rfind("</script>")
+        if open_end == -1 or close_start == -1:
+            continue
+        try:
+            payload = json.loads(block[open_end + 1:close_start])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or payload.get("@type") != "Article":
+            continue
+        duplicate = copy.deepcopy(payload)
+        duplicate["url"] = value
+        duplicate_block = (
+            '<script type="application/ld+json">\n'
+            + json.dumps(duplicate, ensure_ascii=False, indent=2)
+            + "\n</script>"
+        )
+        return raw[:match.end()] + "\n" + duplicate_block + raw[match.end():]
+    raise AssertionError("top-level Article JSON-LD block not found")
 
 
 def mutate_navigation(raw: str, key: str, value: str) -> str:
@@ -878,6 +914,138 @@ class SEOFixtureTests(unittest.TestCase):
         )
         self.assertIn('"@type": "Article"', source_path.read_text(encoding="utf-8"))
 
+    def test_duplicate_article_url_conflict_uses_stable_identity(self) -> None:
+        mutation = self.fixture_data["duplicate_article_url_mismatch"]
+        articles = [
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/shared-identity/#article",
+                "headline": "First representation",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": "https://overkillhill.com/writings/first/",
+            },
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/shared-identity/#article",
+                "headline": "Second representation",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": mutation["value"],
+            },
+        ]
+        parser = parse_html(
+            '<script type="application/ld+json">'
+            + json.dumps({"@graph": articles})
+            + "</script>"
+        )
+        findings = validator.validate_article_jsonld_dates(
+            "same-article-id.fixture",
+            parser,
+        )
+        self.assert_rejected(findings, mutation["expected"])
+
+    def test_noindex_duplicate_article_url_conflict_remains_exempt(self) -> None:
+        page = self.pages_by_route["/writings/biases-as-constants/"]
+        source_path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        generated_path = ROOT / page["path"]
+        conflict_url = self.fixture_data["duplicate_article_url_mismatch"]["value"]
+        source_raw = duplicate_article_jsonld_root_url(
+            source_path.read_text(encoding="utf-8"), conflict_url
+        )
+        generated_raw = duplicate_article_jsonld_root_url(
+            generated_path.read_text(encoding="utf-8"), conflict_url
+        )
+        for raw in (source_raw, generated_raw):
+            self.assert_rejected(
+                validator.validate_article_jsonld_dates("noindex-control", parse_html(raw)),
+                "conflicting duplicate Article JSON-LD url values",
+            )
+        original_read = Path.read_text
+
+        def read_source(path, *args, **kwargs):
+            if path == source_path:
+                return source_raw
+            return original_read(path, *args, **kwargs)
+
+        with patch.object(Path, "read_text", read_source):
+            self.assertFalse(validator.validate_article_jsonld_source([page]))
+        self.assertTrue(parse_html(generated_raw).is_noindex)
+        self.assertFalse(validator.validate_generated_seo(
+            generated_path, parse_html(generated_raw), page,
+        ))
+
+    def test_distinct_article_graph_nodes_may_have_distinct_urls(self) -> None:
+        articles = [
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/one/#article",
+                "headline": "First article",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": "https://overkillhill.com/writings/one/",
+            },
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/two/#article",
+                "headline": "Second article",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": "https://overkillhill.com/writings/two/",
+            },
+        ]
+        parser = parse_html(
+            '<script type="application/ld+json">'
+            + json.dumps({"@graph": articles})
+            + "</script>"
+        )
+        findings = validator.validate_article_jsonld_dates(
+            "distinct-article-graph.fixture",
+            parser,
+        )
+        self.assertFalse(findings, findings_text(findings))
+
+    def test_identical_duplicate_article_urls_remain_valid(self) -> None:
+        mutation = self.fixture_data["duplicate_article_url_mismatch"]
+        page = self.pages_by_route[mutation["route"]]
+        path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        original_raw = path.read_text(encoding="utf-8")
+        original_article = article_jsonld_nodes(original_raw)[0]
+        duplicated_raw = duplicate_article_jsonld(
+            original_raw,
+            "datePublished",
+            original_article["datePublished"],
+        )
+        articles = article_jsonld_nodes(duplicated_raw)
+        self.assertEqual(articles[0]["url"], articles[1]["url"])
+        findings = validator.validate_article_jsonld_dates(
+            path.relative_to(ROOT).as_posix(),
+            parse_html(duplicated_raw),
+            page["meta:article:published_time"],
+        )
+        self.assertFalse(findings, findings_text(findings))
+
+    def test_single_article_without_url_remains_valid_including_murderbird(self) -> None:
+        page = self.pages_by_route["/writings/murderbird/"]
+        source_path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        generated_path = ROOT / page["path"]
+        source_raw = source_path.read_text(encoding="utf-8")
+        generated_raw = generated_path.read_text(encoding="utf-8")
+        self.assertEqual(len(article_jsonld_nodes(source_raw)), 1)
+        self.assertNotIn("url", article_jsonld_nodes(source_raw)[0])
+        self.assertEqual(len(article_jsonld_nodes(generated_raw)), 1)
+        self.assertNotIn("url", article_jsonld_nodes(generated_raw)[0])
+        self.assertFalse(
+            validator.validate_article_jsonld_source([page]),
+            "a single source Article without url remains accepted",
+        )
+        generated_findings = validator.validate_generated_seo(
+            generated_path,
+            parse_html(generated_raw),
+            page,
+        )
+        self.assertFalse(generated_findings, findings_text(generated_findings))
+
     def test_rendered_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
         index_path = GENERATED_FIXTURE / "index.html.fixture"
         index_page = self.pages_by_route["/"]
@@ -1480,6 +1648,41 @@ class SEOFixtureTests(unittest.TestCase):
         )
         self.assert_rejected(findings, mutation["expected"])
 
+    def test_duplicate_article_jsonld_root_url_rejected_in_source_extras(self) -> None:
+        mutation = self.fixture_data["duplicate_article_url_mismatch"]
+        page = self.pages_by_route[mutation["route"]]
+        path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        original_raw = path.read_text(encoding="utf-8")
+        original_articles = article_jsonld_nodes(original_raw)
+        mutated_raw = duplicate_article_jsonld_root_url(
+            original_raw, mutation["value"]
+        )
+        mutated_articles = article_jsonld_nodes(mutated_raw)
+        self.assertEqual(len(mutated_articles), 2)
+        self.assertNotEqual(original_articles[0]["url"], mutation["value"])
+        self.assertEqual(mutated_articles[0]["url"], original_articles[0]["url"])
+        self.assertEqual(mutated_articles[1]["url"], mutation["value"])
+        self.assertEqual(
+            mutated_articles[1]["author"]["url"],
+            original_articles[0]["author"]["url"],
+            "source fixture mutation changed nested author.url",
+        )
+        self.assertIn(
+            '"headline": "The First Diagram Is Usually a Liar"',
+            mutated_raw,
+        )
+        self.assertEqual(
+            page.get("meta:robots"),
+            "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+            "source fixture mutation changed the indexing boundary",
+        )
+        findings = validator.validate_article_jsonld_dates(
+            path.relative_to(ROOT).as_posix(),
+            parse_html(mutated_raw),
+            page["meta:article:published_time"],
+        )
+        self.assert_rejected(findings, mutation["expected"])
+
     def test_same_as_drift_rejected_in_shared_head_source(self) -> None:
         mutation = self.fixture_data["organization_same_as_drift"]
         original_raw = validator.HEAD_PARTIAL.read_text(encoding="utf-8")
@@ -1838,6 +2041,42 @@ class SEOFixtureTests(unittest.TestCase):
             original_raw, "dateModified", mutation["value"]
         )
         mutated_parser = parse_html(mutated_raw)
+        self.assertIn(
+            "<article>Fixture article copy remains unchanged.</article>",
+            mutated_raw,
+        )
+        self.assertEqual(
+            original_parser.is_noindex,
+            mutated_parser.is_noindex,
+            "generated fixture mutation changed the indexing boundary",
+        )
+        findings = validator.validate_generated_seo(
+            path,
+            mutated_parser,
+            self.pages_by_route[mutation["route"]],
+        )
+        self.assert_rejected(findings, mutation["expected"])
+
+    def test_duplicate_article_jsonld_root_url_rejected_in_generated_metadata(self) -> None:
+        mutation = self.fixture_data["duplicate_article_url_mismatch"]
+        path = GENERATED_FIXTURE / "article.html.fixture"
+        original_raw = path.read_text(encoding="utf-8")
+        original_parser = parse_html(original_raw)
+        original_articles = article_jsonld_nodes(original_raw)
+        mutated_raw = duplicate_article_jsonld_root_url(
+            original_raw, mutation["value"]
+        )
+        mutated_parser = parse_html(mutated_raw)
+        mutated_articles = article_jsonld_nodes(mutated_raw)
+        self.assertEqual(len(mutated_articles), 2)
+        self.assertNotEqual(original_articles[0]["url"], mutation["value"])
+        self.assertEqual(mutated_articles[0]["url"], original_articles[0]["url"])
+        self.assertEqual(mutated_articles[1]["url"], mutation["value"])
+        self.assertEqual(
+            mutated_articles[1]["author"]["url"],
+            original_articles[0]["author"]["url"],
+            "generated fixture mutation changed nested author.url",
+        )
         self.assertIn(
             "<article>Fixture article copy remains unchanged.</article>",
             mutated_raw,
