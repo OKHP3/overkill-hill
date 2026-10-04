@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta property="og:type" content="article">
+  <meta property="og:image" content="https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png">
+  <meta property="og:image:alt" content="Fixture social preview">
+  <meta property="og:image:width" content="1536">
+  <meta property="og:image:height" content="1024">
+  <meta property="og:image:type" content="image/png">
+  <meta name="twitter:image" content="https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png">
+  <meta name="twitter:image:alt" content="Fixture social preview">
+  <meta name="article:published_time" content="2026-04-07">
+  <meta name="robots" content="index, follow">
+  <script type="application/ld+json">{
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        "@id": "https://overkillhill.com/writings/first-diagram-is-a-liar/#article",
+        "headline": "The First Diagram Is Usually a Liar",
+        "description": "From AutoCAD 10 and Visio trauma to Mermaid, ROY, and a Council of AIs. The v0.3 Visual Edition of The First Diagram Is Usually a Liar, now with the Etch-AI-Sketch deck, public scoring bracket, poll schedule, and three-lane scoring model.",
+        "author": {
+          "@type": "Person",
+          "name": "Jamie Hill",
+          "url": "https://www.linkedin.com/in/jamiehill75"
+        },
+        "publisher": {
+          "@id": "https://overkillhill.com/#organization"
+        },
+        "datePublished": "2026-04-07",
+        "dateModified": "2026-05-24",
+        "image": "https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png",
+        "url": "https://overkillhill.com/writings/first-diagram-is-a-liar/"
+      },
+      {
+        "@type": "Article",
+        "@id": "https://overkillhill.com/writings/first-diagram-is-a-liar/#article",
+        "headline": "The First Diagram Is Usually a Liar",
+        "description": "From AutoCAD 10 and Visio trauma to Mermaid, ROY, and a Council of AIs. The v0.3 Visual Edition of The First Diagram Is Usually a Liar, now with the Etch-AI-Sketch deck, public scoring bracket, poll schedule, and three-lane scoring model.",
+        "author": {
+          "@type": "Person",
+          "name": "Jamie Hill",
+          "url": "https://www.linkedin.com/in/jamiehill75"
+        },
+        "publisher": {
+          "@id": "https://overkillhill.com/#organization"
+        },
+        "datePublished": "2026-04-07",
+        "dateModified": "2026-05-23",
+        "image": "https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png",
+        "url": "https://overkillhill.com/writings/first-diagram-is-a-liar/"
+      }
+    ]
+  }</script>
+  <script type="application/ld+json">{
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": "https://overkillhill.com/#organization",
+    "name": "OverKill Hill P³™",
+    "url": "https://overkillhill.com/",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://overkillhill.com/assets/img/favicons/murderbird-v2-icon-1024.png",
+      "width": 1024,
+      "height": 1024
+    },
+    "sameAs": [
+      "https://www.linkedin.com/company/overkillhillp3",
+      "https://facebook.com/OverKillHillP3/",
+      "https://x.com/OverKillHillP3",
+      "https://www.youtube.com/@OverKillHillP3",
+      "https://ko-fi.com/overkillhillp3",
+      "https://pro.fiverr.com/s/VYKPpoB"
+    ]
+  }</script>
+</head>
+<body><article>Fixture article copy remains unchanged.</article></body>
+</html>
