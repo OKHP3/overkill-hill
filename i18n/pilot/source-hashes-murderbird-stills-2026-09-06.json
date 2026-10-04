@@ -8,14 +8,14 @@
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
   "current_release_shell": {
-    "source_revision": "git:984ef5aa91eb2b9c98e162e25fbcbb0db71ec6bb",
+    "source_revision": "git:f462188e+atom-feed-shell-record",
     "release": "v1.0",
-    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved. Capability transition notice, modal and footer link added; regional drafts retain noindex and draft status, with explicit English fallback in es-MX. This active source baseline also includes the guarded early theme-storage read and regenerated CSP hashes, reviewed as a runtime-only change with no translation, route, draft-boundary, or approval change. See i18n/pilot/regional-runtime-metadata-review-2026-10-01.json; no human/native approval or release acceptance is implied.",
+    "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved. Capability transition notice, modal and footer link added; regional drafts retain noindex and draft status, with explicit English fallback in es-MX. This active source baseline also includes the guarded early theme-storage read and regenerated CSP hashes, reviewed as a runtime-only change with no translation, route, draft-boundary, or approval change. See i18n/pilot/regional-runtime-metadata-review-2026-10-01.json; no human/native approval or release acceptance is implied. English Atom feed discovery added to canonical heads only; body content and regional draft boundaries unchanged.",
     "normalized_routes": {
-      "/": "654307cbf66983eb199a3a9227d5187cfd5f6a2b902f0d95b6bff2b575a15fb4",
-      "/about/": "c979d9c7daa4979d2593ac9004993742fc2b546f3287ab35f2a2b577ab07d9fc",
-      "/projects/": "a10bf44701a1051b84230167316530061d36f590029b8d92ec58045e3d6f3e89",
-      "/contact/": "c20cc36ae87e238a7e331a3c13f0988a77a1a5c8795ac8a7a0e207816826ec98"
+      "/": "51a1581e69b864dc0002a6239733a36ae5670c3c3befed7d1167d423f9d0d8ae",
+      "/about/": "40b3f575108e324ea7b8e559d3d6cbd60d97c752bbf4988ebfee7c5335e953d2",
+      "/projects/": "aa2ffaa4d5effd435e2e899a82668b8b731186e67ada59f1cb76a474ab3938f9",
+      "/contact/": "0eb42fcb3e50df2d8419316d3b07db6aa2b34d36dd7264f2d8511307541eb484"
     }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",
@@ -309,5 +309,45 @@
     "status": "ai-reviewed-draft",
     "source_register": "plainspoken en-US",
     "voice_profile_status": "provisional; no bilingual translation attempted"
+  },
+  "atom_feed_shell_review": {
+    "reviewed_on": "2026-10-04",
+    "source_revision": "git:f462188eb7b0b5c4b2faa3f319b6e9e4e26c1c01",
+    "prior_release_shell": {
+      "source_revision": "git:984ef5aa91eb2b9c98e162e25fbcbb0db71ec6bb",
+      "release": "v1.0",
+      "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved. Capability transition notice, modal and footer link added; regional drafts retain noindex and draft status, with explicit English fallback in es-MX. This active source baseline also includes the guarded early theme-storage read and regenerated CSP hashes, reviewed as a runtime-only change with no translation, route, draft-boundary, or approval change. See i18n/pilot/regional-runtime-metadata-review-2026-10-01.json; no human/native approval or release acceptance is implied.",
+      "normalized_routes": {
+        "/": "654307cbf66983eb199a3a9227d5187cfd5f6a2b902f0d95b6bff2b575a15fb4",
+        "/about/": "c979d9c7daa4979d2593ac9004993742fc2b546f3287ab35f2a2b577ab07d9fc",
+        "/projects/": "a10bf44701a1051b84230167316530061d36f590029b8d92ec58045e3d6f3e89",
+        "/contact/": "c20cc36ae87e238a7e331a3c13f0988a77a1a5c8795ac8a7a0e207816826ec98"
+      }
+    },
+    "scope": "English head-only Atom feed discovery. All four canonical bodies match the prior main bytes after LF normalization. Regional translation artifacts and draft pages unchanged; feed is not advertised by locales. No human/native approval or release acceptance inferred.",
+    "evidence": [
+      {
+        "route": "/",
+        "body_unchanged": true,
+        "body_sha256": "3b74600027fe1c7fcdb2178a703aee3165c98bbd1133bbaaf3bc7658c7124438"
+      },
+      {
+        "route": "/about/",
+        "body_unchanged": true,
+        "body_sha256": "5df9234ecad2e1fde112505f041860fe067e1179c9a15e4ffd048c857a732e7a"
+      },
+      {
+        "route": "/projects/",
+        "body_unchanged": true,
+        "body_sha256": "6ef9e2030f55e3cba0671cfd5476a2c8e0bed19f62624d6752b8d3ce3fd42885"
+      },
+      {
+        "route": "/contact/",
+        "body_unchanged": true,
+        "body_sha256": "d8f7d97e2a156f9d7849491bad10b7f88f4f2949eb3f104f3894b04a76443d37"
+      }
+    ],
+    "human_native_approved": false,
+    "release_accepted": false
   }
 }
