@@ -258,6 +258,9 @@ jobs:
       - name: Check generated HTML is current
         run: python3 scripts/build-site.py --check
 
+      - name: Validate isolated Atom-feed generator
+        run: python3 tests/test-atom-feed-generator.py
+
       - name: Check canonical CSP policies and public-page discovery
         run: |
           python3 tests/test_csp_page_discovery.py
