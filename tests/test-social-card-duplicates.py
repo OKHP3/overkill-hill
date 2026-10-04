@@ -87,6 +87,7 @@ def site_fixture_html(*, duplicate: str | None = None, noindex: bool = False) ->
   <meta name="description" content="Fixture page">
   <meta name="robots" content="{robots}">
   <link rel="canonical" href="https://overkillhill.com/fixture/">
+  <link rel="alternate" type="application/atom+xml" href="/feed.xml">
   <link rel="stylesheet" href="{theme_url}">
   {social_card_tags(duplicate=duplicate)}
 </head>
