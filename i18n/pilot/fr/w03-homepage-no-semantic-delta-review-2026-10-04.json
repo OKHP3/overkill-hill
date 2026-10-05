@@ -1,0 +1,32 @@
+{
+  "language_pair": "en-US -> fr-FR",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-10-04",
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "review": {
+    "method": "Bounded AI route-scope review of the W03 English homepage unit against the exact French root page.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "scope": "W03 root route only. The English source has a semantic featured-copy change, not a runtime-only change. The matching article.latest-card unit is absent from the French target; its distinct localized card is unchanged. This is not a full-page identity claim, approval, or native certification.",
+  "routes": [
+    {
+      "route": "/",
+      "locale": "fr",
+      "source_path": "index.html",
+      "target_path": "fr/index.html",
+      "baseline_source_sha256": "e5f99afa937504f297c9434d6d7a2b27120b04826f09ba88669f7e3c23a60131",
+      "baseline_target_sha256": "7e215a2e6f686e7246114eb6107e5c6c89a085b8c2b393b7f01f5db805d8e17d",
+      "source_sha256": "01c727314716f81d1aba7ee9fe5d7c3ffcfd33419003f9b88c699a1b20b56472",
+      "target_sha256": "7e215a2e6f686e7246114eb6107e5c6c89a085b8c2b393b7f01f5db805d8e17d",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_feature_selector": "article.latest-card",
+      "source_feature_present": true,
+      "target_feature_present": false,
+      "target_changed_for_w03": false,
+      "target_unit_note": "The French root keeps its separate localized project card."
+    }
+  ]
+}

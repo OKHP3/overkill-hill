@@ -8,14 +8,20 @@
     "/contact/": "de73ecd6dd31f786e72ce6a4f134db5d5c797c52b99767ed5555d9a85692fe49"
   },
   "current_release_shell": {
-    "source_revision": "git:f462188e+atom-feed-shell-record",
+    "source_revision": "git:20c73145b2e6f690138f179b9dfbffbe21b03332+W03-feature-review-working-tree",
     "release": "v1.0",
     "scope": "The site-wide release notice now uses the owner-approved English Final Cut announcement. Locale links explicitly carry lang=en-US. Localized labels, navigation, reviewed translation snapshots, noindex draft boundaries, and approval status are preserved. Capability transition notice, modal and footer link added; regional drafts retain noindex and draft status, with explicit English fallback in es-MX. This active source baseline also includes the guarded early theme-storage read and regenerated CSP hashes, reviewed as a runtime-only change with no translation, route, draft-boundary, or approval change. See i18n/pilot/regional-runtime-metadata-review-2026-10-01.json; no human/native approval or release acceptance is implied. English Atom feed discovery added to canonical heads only; body content and regional draft boundaries unchanged.",
     "normalized_routes": {
-      "/": "51a1581e69b864dc0002a6239733a36ae5670c3c3befed7d1167d423f9d0d8ae",
+      "/": "5db04e9af39ab92681689a150ec65f4324ddeb54c57bfabe2f73af4d8da3c813",
       "/about/": "40b3f575108e324ea7b8e559d3d6cbd60d97c752bbf4988ebfee7c5335e953d2",
       "/projects/": "aa2ffaa4d5effd435e2e899a82668b8b731186e67ada59f1cb76a474ab3938f9",
       "/contact/": "0eb42fcb3e50df2d8419316d3b07db6aa2b34d36dd7264f2d8511307541eb484"
+    },
+    "w03_homepage_feature_review": {
+      "base_revision": "git:20c73145b2e6f690138f179b9dfbffbe21b03332",
+      "change_type": "semantic editorial copy and article-fragment destinations; not runtime-only",
+      "scope": "English root featured-writing unit; matching en-GB and es-MX homepage units receive pair-specific AI review. FR/DE/ES keep their distinct cards and receive root-only no-semantic-delta review. Locale publication and indexability boundaries are unchanged.",
+      "reviewed_on": "2026-10-04"
     }
   },
   "fallback_metadata_update": "PNG fallback only; unchanged editorial text verified against d112ca4e by tests/test-murderbird-fallback-editorial.py; prior review limitations retained.",

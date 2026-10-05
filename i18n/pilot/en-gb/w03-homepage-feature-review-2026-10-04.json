@@ -1,0 +1,46 @@
+{
+  "language_pair": "en-US -> en-GB",
+  "source_locale": "en-US",
+  "target_locale": "en-GB",
+  "direction": "one-way",
+  "source_register": "plainspoken",
+  "artifact_type": "html",
+  "route": "/",
+  "source_base_revision": "20c73145b2e6f690138f179b9dfbffbe21b03332",
+  "source_path": "index.html",
+  "source_sha256": "01c727314716f81d1aba7ee9fe5d7c3ffcfd33419003f9b88c699a1b20b56472",
+  "target_path": "en-gb/index.html",
+  "target_sha256": "1a50143554b01df09d15bfdcf60726de5ba32b8cdb8061363e5937331b5de39a",
+  "voice_profile": "i18n/pilot/en-gb/voice-profile.en-us.json@1.0.0",
+  "dictionary": "i18n/pilot/en-gb/dictionary.en-us-en-uk.json@0.1.0",
+  "dictionary_version": "0.1.0",
+  "status": "machine-drafted",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-10-04",
+  "review": {
+    "method": "Bounded AI editorial review using the exact en-US-to-en-GB skill, existing pair dictionary, provisional voice profile, and exact homepage route.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "scope": "Only the homepage article.latest-card paragraph, image destination, and CTA text/destination. The image and CTA both point to the read-or-interact fragment.",
+  "source_unit": {
+    "paragraph": "The Final Cut is live: read the complete story or explore Diagram Truth, the interactive guide to more honest diagrams.",
+    "image_href": "/writings/first-diagram-is-a-liar/#read-or-interact",
+    "cta_text": "Read or explore →",
+    "cta_href": "/writings/first-diagram-is-a-liar/#read-or-interact"
+  },
+  "target_unit": {
+    "paragraph": "The Final Cut is live: read the complete story or explore Diagram Truth, the interactive guide to more honest diagrams.",
+    "image_href": "/writings/first-diagram-is-a-liar/#read-or-interact",
+    "cta_text": "Read or explore →",
+    "cta_href": "/writings/first-diagram-is-a-liar/#read-or-interact"
+  },
+  "assumptions": [
+    "The source wording already follows the declared British spelling preference, so no regional wording change is needed.",
+    "Diagram Truth is retained as a product name. The provisional voice profile remains provisional; no owner approval or native certification is claimed."
+  ],
+  "unresolved_terms": []
+}
