@@ -298,9 +298,29 @@ class ReviewedTargetIntegrityTests(unittest.TestCase):
         self.assertEqual(self.original, self.state.read_bytes())
 
     def test_unchanged_and_crlf_targets_pass(self):
-        self.target.write_bytes(self.target.read_bytes().replace(b"\n", b"\r\n"))
-        self.assertEqual([], MODULE.load_results(self.config)["policy"]["blocking_items"])
-        self.assertEqual(0, MODULE.main(["--mode", "check"]))
+        original = self.target.read_bytes()
+        lf_target = original.replace(b"\r\n", b"\n")
+        self.assertIn(b"\n", lf_target)
+        self.assertNotIn(b"\r", lf_target)
+        crlf_target = lf_target.replace(b"\n", b"\r\n")
+        expected_target_hash = json.loads(self.original)["pages"]["/"]["targets"]["fr"]["target_sha256"]
+
+        for line_ending, target_bytes in (("LF", lf_target), ("CRLF", crlf_target)):
+            with self.subTest(line_ending=line_ending):
+                if line_ending == "LF":
+                    self.assertNotIn(b"\r", target_bytes)
+                else:
+                    self.assertIn(b"\r\n", target_bytes)
+                    self.assertNotIn(b"\r\r\n", target_bytes)
+                    self.assertEqual(target_bytes.count(b"\r\n"), target_bytes.count(b"\n"))
+                    self.assertEqual(target_bytes.count(b"\r"), target_bytes.count(b"\r\n"))
+
+                self.target.write_bytes(target_bytes)
+                self.assertEqual(expected_target_hash, DETECTOR_MODULE.sha256_file(self.target))
+                result = MODULE.load_results(self.config)
+                self.assertEqual([], result["target_changed"])
+                self.assertEqual([], result["policy"]["blocking_items"])
+                self.assertEqual(0, MODULE.main(["--mode", "check"]))
 
     def test_draft_target_change_is_advisory(self):
         (self.root / "de" / "index.html").write_text("changed", encoding="utf-8")
