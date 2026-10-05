@@ -1,0 +1,60 @@
+{
+  "language_pair": "en-US -> de-DE",
+  "skill": "okhp3-translation-en-us-de-de",
+  "review_status": "ai-reviewed",
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "baseline_revision": "git:acbaa856fab47f617690f6a44b470d5b45a4fb4c",
+  "source_revision": "git:a15e8db12f2834a534c423cc9c8f4517bc627b3e",
+  "target_baseline_record": "i18n/pilot/de/announcement-focus-cache-review-2026-10-03.json",
+  "reviewed_on": "2026-10-05",
+  "review_scope": "Limited to the shared Atom-feed discovery link added in the English head after the route's ledger source baseline. Removing that one link from each current source page reproduces the complete baseline page byte-for-byte after CRLF-to-LF normalization; the rendered body is unchanged. Each current localized target hash equals its October 3 pair-review target hash, and the target does not advertise /feed.xml. This is a bounded page-freshness review only; it does not recertify language quality, earlier semantic changes, native approval, or release readiness.",
+  "hash_method": "SHA-256 of complete source and target HTML files after CRLF-to-LF normalization, matching scripts/check-i18n-release.py.",
+  "routes": [
+    {
+      "route": "/about/",
+      "locale": "de",
+      "source_path": "about/index.html",
+      "target_path": "de/about/index.html",
+      "baseline_source_sha256": "66dd58fcce7ee12dce344129ab6cd145d96eb71f496f778f15c554d7875882e8",
+      "baseline_target_sha256": "8f945a2349f888de8cd26eade178411cfa23229106f8f1580646f68400897c4a",
+      "source_sha256": "acac8d542d3f38be7fbd46d9dbbf36474ae596314973b9be421959ace9fb9a94",
+      "target_sha256": "8f945a2349f888de8cd26eade178411cfa23229106f8f1580646f68400897c4a",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "feed_head_only_delta_confirmed": true,
+      "source_body_unchanged": true,
+      "localized_target_unchanged_since_prior_review": true,
+      "localized_target_advertises_feed": false
+    },
+    {
+      "route": "/contact/",
+      "locale": "de",
+      "source_path": "contact/index.html",
+      "target_path": "de/contact/index.html",
+      "baseline_source_sha256": "d2ed9bd2c8326439eca420480602deb6fc5bea03f329ed1330a6f7557319f6d4",
+      "baseline_target_sha256": "e593a30484e83d3db502d167df5e2959427aaa099ebaf03339f97aaab10b15d8",
+      "source_sha256": "2d60d9782e2915ab1fb8c27169ac57bb0e955418877bea9cc65f2e6be5ddb8c6",
+      "target_sha256": "e593a30484e83d3db502d167df5e2959427aaa099ebaf03339f97aaab10b15d8",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "feed_head_only_delta_confirmed": true,
+      "source_body_unchanged": true,
+      "localized_target_unchanged_since_prior_review": true,
+      "localized_target_advertises_feed": false
+    },
+    {
+      "route": "/projects/",
+      "locale": "de",
+      "source_path": "projects/index.html",
+      "target_path": "de/projects/index.html",
+      "baseline_source_sha256": "cbe5d614aae8fe29b61e58b59955389103f3f92e8c45f135e98b6a2053033dce",
+      "baseline_target_sha256": "e7f95716913e9b72bf0328cf80a7edfd8675b9900a4503e74d2d13d59e37715e",
+      "source_sha256": "1e311a371182ccf5a6470260f6e56026ec2f8e737b8816b33860ec30857fe185",
+      "target_sha256": "e7f95716913e9b72bf0328cf80a7edfd8675b9900a4503e74d2d13d59e37715e",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "feed_head_only_delta_confirmed": true,
+      "source_body_unchanged": true,
+      "localized_target_unchanged_since_prior_review": true,
+      "localized_target_advertises_feed": false
+    }
+  ]
+}
