@@ -1,0 +1,32 @@
+{
+  "language_pair": "en-US -> es-ES",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-10-04",
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "review": {
+    "method": "Bounded AI route-scope review of the W03 English homepage unit against the exact Spain-Spanish root page.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "scope": "W03 root route only. The English source has a semantic featured-copy change, not a runtime-only change. The matching article.latest-card unit is absent from the Spain-Spanish target; its distinct localized card is unchanged. This is not a full-page identity claim, approval, or native certification.",
+  "routes": [
+    {
+      "route": "/",
+      "locale": "es",
+      "source_path": "index.html",
+      "target_path": "es/index.html",
+      "baseline_source_sha256": "e5f99afa937504f297c9434d6d7a2b27120b04826f09ba88669f7e3c23a60131",
+      "baseline_target_sha256": "300d477fa7eba57f39b296f2918384805d493d280f94d18435678723252eb264",
+      "source_sha256": "01c727314716f81d1aba7ee9fe5d7c3ffcfd33419003f9b88c699a1b20b56472",
+      "target_sha256": "300d477fa7eba57f39b296f2918384805d493d280f94d18435678723252eb264",
+      "disposition": "no-semantic-delta-ai-reviewed",
+      "source_feature_selector": "article.latest-card",
+      "source_feature_present": true,
+      "target_feature_present": false,
+      "target_changed_for_w03": false,
+      "target_unit_note": "The Spain-Spanish root keeps its separate localized project card."
+    }
+  ]
+}
