@@ -42,5 +42,11 @@
     "The informal tú imperative follows the existing project register; Diagram Truth is retained as a product name.",
     "The voice profile remains provisional and its dictionary remains seed-status; no owner approval or native certification is claimed."
   ],
-  "unresolved_terms": []
+  "unresolved_terms": [],
+  "regeneration_authority": {
+    "path": "i18n/pilot/es-mx/reviewed/index.html",
+    "sha256": "e910df6e9bf7190238482a97c5180c311e9bf2a879a99a0eb3a284fe378b9cc4",
+    "aligned_on": "2026-10-05",
+    "scope": "The same reviewed homepage feature unit, copied from the exact reviewed es-MX output; all other source content is preserved."
+  }
 }
