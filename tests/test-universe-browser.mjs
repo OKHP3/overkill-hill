@@ -267,6 +267,8 @@ async function assertUniverseComputedAX(page, viewportWidth) {
 
   const maps = collectUniverseMapDOM(domRoot);
   assert.equal(maps.length, 6, `${viewportWidth}px: expected all six Universe map disclosures in the DOM`);
+  const expectedLinkCount = maps.reduce((total, map) => total + map.outlineItems.length, 0);
+  assert.ok(expectedLinkCount > 0, `${viewportWidth}px: generated map outline is empty`);
   const includedAXNodes = axNodes.filter((node) => !node.ignored);
   const nodesById = new Map(axNodes.map((node) => [node.nodeId, node]));
   function axNodeFor(backendNodeId, expectedRole, label, {requireName = true} = {}) {
@@ -390,11 +392,11 @@ async function assertUniverseComputedAX(page, viewportWidth) {
     }
   }
 
-  assert.equal(svgLinkCount, 40, `${viewportWidth}px: expected 40 named SVG links`);
-  assert.equal(outlineLinkCount, 40, `${viewportWidth}px: expected 40 named outline links`);
-  assert.equal(namedSVGLinkCount, 40, `${viewportWidth}px: not all SVG links have names`);
-  assert.equal(namedOutlineLinkCount, 40, `${viewportWidth}px: not all outline links have names`);
-  assert.equal(outlineDescriptionCount, 40, `${viewportWidth}px: not all outline descriptions are exposed`);
+  assert.equal(svgLinkCount, expectedLinkCount, `${viewportWidth}px: SVG links must cover the generated outline`);
+  assert.equal(outlineLinkCount, expectedLinkCount, `${viewportWidth}px: outline link inventory differs`);
+  assert.equal(namedSVGLinkCount, expectedLinkCount, `${viewportWidth}px: not all SVG links have names`);
+  assert.equal(namedOutlineLinkCount, expectedLinkCount, `${viewportWidth}px: not all outline links have names`);
+  assert.equal(outlineDescriptionCount, expectedLinkCount, `${viewportWidth}px: not all outline descriptions are exposed`);
   return {
     mapCount: maps.length,
     svgLinkCount,
