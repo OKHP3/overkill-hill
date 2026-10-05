@@ -18,6 +18,31 @@ SPEC.loader.exec_module(MODULE)
 
 
 class LocaleDraftBuilderTests(unittest.TestCase):
+    def test_homepage_feature_survives_regional_regeneration(self):
+        canonical = (ROOT / "index.html").read_text(encoding="utf-8")
+        reviewed = (ROOT / "i18n/pilot/es-mx/reviewed/index.html").read_text(encoding="utf-8")
+
+        def feature_units(page):
+            cards = MODULE.BeautifulSoup(page, "html.parser").select("article.latest-card")
+            self.assertEqual(len(cards), 1)
+            card = cards[0]
+            return {
+                "text": " ".join(card.get_text(" ", strip=True).split()),
+                "links": [link.get("href") for link in card.select("a")],
+                "images": [dict(image.attrs) for image in card.select("img, source")],
+            }
+
+        for locale in ("en-gb", "es-mx"):
+            with self.subTest(locale=locale):
+                dictionary, _profile = MODULE.load_pair_contract(locale)
+                rendered = (
+                    MODULE.build_en_gb(canonical, "/", dictionary)
+                    if locale == "en-gb"
+                    else MODULE.build_es_mx(reviewed, canonical, "/", dictionary)
+                )
+                current = (ROOT / locale / "index.html").read_text(encoding="utf-8")
+                self.assertEqual(feature_units(rendered), feature_units(current))
+
     def test_es_mx_uses_reviewed_input_and_keeps_the_reviewed_file_untouched(self):
         canonical = (ROOT / "index.html").read_text(encoding="utf-8")
         reviewed_path = ROOT / "i18n" / "pilot" / "es-mx" / "reviewed" / "index.html"
