@@ -3,6 +3,7 @@ import mermaid from "/assets/vendor/mermaid/mermaid.esm.min.mjs";
 
 const diagrams = [...document.querySelectorAll(".universe-diagram")];
 const sources = new Map(diagrams.map((element) => [element, element.textContent]));
+const compactViewport = window.matchMedia("(max-width: 360px)");
 let sequence = 0;
 let pending = Promise.resolve();
 
@@ -31,11 +32,21 @@ function configure() {
   });
 }
 
+function applyDiagramWidth(element, view = element.querySelector("svg")) {
+  if (!view) return;
+  const minimumWidth = compactViewport.matches ? 0 : 720;
+  view.style.width = Math.max(minimumWidth, view.viewBox.baseVal.width) + "px";
+}
+
 async function renderVisible() {
   configure();
   for (const element of diagrams) {
     if (!element.closest("details")?.open || element.dataset.rendered) continue;
     try {
+      const focusedLink = document.activeElement?.closest(".universe-diagram svg a[href]");
+      const restoreFocus = focusedLink && element.contains(focusedLink)
+        ? {href: focusedLink.getAttribute("href"), label: focusedLink.getAttribute("aria-label")}
+        : null;
       const {svg} = await mermaid.render("universe-render-" + sequence++, sources.get(element));
       element.innerHTML = svg;
       const view = element.querySelector("svg");
@@ -43,7 +54,7 @@ async function renderVisible() {
       // Preserve readable labels on phones; the diagram scrolls inside its panel.
       element.style.overflowX = "auto";
       element.style.maxWidth = "100%";
-      view.style.width = Math.max(720, view.viewBox.baseVal.width) + "px";
+      applyDiagramWidth(element, view);
       view.style.maxWidth = "none";
       view.style.height = "auto";
       for (const link of element.closest("details").querySelectorAll("li a[href]")) {
@@ -56,11 +67,22 @@ async function renderVisible() {
         anchor.setAttribute("href", target.pathname + target.hash);
         anchor.setAttribute("aria-label", link.textContent);
         anchor.setAttribute("tabindex", "0");
+        anchor.style.scrollMargin = "6px";
         while (node.firstChild) anchor.append(node.firstChild);
         node.append(anchor);
       }
       element.dataset.rendered = "true";
       element.hidden = false;
+      if (restoreFocus) {
+        const replacement = [...view.querySelectorAll("a[href]")].find((anchor) => (
+          anchor.getAttribute("href") === restoreFocus.href
+          && anchor.getAttribute("aria-label") === restoreFocus.label
+        ));
+        if (replacement) {
+          replacement.focus({preventScroll: true});
+          replacement.scrollIntoView({behavior: "instant", block: "nearest", inline: "nearest"});
+        }
+      }
     } catch (error) {
       element.textContent = "The diagram is unavailable. Use the page links below.";
       element.hidden = false;
@@ -74,6 +96,15 @@ function enqueue() {
     console.error("Universe diagram queue failed", error);
   });
 }
+document.querySelector(".universe-generated")?.addEventListener("focusin", (event) => {
+  const link = event.target.closest?.(".universe-diagram svg a[href]");
+  link?.scrollIntoView({behavior: "instant", block: "nearest", inline: "nearest"});
+});
+compactViewport.addEventListener("change", () => {
+  diagrams.forEach((element) => applyDiagramWidth(element));
+  const focusedLink = document.activeElement?.closest(".universe-diagram svg a[href]");
+  focusedLink?.scrollIntoView({behavior: "instant", block: "nearest", inline: "nearest"});
+});
 document.querySelectorAll(".universe-generated details").forEach((details) => details.addEventListener("toggle", enqueue));
 new MutationObserver(() => {
   diagrams.forEach((element) => { element.removeAttribute("data-rendered"); });
