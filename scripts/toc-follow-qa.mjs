@@ -61,6 +61,30 @@ const waitForStableLayoutFrames = async () => {
 };
 
 try {
+  // Keep the article's native shortcut usable with and without the shared script.
+  for (const javaScriptEnabled of [true, false]) {
+    for (const width of [320, 1280]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce', javaScriptEnabled });
+      try {
+        await page.goto(base + '/writings/first-diagram-is-a-liar/', { waitUntil: 'load' });
+        const shortcut = page.locator('a.okh-skip-link[href="#toc-widget"]');
+        assert.equal(await shortcut.count(), 1, 'Article has one early TOC shortcut');
+        await shortcut.focus();
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => document.activeElement?.id === 'toc-widget');
+        await page.keyboard.press('Tab');
+        assert(await page.locator('#toc-widget a').first().evaluate(a => a === document.activeElement),
+          'Tab after the shortcut reaches the first TOC link');
+        const target = await page.locator('#toc-widget a').first().getAttribute('href');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(hash => location.hash === hash, target);
+        console.log(`PASS article TOC shortcut ${width}px JavaScript=${javaScriptEnabled}`);
+      } catch (error) {
+        failures++;
+        console.error(`FAIL article TOC shortcut ${width}px JavaScript=${javaScriptEnabled}: ${error.message}`);
+      } finally { await page.close(); }
+    }
+  }
   for (const file of menus) {
     const route = '/' + file.replace(/index\.html$/, '');
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: 'no-preference' });
