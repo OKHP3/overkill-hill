@@ -289,6 +289,7 @@ function runFixtureSummary(reportPath, summaryPath, artifactUrl = null) {
   });
 }
 
+// Validate current generated reports only; archived-report compatibility stays separate.
 function assertExternalFailureReportContract(report) {
   assert.equal(report.version, 1);
   assert.equal(report.mode, "external-health");
@@ -298,30 +299,238 @@ function assertExternalFailureReportContract(report) {
   assert.equal(typeof report.summary.failureEvents, "number");
 
   const failures = [
-    ...report.dependencies.flatMap(({ failures = [] }) => failures),
-    ...report.dependencies.flatMap(({ routeOutcomes = [] }) =>
-      routeOutcomes.flatMap(({ failures = [] }) => failures),
-    ),
-    ...report.externalOutages.flatMap(({ failures = [] }) => failures),
-    ...report.externalOutages.flatMap(({ routeOutcomes = [] }) =>
-      routeOutcomes.flatMap(({ failures = [] }) => failures),
-    ),
+    ...report.dependencies.flatMap((dependency, dependencyIndex) => {
+      const { failures = [] } = dependency;
+      return failures.map((failure, failureIndex) => ({
+        failure,
+        dependencyUrl: dependency.url,
+        location: `dependencies[${dependencyIndex}].failures[${failureIndex}]`,
+      }));
+    }),
+    ...report.dependencies.flatMap((dependency, dependencyIndex) => {
+      const { routeOutcomes = [] } = dependency;
+      return routeOutcomes.flatMap((routeOutcome, routeOutcomeIndex) => {
+        const { failures = [] } = routeOutcome;
+        return failures.map((failure, failureIndex) => ({
+          failure,
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.failures[${failureIndex}]`,
+          parentRoute: routeOutcome.route,
+        }));
+      });
+    }),
+    ...report.externalOutages.flatMap((outage, outageIndex) => {
+      const { failures = [] } = outage;
+      return failures.map((failure, failureIndex) => ({
+        failure,
+        dependencyUrl: outage.url,
+        location: `externalOutages[${outageIndex}].failures[${failureIndex}]`,
+      }));
+    }),
+    ...report.externalOutages.flatMap((outage, outageIndex) => {
+      const { routeOutcomes = [] } = outage;
+      return routeOutcomes.flatMap((routeOutcome, routeOutcomeIndex) => {
+        const { failures = [] } = routeOutcome;
+        return failures.map((failure, failureIndex) => ({
+          failure,
+          dependencyUrl: outage.url,
+          location:
+            `externalOutages[${outageIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.failures[${failureIndex}]`,
+          parentRoute: routeOutcome.route,
+        }));
+      });
+    }),
   ];
 
-  for (const failure of failures) {
+  for (const record of failures) {
+    const { failure, dependencyUrl, location, parentRoute } = record;
+    const parentRouteContext = Object.hasOwn(record, "parentRoute")
+      ? `; route outcome route: ${String(parentRoute)}`
+      : "";
+    const actualRouteContext = typeof failure.route === "string"
+      ? `; reported route: ${failure.route}`
+      : "";
+    const context =
+      `dependency ${dependencyUrl} at ${location}${parentRouteContext}${actualRouteContext}`;
+
     assert.equal(
       typeof failure.route,
       "string",
-      "current external failure records must include route attribution",
+      `${context}: failure.route must be a string`,
     );
     assert.ok(
       report.routes.includes(failure.route),
-      `external failure route is not a public checked route: ${failure.route}`,
+      `${context}: failure.route is not in report.routes`,
     );
-    assert.equal(typeof failure.errorText, "string");
-    assert.ok(failure.errorText.trim(), "external failure error text must be non-empty");
+    assert.equal(
+      typeof failure.errorText,
+      "string",
+      `${context}: failure.errorText must be a string`,
+    );
+    assert.ok(
+      failure.errorText.trim(),
+      `${context}: failure.errorText must be non-empty`,
+    );
   }
 }
+
+function makeSyntheticExternalFailureReport() {
+  return {
+    version: 1,
+    mode: "external-health",
+    routes: ["/checked/alpha.html", "/checked/beta.html"],
+    status: "EXTERNAL_OUTAGE",
+    summary: { failureEvents: 1 },
+    dependencies: [
+      {
+        url: "https://first.test/dependency.png",
+        failures: [],
+        routeOutcomes: [],
+      },
+      {
+        url: "https://second.test/dependency.png",
+        failures: [],
+        routeOutcomes: [],
+      },
+    ],
+    externalOutages: [
+      {
+        url: "https://first.test/outage.png",
+        failures: [],
+        routeOutcomes: [],
+      },
+      {
+        url: "https://second.test/outage.png",
+        failures: [],
+        routeOutcomes: [],
+      },
+    ],
+  };
+}
+
+function assertFailureDiagnosticContext(report, expected) {
+  let error;
+  assert.throws(() => {
+    try {
+      assertExternalFailureReportContract(report);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    }
+  }, assert.AssertionError);
+  assert.ok(error, "current external-health report should be rejected");
+  for (const context of [
+    expected.url,
+    expected.location,
+    expected.reason,
+    expected.parentRoute,
+    expected.actualRoute,
+  ].filter(Boolean)) {
+    assert.ok(
+      error.message.includes(context),
+      `failure diagnostic must include ${context}; received: ${error.message}`,
+    );
+  }
+}
+
+test("diagnoses missing attribution in dependency failures with URL and location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].failures = [{ errorText: "net::ERR_EMPTY_RESPONSE" }];
+
+  assertFailureDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].failures[0]",
+    reason: "failure.route",
+  });
+});
+
+test("diagnoses missing attribution in nested dependency failures with parent route", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].routeOutcomes = [{
+    route: report.routes[0],
+    failures: [{ errorText: "net::ERR_EMPTY_RESPONSE" }],
+  }];
+
+  assertFailureDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].routeOutcomes[0].failures[0]",
+    reason: "failure.route",
+    parentRoute: report.routes[0],
+  });
+});
+
+test("diagnoses blank error text in outage failures with URL and location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.externalOutages[1].failures = [{
+    route: report.routes[1],
+    errorText: " ",
+  }];
+
+  assertFailureDiagnosticContext(report, {
+    url: report.externalOutages[1].url,
+    location: "externalOutages[1].failures[0]",
+    reason: "failure.errorText",
+    actualRoute: report.routes[1],
+  });
+});
+
+test("diagnoses an unchecked route in nested outage failures with parent route", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.externalOutages[0].routeOutcomes = [{
+    route: report.routes[0],
+    failures: [{
+      route: "/not-checked.html",
+      errorText: "net::ERR_EMPTY_RESPONSE",
+    }],
+  }];
+
+  assertFailureDiagnosticContext(report, {
+    url: report.externalOutages[0].url,
+    location: "externalOutages[0].routeOutcomes[0].failures[0]",
+    reason: "failure.route",
+    parentRoute: report.routes[0],
+    actualRoute: "/not-checked.html",
+  });
+});
+
+test("accepts a healthy external report with no failure records", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.status = "PASS";
+  report.summary.failureEvents = 0;
+
+  assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+});
+
+test("accepts attributed failures in all current report collections", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[0].failures = [{
+    route: report.routes[0],
+    errorText: "net::ERR_EMPTY_RESPONSE",
+  }];
+  report.dependencies[1].routeOutcomes = [{
+    route: report.routes[1],
+    failures: [{
+      route: report.routes[1],
+      errorText: "net::ERR_CONNECTION_RESET",
+    }],
+  }];
+  report.externalOutages[0].failures = [{
+    route: report.routes[0],
+    errorText: "net::ERR_ABORTED",
+  }];
+  report.externalOutages[1].routeOutcomes = [{
+    route: report.routes[1],
+    failures: [{
+      route: report.routes[1],
+      errorText: "net::ERR_FAILED",
+    }],
+  }];
+
+  assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+});
 
 test("links the focused CSP summary to its uploaded artifact", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-link-"));
