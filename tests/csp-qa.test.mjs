@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { firefox, webkit } from "playwright";
 
 const testsDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = join(testsDirectory, "..");
@@ -29,6 +31,30 @@ const fixtureFiles = new Map([
   ["/external-delayed-outage.html", "external-delayed-outage.html"],
   ["/external-timeout.html", "external-timeout.html"],
 ]);
+const optionalEngineChecks = [
+  {
+    name: "firefox",
+    browserType: firefox,
+    userAgentPattern: /Firefox\//,
+  },
+  {
+    name: "webkit",
+    browserType: webkit,
+    userAgentPattern: /Version\/.*Safari\//,
+  },
+].map(({ name, browserType, userAgentPattern }) => {
+  const executablePath = browserType.executablePath();
+  const available = existsSync(executablePath);
+  return {
+    name,
+    executablePath,
+    available,
+    skipReason: available
+      ? false
+      : `${name} skipped: configured Playwright executable is missing at ${executablePath}`,
+    userAgentPattern,
+  };
+});
 
 let server;
 let externalServer;
@@ -118,6 +144,24 @@ async function serveFixture(request, response) {
 
 before(async () => {
   focusedReportDirectory = await mkdtemp(join(tmpdir(), "csp-focused-results-"));
+  const engineEvidenceDirectory = process.env.CSP_TASK384_EVIDENCE_DIR;
+  if (engineEvidenceDirectory) {
+    await mkdir(engineEvidenceDirectory, { recursive: true });
+    await writeFile(
+      join(engineEvidenceDirectory, "optional-engine-availability.json"),
+      `${JSON.stringify(optionalEngineChecks.map(({
+        name,
+        executablePath,
+        available,
+        skipReason,
+      }) => ({
+        name,
+        executablePath,
+        available,
+        skipReason,
+      })), null, 2)}\n`,
+    );
+  }
   externalServer = createServer((request, response) => {
     const requestUrl = new URL(request.url, "http://external-fixture");
     const path = requestUrl.pathname;
@@ -172,6 +216,12 @@ before(async () => {
       return;
     }
     if (path === "/shared.png") {
+      externalFixtureObservations.push({
+        path,
+        method: request.method,
+        status: 503,
+        userAgent: request.headers["user-agent"] || null,
+      });
       response.writeHead(503, { "content-type": "text/plain" });
       response.end("shared fixture dependency intentionally unavailable");
       return;
@@ -278,6 +328,37 @@ function runCspQa(path, flags = []) {
         return;
       }
       resolve(result);
+    });
+  });
+}
+
+function runCspQaCommand(flags = []) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [cspQaScript, `--base-url=${baseUrl}`, ...flags],
+      { cwd: repositoryRoot },
+    );
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`CSP QA CLI timed out for ${flags.join(" ")}`));
+    }, 60000);
+
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (status, signal) => {
+      clearTimeout(timeout);
+      resolve({
+        output: `${stdout}\n${stderr}`,
+        status,
+        signal,
+      });
     });
   });
 }
@@ -751,9 +832,11 @@ test("reports an explicit zero failure total for an available dependency", async
   try {
     const result = await runCspQa(route, [
       "--external-health",
+      "--browser=chromium",
       `--report=${reportPath}`,
     ]);
     assert.equal(result.status, 0, result.output);
+    assert.match(result.output, /Browser engine: chromium/);
 
     const report = JSON.parse(await readFile(reportPath, "utf8"));
     assert.equal(report.status, "PASS", JSON.stringify(report, null, 2));
@@ -797,6 +880,27 @@ test("reports an explicit zero failure total for an available dependency", async
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
+});
+
+test("rejects an unsupported external-health browser before launch", async () => {
+  const result = await runCspQaCommand([
+    "--external-health",
+    "--paths=/external-healthy-only.html",
+    "--browser=phantom",
+  ]);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /Invalid --browser=phantom/);
+  assert.doesNotMatch(result.output, /Browser engine:/);
+});
+
+test("rejects non-Chromium selection outside external-health", async () => {
+  const result = await runCspQaCommand([
+    "--paths=/external-csp-blocked.html",
+    "--browser=firefox",
+  ]);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /--browser=firefox is only supported with --external-health/);
+  assert.doesNotMatch(result.output, /Browser engine:/);
 });
 
 test("retains successful shared dependency evidence for two healthy routes", async () => {
@@ -1357,6 +1461,7 @@ test("reports CSP-blocked dependencies separately from external outages", async 
     assert.notEqual(result.status, 0, result.output);
     assert.match(result.output, /CSP diagnostics were observed/);
     assert.doesNotMatch(result.output, /EXTERNAL OUTAGE:/);
+    assert.match(result.output, /Browser engine: chromium/);
 
     assert.equal(report.mode, "external-health");
     assert.equal(report.status, "CSP_BLOCKED");
@@ -1515,16 +1620,55 @@ test("keeps a shared-route outage visible when another route blocks the same URL
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-shared-health-"));
   const reportPath = join(reportDirectory, "report.json");
   const paths = "/external-csp-shared.html,/external-outage-shared.html";
+  const observationStart = externalFixtureObservations.length;
   try {
     const result = await runCspQa(paths, [
       "--external-health",
       `--report=${reportPath}`,
     ]);
     assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /Browser engine: chromium/);
     assert.match(result.output, /EXTERNAL OUTAGE:/);
     assert.match(result.output, /CSP diagnostics were observed/);
 
-    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    const reportText = await readFile(reportPath, "utf8");
+    const report = JSON.parse(reportText);
+    const sharedRequests = externalFixtureObservations
+      .slice(observationStart)
+      .filter(({ path }) => path === "/shared.png");
+    const evidenceDirectory = process.env.CSP_TASK384_EVIDENCE_DIR;
+    if (evidenceDirectory) {
+      const engineDirectory = join(evidenceDirectory, "chromium");
+      await mkdir(engineDirectory, { recursive: true });
+      await writeFile(join(engineDirectory, "shared-route-report.json"), reportText);
+      await writeFile(
+        join(engineDirectory, "shared-route-runner-output.txt"),
+        result.output,
+      );
+      await writeFile(
+        join(engineDirectory, "shared-route-runner-status.json"),
+        `${JSON.stringify({
+          exitCode: result.status,
+          signal: result.signal,
+        }, null, 2)}\n`,
+      );
+      await writeFile(
+        join(engineDirectory, "shared-route-server-observations.json"),
+        `${JSON.stringify({
+          selectedEngine: "chromium",
+          expectedUserAgentPattern: "Chrome/",
+          routes: paths.split(","),
+          sharedRequests,
+        }, null, 2)}\n`,
+      );
+    }
+    assert.ok(sharedRequests.length >= 1, JSON.stringify(sharedRequests, null, 2));
+    for (const request of sharedRequests) {
+      assert.equal(request.method, "GET");
+      assert.equal(request.status, 503);
+      assert.match(request.userAgent || "", /Chrome\//);
+    }
+
     assert.equal(report.status, "EXTERNAL_OUTAGE");
     assert.deepEqual(report.routes, [
       "/external-csp-shared.html",
@@ -1576,6 +1720,149 @@ test("keeps a shared-route outage visible when another route blocks the same URL
     await rm(reportDirectory, { recursive: true, force: true });
   }
 });
+
+for (const {
+  name,
+  executablePath,
+  available,
+  skipReason,
+  userAgentPattern,
+} of optionalEngineChecks) {
+  test(
+    `keeps CSP-only and shared HTTP 503 evidence distinct in ${name}`,
+    { skip: skipReason },
+    async () => {
+      assert.ok(
+        existsSync(executablePath),
+        `${name} executable disappeared after the optional test was registered`,
+      );
+      const reportDirectory = await mkdtemp(join(tmpdir(), `csp-${name}-health-`));
+      const reportPath = join(reportDirectory, "report.json");
+      const routePaths = [
+        "/external-csp-blocked.html",
+        "/external-csp-shared.html",
+        "/external-outage-shared.html",
+      ];
+      const observationStart = externalFixtureObservations.length;
+      try {
+        const result = await runCspQa(routePaths.join(","), [
+          "--external-health",
+          `--browser=${name}`,
+          `--report=${reportPath}`,
+        ]);
+        const reportText = await readFile(reportPath, "utf8");
+        const report = JSON.parse(reportText);
+        const newObservations = externalFixtureObservations.slice(observationStart);
+        const blockedEndpointRequests = newObservations.filter(
+          ({ path }) => path === "/blocked.png",
+        );
+        const sharedRequests = newObservations.filter(
+          ({ path }) => path === "/shared.png",
+        );
+        const evidenceDirectory = process.env.CSP_TASK384_EVIDENCE_DIR;
+        if (evidenceDirectory) {
+          const engineDirectory = join(evidenceDirectory, name);
+          await mkdir(engineDirectory, { recursive: true });
+          await writeFile(join(engineDirectory, "report.json"), reportText);
+          await writeFile(
+            join(engineDirectory, "runner-output.txt"),
+            result.output,
+          );
+          await writeFile(
+            join(engineDirectory, "runner-status.json"),
+            `${JSON.stringify({
+              exitCode: result.status,
+              signal: result.signal,
+            }, null, 2)}\n`,
+          );
+          await writeFile(
+            join(engineDirectory, "server-observations.json"),
+            `${JSON.stringify({
+              selectedEngine: name,
+              configuredExecutable: executablePath,
+              configuredExecutableExists: available,
+              expectedUserAgentPattern: userAgentPattern.source,
+              routes: routePaths,
+              blockedEndpointRequests,
+              sharedRequests,
+              allNewExternalFixtureObservations: newObservations,
+            }, null, 2)}\n`,
+          );
+        }
+
+        assert.notEqual(result.status, 0, result.output);
+        assert.match(result.output, new RegExp(`Browser engine: ${name}`));
+        assert.match(result.output, /EXTERNAL OUTAGE:/);
+        assert.match(result.output, /CSP diagnostics were observed/);
+        assert.equal(report.status, "EXTERNAL_OUTAGE");
+        assert.deepEqual(report.routes, routePaths);
+        assert.equal(report.summary.externalOutages, 1);
+        assert.equal(report.summary.localFailures, 0);
+        assert.equal(report.summary.timeouts, 0);
+        assert.equal(report.summary.budgetExceeded, false);
+        assert.equal(report.timeBudget.exceeded, false);
+
+        const cspOnly = report.dependencies.find(({ url }) => url.endsWith("/blocked.png"));
+        const shared = report.dependencies.find(({ url }) => url.endsWith("/shared.png"));
+        assert.ok(cspOnly, JSON.stringify(report, null, 2));
+        assert.ok(shared, JSON.stringify(report, null, 2));
+        for (const dependency of [cspOnly, shared]) {
+          const normalizedUrl = new URL(dependency.url);
+          assert.equal(normalizedUrl.search, "");
+          assert.equal(normalizedUrl.hash, "");
+        }
+
+        assert.equal(cspOnly.state, "blocked-by-csp");
+        assert.equal(cspOnly.cspBlocked, true);
+        assert.deepEqual(cspOnly.responses, []);
+        assert.deepEqual(
+          cspOnly.routeOutcomes.map(({ route, state }) => ({ route, state })),
+          [{ route: routePaths[0], state: "blocked-by-csp" }],
+        );
+        assert.equal(
+          report.externalOutages.some(({ url }) => url === cspOnly.url),
+          false,
+          "a CSP-only dependency must not appear as an external outage",
+        );
+
+        assert.equal(shared.state, "unavailable");
+        assert.equal(shared.cspBlocked, true);
+        assert.deepEqual(shared.routes, routePaths.slice(1));
+        assert.ok(shared.responses.some(({ status }) => status === 503));
+        const sharedCspOutcome = shared.routeOutcomes.find(
+          ({ route }) => route === routePaths[1],
+        );
+        const sharedHttpOutcome = shared.routeOutcomes.find(
+          ({ route }) => route === routePaths[2],
+        );
+        assert.equal(sharedCspOutcome.state, "blocked-by-csp");
+        assert.ok(sharedCspOutcome.cspEvidence.some(
+          ({ blockedURI }) => blockedURI === shared.url,
+        ));
+        assert.deepEqual(sharedCspOutcome.responses, []);
+        assert.equal(sharedHttpOutcome.state, "unavailable");
+        assert.ok(sharedHttpOutcome.responses.some(({ status }) => status === 503));
+        assert.deepEqual(sharedHttpOutcome.cspEvidence, []);
+        assert.deepEqual(report.externalOutages.map(({ url }) => url), [shared.url]);
+        assert.ok(report.externalOutages[0].responses.some(({ status }) => status === 503));
+
+        assert.deepEqual(blockedEndpointRequests, []);
+        assert.ok(sharedRequests.length >= 1, JSON.stringify(sharedRequests, null, 2));
+        for (const request of sharedRequests) {
+          assert.equal(request.method, "GET");
+          assert.equal(request.status, 503);
+          assert.match(
+            request.userAgent || "",
+            userAgentPattern,
+            `${name} response must come from the selected browser engine`,
+          );
+        }
+      } finally {
+        await rm(reportDirectory, { recursive: true, force: true });
+      }
+    },
+  );
+}
 
 test("waits for a delayed external response before classifying the dependency", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-delayed-health-"));

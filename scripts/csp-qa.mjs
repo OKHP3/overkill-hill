@@ -22,11 +22,13 @@
  *   node scripts/csp-qa.mjs --external-health --base-url=https://overkillhill.com
  *   node scripts/csp-qa.mjs --external-health --report=third-party-report.json
  *   node scripts/csp-qa.mjs --external-health --external-budget-ms=120000
+ *   node scripts/csp-qa.mjs --external-health --browser=firefox
+ *   External-health browser choices: chromium (default), firefox, or webkit.
  *   node scripts/csp-qa.mjs --fixture-summary=fixture-results.json
  */
 
 import { loadFunctionalPaths } from './release-qa-inventory.mjs';
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5000";
@@ -42,6 +44,30 @@ const artifactUrlArg = process.argv.find((arg) => arg.startsWith("--artifact-url
 const externalBudgetArg = process.argv.find((arg) => arg.startsWith("--external-budget-ms="));
 const externalHealthMode =
   process.argv.includes("--external-health") || process.argv.includes("--check-external");
+const browserArguments = process.argv.filter(
+  (arg) => arg === "--browser" || arg.startsWith("--browser="),
+);
+
+if (browserArguments.length > 1) {
+  throw new Error("--browser may be specified only once");
+}
+if (browserArguments[0] === "--browser") {
+  throw new Error("--browser requires a value: chromium, firefox, or webkit");
+}
+
+const browserName = browserArguments.length
+  ? browserArguments[0].slice("--browser=".length)
+  : "chromium";
+const browserTypes = { chromium, firefox, webkit };
+if (!Object.hasOwn(browserTypes, browserName)) {
+  throw new Error(
+    `Invalid --browser=${browserName}. Choose chromium, firefox, or webkit.`,
+  );
+}
+if (browserName !== "chromium" && !externalHealthMode) {
+  throw new Error(`--browser=${browserName} is only supported with --external-health.`);
+}
+const externalHealthBrowserType = browserTypes[browserName];
 
 if (reportArg && !externalHealthMode && !pathsArg) {
   throw new Error("--report requires --external-health or --paths");
@@ -368,7 +394,11 @@ async function checkRoute(browser, path) {
 }
 
 function getExternalDependency(dependencies, request) {
-  const requestUrl = new URL(request.url());
+  return getExternalDependencyForUrl(dependencies, request.url());
+}
+
+function getExternalDependencyForUrl(dependencies, value) {
+  const requestUrl = new URL(value);
   if (!isHttpUrl(requestUrl) || requestUrl.origin === baseOrigin) return null;
 
   // Query strings often contain per-visit analytics identifiers. They are
@@ -657,6 +687,13 @@ async function checkExternalRoute(browser, path, overallDeadline) {
       statusCode: evidence.statusCode || 0,
     }))
     .filter(({ blockedURI }) => blockedURI);
+  // Firefox and WebKit can enforce CSP before emitting a request event.
+  // Retain that dependency from structured evidence without inventing a
+  // request count, resource type, response, or browser failure.
+  for (const { blockedURI } of externalCspEvidence) {
+    const dependency = getExternalDependencyForUrl(dependencies, blockedURI);
+    if (dependency) dependency.routes.add(path);
+  }
   await page.close();
   return {
     path,
@@ -756,6 +793,7 @@ async function runExternalHealth() {
   console.log("OverKill Hill third-party runtime health");
   console.log("=".repeat(40));
   console.log(`Base URL: ${baseUrl}`);
+  console.log(`Browser engine: ${browserName}`);
   console.log(`Routes: ${PUBLIC_PATHS.length}`);
   if (pathsArg) console.log(`Focused paths: ${PUBLIC_PATHS.join(", ")}`);
   console.log(
@@ -769,7 +807,7 @@ async function runExternalHealth() {
     `per-route settle limit: ${EXTERNAL_SETTLE_TIMEOUT_MS}ms.\n`,
   );
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await externalHealthBrowserType.launch({ headless: true });
   const results = [];
   const routesCutShortByBudget = [];
   const routesSkippedByBudget = [];
