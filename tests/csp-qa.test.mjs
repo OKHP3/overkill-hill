@@ -584,6 +584,67 @@ test("groups repeated failures for one dependency without losing the browser rea
   }
 });
 
+test("counts shared repeated failures once while preserving route evidence", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-shared-repeated-failures-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const repeatedRoute = "/external-repeated-network-failure.html";
+  const sharedRoute = "/external-network-failure-shared.html";
+  const routes = [repeatedRoute, sharedRoute].sort();
+  try {
+    const result = await runCspQa(routes.join(","), [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /EXTERNAL OUTAGE:/);
+    for (const route of routes) {
+      assert.ok(result.output.includes(`${route}: net::ERR_`), result.output);
+    }
+
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assertExternalFailureReportContract(report);
+    assert.equal(report.status, "EXTERNAL_OUTAGE");
+    assert.equal(report.summary.externalOutages, 1);
+    assert.equal(report.summary.failureEvents, 3, JSON.stringify(report, null, 2));
+
+    const dependency = report.dependencies.find(({ url }) => url.endsWith("/aborted.png"));
+    assert.ok(dependency, JSON.stringify(report, null, 2));
+    assert.equal(dependency.url.includes("?"), false);
+    assert.equal(dependency.state, "unavailable");
+    assert.deepEqual(dependency.routes, routes);
+    assert.deepEqual(
+      dependency.failures.map(({ route, count }) => ({ route, count }))
+        .sort((left, right) => left.route.localeCompare(right.route)),
+      [
+        { route: sharedRoute, count: 1 },
+        { route: repeatedRoute, count: 2 },
+      ].sort((left, right) => left.route.localeCompare(right.route)),
+    );
+    assert.ok(dependency.failures.every(({ errorText }) => /^net::ERR_/.test(errorText)));
+
+    assert.deepEqual(
+      dependency.routeOutcomes.map(({ route, state }) => ({ route, state })),
+      routes.map((route) => ({ route, state: "unavailable" })),
+    );
+    for (const outcome of dependency.routeOutcomes) {
+      const expectedCount = outcome.route === repeatedRoute ? 2 : 1;
+      assert.deepEqual(
+        outcome.failures.map(({ route, count }) => ({ route, count })),
+        [{ route: outcome.route, count: expectedCount }],
+      );
+      assert.ok(outcome.failures.every(({ errorText }) => /^net::ERR_/.test(errorText)));
+    }
+
+    const outage = report.externalOutages.find(({ url }) => url.endsWith("/aborted.png"));
+    assert.ok(outage, JSON.stringify(report, null, 2));
+    assert.equal(outage.state, "unavailable");
+    assert.deepEqual(outage.routes, routes);
+    assert.deepEqual(outage.routeOutcomes, dependency.routeOutcomes);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("keeps different browser failure reasons separate for one normalized dependency", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-different-failures-"));
   const reportPath = join(reportDirectory, "report.json");
