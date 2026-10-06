@@ -1289,37 +1289,54 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(summary_script, ROOT / 'scripts/csp-qa.mjs')
         self.assertTrue(summary_script.is_file())
 
-        with tempfile.TemporaryDirectory() as directory:
-            report_path = Path(directory) / report_name
-            summary_path = Path(directory) / 'github-step-summary.md'
-            self.assertFalse(report_path.exists())
-            environment = os.environ.copy()
-            environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
-            result = subprocess.run(
-                [
-                    node,
-                    str(summary_script),
-                    f'--fixture-summary={report_path}',
-                    '--artifact-url=',
-                ],
-                cwd=directory,
-                env=environment,
+        with self.subTest('missing-report summary entry point'):
+            # Python compatibility jobs omit optional Node QA packages. Their
+            # source-contract and failure-command assertions still run below.
+            dependency = subprocess.run(
+                [node, '--input-type=module', '--eval', "import.meta.resolve('playwright')"],
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
             )
-            output = result.stdout + result.stderr
-            self.assertEqual(result.returncode, 0, output)
-            self.assertTrue(summary_path.is_file(), output)
-            rendered = summary_path.read_text(encoding='utf-8')
-            self.assertIn(
-                '| unavailable | unknown | Could not read focused CSP fixture report:',
-                rendered,
-            )
-            self.assertIn(
-                'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
-                rendered,
-            )
-            self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
+            dependency_output = dependency.stdout + dependency.stderr
+            if (
+                dependency.returncode != 0
+                and 'ERR_MODULE_NOT_FOUND' in dependency_output
+                and "Cannot find package 'playwright'" in dependency_output
+            ):
+                self.skipTest('optional Playwright QA package is absent; summary execution was not run')
+            self.assertEqual(dependency.returncode, 0, dependency_output)
+            with tempfile.TemporaryDirectory() as directory:
+                report_path = Path(directory) / report_name
+                summary_path = Path(directory) / 'github-step-summary.md'
+                self.assertFalse(report_path.exists())
+                environment = os.environ.copy()
+                environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+                result = subprocess.run(
+                    [
+                        node,
+                        str(summary_script),
+                        f'--fixture-summary={report_path}',
+                        '--artifact-url=',
+                    ],
+                    cwd=directory,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                )
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, output)
+                self.assertTrue(summary_path.is_file(), output)
+                rendered = summary_path.read_text(encoding='utf-8')
+                self.assertIn(
+                    '| unavailable | unknown | Could not read focused CSP fixture report:',
+                    rendered,
+                )
+                self.assertIn(
+                    'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                    rendered,
+                )
+                self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
 
         preserve_run = re.search(r'(?m)^        run: ([^\r\n]+)$', preserve_step)
         self.assertIsNotNone(preserve_run, 'failure-preservation command is missing')
