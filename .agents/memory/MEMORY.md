@@ -2,7 +2,7 @@
 - [okhp3 skills scoped to other projects](okhp3-skills-cross-project-scope.md) — some bundled `.agents/skills/` entries target sibling repos, not this one; check the skill's own project contract before applying it here.
 - [Project page stat sources](project-page-stat-sources.md) — which repo artifact is the source of truth per project page; skillz syncs to project-summary.json, not raw SKILL.md counts.
 - [Brand style registry location](brand-style-registry-location.md) — the OverKill Hill profile is a project-owned `brand-styles/registry.yaml` + `profiles/overkill-hill.yaml`, promoted from the skill's bundled seed on 2026-08-03.
-- [Playwright system libraries](playwright-system-libraries.md) — local Chromium needs Nix `libgbm` and `cups` in `.replit`; package activation requires an app workflow restart.
+- [Playwright system libraries](playwright-system-libraries.md) — check Replit's Chromium binary when Playwright's cache is missing; `libgbm`/`cups` still matter for shared-library failures.
 - [Screen-reader tree audit](screen-reader-tree-audit.md) — no real AT in this sandbox; use CDP `Accessibility.getFullAXTree` instead, and watch for Chromium's layout-table heuristic stripping `<table>` semantics.
 - [Layout-table CI gate](layout-table-ci-gate.md) — accessibility-qa.mjs now statically flags any `<table>` missing `<th>`/`<caption>`/`role`, catching the heuristic before it ships.
 - [GitHub workflow push auth](github-workflow-push-auth.md) — use the workflow-scoped PAT via Basic x-access-token transport; the attached OAuth connection may only have repo scope.

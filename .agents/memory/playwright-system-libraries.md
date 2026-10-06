@@ -13,3 +13,15 @@ not exposed.
 **How to apply:** Keep `libgbm` and `cups` in the project Nix package list and
 restart the application workflow after changing that list before running
 browser QA.
+
+The Replit runtime may also provide Chromium independently of Playwright's
+versioned browser cache. Check `command -v chromium` and, if that binary launches
+through Playwright, pass it as `executablePath` before installing another
+browser.
+
+**Why:** In this project the expected Playwright browser-cache build was absent,
+while `/repl/tools/bin/chromium` launched under the existing runtime; no install
+was needed.
+
+**How to apply:** Try the managed Chromium executable first. Keep the separate
+`libgbm`/`cups` guidance for launch failures caused by missing shared libraries.
