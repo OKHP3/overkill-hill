@@ -33,6 +33,7 @@ const fixtureFiles = new Map([
 let server;
 let externalServer;
 const pendingExternalSockets = new Set();
+const externalFixtureObservations = [];
 let baseUrl;
 let externalBaseUrl;
 let focusedReportDirectory;
@@ -100,6 +101,7 @@ before(async () => {
   externalServer = createServer((request, response) => {
     const path = new URL(request.url, "http://external-fixture").pathname;
     if (path === "/healthy.png") {
+      externalFixtureObservations.push({ path, method: request.method, status: 200 });
       response.writeHead(200, { "content-type": "image/png" });
       response.end(Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -108,6 +110,7 @@ before(async () => {
       return;
     }
     if (path === "/outage.png") {
+      externalFixtureObservations.push({ path, method: request.method, status: 503 });
       response.writeHead(503, { "content-type": "text/plain" });
       response.end("fixture dependency intentionally unavailable");
       return;
@@ -250,6 +253,15 @@ function runCspQa(path, flags = []) {
       resolve(result);
     });
   });
+}
+
+async function readExternalHealthReport(reportPath, evidenceFilename) {
+  const reportText = await readFile(reportPath, "utf8");
+  const evidenceDirectory = process.env.CSP_TASK387_EVIDENCE_DIR;
+  if (evidenceDirectory) {
+    await writeFile(join(evidenceDirectory, evidenceFilename), reportText);
+  }
+  return JSON.parse(reportText);
 }
 
 function runFixtureSummary(reportPath, summaryPath, artifactUrl = null) {
@@ -755,6 +767,162 @@ test("reports an explicit zero failure total for an available dependency", async
     const [routeOutcome] = healthy.routeOutcomes;
     assert.deepEqual(routeOutcome.failures, []);
     assert.ok(routeOutcome.responses.some(({ status }) => status === 200));
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("deduplicates repeated route input without inflating dependency request counts", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-duplicate-route-counts-"));
+  const singleRoute = "/external-healthy-only.html";
+  const duplicateRoute = "/external-health.html";
+  const duplicateInput = [duplicateRoute, duplicateRoute].join(",");
+  const singleReportPath = join(reportDirectory, "single-route.json");
+  const duplicateReportPath = join(reportDirectory, "duplicate-route.json");
+  const evidenceDirectory = process.env.CSP_TASK387_EVIDENCE_DIR;
+
+  try {
+    const singleObservationStart = externalFixtureObservations.length;
+    const singleResult = await runCspQa(singleRoute, [
+      "--external-health",
+      `--report=${singleReportPath}`,
+    ]);
+    assert.equal(singleResult.status, 0, singleResult.output);
+    assert.match(singleResult.output, /External health:/, singleResult.output);
+    const singleFixtureRequests = externalFixtureObservations
+      .slice(singleObservationStart);
+    const singleReport = await readExternalHealthReport(
+      singleReportPath,
+      "single-route-report.json",
+    );
+
+    const duplicateObservationStart = externalFixtureObservations.length;
+    const duplicateResult = await runCspQa(duplicateInput, [
+      "--external-health",
+      `--report=${duplicateReportPath}`,
+    ]);
+    assert.notEqual(duplicateResult.status, 0, duplicateResult.output);
+    assert.match(duplicateResult.output, /External health:/, duplicateResult.output);
+    const duplicateFixtureRequests = externalFixtureObservations
+      .slice(duplicateObservationStart);
+    const duplicateReport = await readExternalHealthReport(
+      duplicateReportPath,
+      "duplicate-route-report.json",
+    );
+
+    if (evidenceDirectory) {
+      await writeFile(
+        join(evidenceDirectory, "fixture-observations.json"),
+        `${JSON.stringify({
+          singleRouteControl: {
+            input: singleRoute,
+            exitCode: singleResult.status,
+            requests: singleFixtureRequests,
+          },
+          duplicateRouteInput: {
+            input: duplicateInput,
+            exitCode: duplicateResult.status,
+            requests: duplicateFixtureRequests,
+          },
+        }, null, 2)}\n`,
+      );
+    }
+
+    assert.equal(singleReport.status, "PASS", JSON.stringify(singleReport, null, 2));
+    assert.deepEqual(singleReport.routes, [singleRoute]);
+    assert.equal(singleReport.summary.routes, 1);
+    assert.equal(singleReport.summary.failureEvents, 0);
+    assert.equal(singleReport.summary.externalOutages, 0);
+    assert.equal(singleReport.dependencies.length, 1);
+
+    const [singleHealthy] = singleReport.dependencies;
+    assert.equal(singleHealthy.state, "available");
+    assert.deepEqual(singleHealthy.routes, [singleRoute]);
+    assert.deepEqual(
+      singleHealthy.routeOutcomes.map(({ route, state }) => ({ route, state })),
+      [{ route: singleRoute, state: "available" }],
+    );
+    assert.deepEqual(singleHealthy.responses.map(({ status }) => status), [200]);
+    assert.deepEqual(singleHealthy.failures, []);
+    assert.deepEqual(singleHealthy.routeOutcomes[0].failures, []);
+
+    assert.equal(
+      duplicateReport.status,
+      "EXTERNAL_OUTAGE",
+      JSON.stringify(duplicateReport, null, 2),
+    );
+    assert.deepEqual(duplicateReport.routes, [duplicateRoute]);
+    assert.equal(duplicateReport.summary.routes, 1);
+    assert.equal(duplicateReport.summary.dependencies, 2);
+    assert.equal(duplicateReport.summary.externalOutages, 1);
+    assert.equal(duplicateReport.summary.failureEvents, 0);
+    assert.equal(duplicateReport.externalOutages.length, 1);
+
+    const duplicateHealthy = duplicateReport.dependencies.find(
+      ({ url }) => url.endsWith("/healthy.png"),
+    );
+    const duplicateOutage = duplicateReport.dependencies.find(
+      ({ url }) => url.endsWith("/outage.png"),
+    );
+    assert.ok(duplicateHealthy, JSON.stringify(duplicateReport, null, 2));
+    assert.ok(duplicateOutage, JSON.stringify(duplicateReport, null, 2));
+    for (const dependency of [duplicateHealthy, duplicateOutage]) {
+      assert.deepEqual(dependency.routes, [duplicateRoute]);
+      assert.deepEqual(
+        dependency.routeOutcomes.map(({ route }) => route),
+        [duplicateRoute],
+      );
+      assert.deepEqual(dependency.failures, []);
+      assert.deepEqual(dependency.routeOutcomes[0].failures, []);
+    }
+    assert.equal(duplicateHealthy.state, "available");
+    assert.deepEqual(duplicateHealthy.responses.map(({ status }) => status), [200]);
+    assert.equal(duplicateOutage.state, "unavailable");
+    assert.deepEqual(duplicateOutage.responses.map(({ status }) => status), [503]);
+    assert.equal(duplicateReport.externalOutages[0].url, duplicateOutage.url);
+
+    // These complete 200/503 replies avoid aborted-socket retries.
+    assert.deepEqual(
+      singleFixtureRequests.map(({ path, method, status }) => ({ path, method, status })),
+      [{ path: "/healthy.png", method: "GET", status: 200 }],
+    );
+    assert.deepEqual(
+      duplicateFixtureRequests
+        .map(({ path, method, status }) => ({ path, method, status }))
+        .sort((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: "/healthy.png", method: "GET", status: 200 },
+        { path: "/outage.png", method: "GET", status: 503 },
+      ],
+    );
+
+    assert.equal(
+      singleHealthy.requestCount,
+      singleFixtureRequests.length,
+      `single-route browser count versus local fixture requests: ${JSON.stringify({
+        browserRequestCount: singleHealthy.requestCount,
+        fixtureRequests: singleFixtureRequests,
+      })}`,
+    );
+    for (const dependency of [duplicateHealthy, duplicateOutage]) {
+      const observedRequests = duplicateFixtureRequests.filter(
+        ({ path }) => new URL(dependency.url).pathname === path,
+      );
+      assert.equal(
+        dependency.requestCount,
+        observedRequests.length,
+        `duplicate-route browser count versus local fixture requests: ${JSON.stringify({
+          dependencyUrl: dependency.url,
+          browserRequestCount: dependency.requestCount,
+          fixtureRequests: observedRequests,
+        })}`,
+      );
+      assert.equal(dependency.responses.length, observedRequests.length);
+      assert.deepEqual(
+        dependency.responses.map(({ status }) => status),
+        observedRequests.map(({ status }) => status),
+      );
+    }
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }

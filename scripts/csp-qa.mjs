@@ -677,6 +677,7 @@ function mergeExternalDependencies(results) {
       if (!merged.has(dependency.url)) {
         merged.set(dependency.url, {
           ...dependency,
+          requestCount: 0,
           routes: [],
           routeOutcomes: [],
           resourceTypes: [],
