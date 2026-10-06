@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 import re
+import shlex
+import shutil
 import stat
 from pathlib import Path, PurePosixPath
 import subprocess
@@ -1204,6 +1206,141 @@ class SummaryTests(unittest.TestCase):
         )
         self.assertIsNotNone(fixture_step, 'missing CSP fixture regression step')
         self.assertIn('continue-on-error: true', fixture_step.group(1))
+
+    def test_missing_optional_csp_report_preserves_originating_failure(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        names = (
+            'Run CSP fixture regressions',
+            'Upload failed CSP fixture report',
+            'Summarize failed CSP fixture regressions',
+            'Preserve CSP fixture regression failure',
+        )
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        steps = {name: step(name) for name in names}
+        step_positions = [workflow.index(f'      - name: {name}\n') for name in names]
+        self.assertEqual(
+            step_positions,
+            sorted(step_positions),
+            'the originating check, optional upload, summary, and failure guard must stay ordered',
+        )
+        fixture_step, upload_step, summary_step, preserve_step = (
+            steps[name] for name in names
+        )
+        self.assertIn('id: csp-fixtures', fixture_step)
+        # continue-on-error can make conclusion success while outcome retains the original failure.
+        self.assertIn('continue-on-error: true', fixture_step)
+        self.assertIn('run: npm run test:csp:regressions', fixture_step)
+        report_name_match = re.search(
+            r'(?m)^          CSP_FIXTURE_REPORT: ([^\s]+)$',
+            fixture_step,
+        )
+        self.assertIsNotNone(report_name_match, 'CSP fixture report path is not declared')
+        report_name = report_name_match.group(1)
+        expected_failure_condition = "if: always() && steps.csp-fixtures.outcome == 'failure'"
+        for follow_up_step in (upload_step, summary_step, preserve_step):
+            self.assertIn(expected_failure_condition, follow_up_step)
+            self.assertNotIn('steps.csp-fixtures.conclusion', follow_up_step)
+        preserve_error_policy = re.search(
+            r'(?m)^        continue-on-error: ([^\r\n]+)$', preserve_step,
+        )
+        if preserve_error_policy is not None:
+            self.assertEqual(
+                preserve_error_policy.group(1).strip(), 'false',
+                'the failure-preservation step must not continue after its nonzero exit',
+            )
+        self.assertIn('id: upload-csp-fixture-report', upload_step)
+        self.assertIn('uses: actions/upload-artifact@', upload_step)
+        self.assertRegex(upload_step, rf'(?m)^          path: {re.escape(report_name)}$')
+        self.assertIn('if-no-files-found: warn', upload_step)
+        self.assertIn('retention-days: 7', upload_step)
+
+        run_match = re.search(
+            r'(?ms)^        run: >-\n((?:^          [^\n]*\n?)+)',
+            summary_step,
+        )
+        self.assertIsNotNone(run_match, 'CSP summary run block is not the supported folded form')
+        summary_command = ' '.join(line.strip() for line in run_match.group(1).splitlines())
+        try:
+            summary_tokens = shlex.split(summary_command, posix=True)
+        except ValueError as exc:
+            self.fail(f'CSP summary command is not in the supported form: {exc}')
+        self.assertEqual(
+            summary_tokens,
+            [
+                'node',
+                'scripts/csp-qa.mjs',
+                f'--fixture-summary={report_name}',
+                '--artifact-url=${{ steps.upload-csp-fixture-report.outputs.artifact-url }}',
+            ],
+            'CSP summary must keep using the workflow report and its upload output',
+        )
+        node = shutil.which(summary_tokens[0])
+        self.assertIsNotNone(node, 'the existing Node.js runtime is required')
+        summary_script = ROOT / summary_tokens[1]
+        self.assertEqual(summary_script, ROOT / 'scripts/csp-qa.mjs')
+        self.assertTrue(summary_script.is_file())
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / report_name
+            summary_path = Path(directory) / 'github-step-summary.md'
+            self.assertFalse(report_path.exists())
+            environment = os.environ.copy()
+            environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+            result = subprocess.run(
+                [
+                    node,
+                    str(summary_script),
+                    f'--fixture-summary={report_path}',
+                    '--artifact-url=',
+                ],
+                cwd=directory,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            self.assertTrue(summary_path.is_file(), output)
+            rendered = summary_path.read_text(encoding='utf-8')
+            self.assertIn(
+                '| unavailable | unknown | Could not read focused CSP fixture report:',
+                rendered,
+            )
+            self.assertIn(
+                'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                rendered,
+            )
+            self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
+
+        preserve_run = re.search(r'(?m)^        run: ([^\r\n]+)$', preserve_step)
+        self.assertIsNotNone(preserve_run, 'failure-preservation command is missing')
+        preserve_command = preserve_run.group(1).strip()
+        self.assertRegex(
+            preserve_command,
+            r'\Aexit [0-9]+\Z',
+            'only the portable single exit-code form is supported',
+        )
+        result = subprocess.run(
+            preserve_command,
+            shell=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(
+            result.returncode,
+            0,
+            'the failure-preservation command must remain nonzero',
+        )
 
     def test_pages_only_blocked_fixture_is_partial_and_not_enforcement_proof(self):
         code, summary = self.run_summary(self.load_fixture('live-edge-pages-blocked.json'))
