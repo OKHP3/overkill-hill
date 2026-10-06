@@ -7,6 +7,11 @@ import {chromium} from 'playwright';
 const root = path.resolve(import.meta.dirname, '..');
 const evidenceDir = process.env.W06_FOCUS_EVIDENCE_DIR;
 const announcementKey = 'okh-capability-transition-2026-09-29';
+const negativeControlMode = process.env.W06_AX_NEGATIVE_CONTROL || '';
+assert.ok(
+  ['', 'remove-svg-name'].includes(negativeControlMode),
+  `unsupported W06_AX_NEGATIVE_CONTROL value: ${negativeControlMode}`,
+);
 const mimeTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -161,6 +166,245 @@ async function rerenderWithNodeFocused(page, mapIndex, viewportWidth, expectedHr
   await assertFocusedNodeVisible(page, `${viewportWidth}px node after ${scheme} theme rerender`);
 }
 
+function domNodeAttributes(node) {
+  const result = {};
+  for (let index = 0; index < (node.attributes || []).length; index += 2) {
+    result[node.attributes[index]] = node.attributes[index + 1];
+  }
+  return result;
+}
+
+function domNodeText(node) {
+  if (node.nodeName === '#text') return node.nodeValue || '';
+  return (node.children || []).map(domNodeText).join('');
+}
+
+function normalizeAXText(value) {
+  return String(value || '').replace(/\s+/gu, ' ').trim();
+}
+
+function collectUniverseMapDOM(rootNode) {
+  const maps = [];
+  function visit(node, state = {}) {
+    if (!node.nodeName || node.nodeName.startsWith('#')) {
+      for (const child of node.children || []) visit(child, state);
+      return;
+    }
+
+    const tag = node.nodeName.toLowerCase();
+    const attributes = domNodeAttributes(node);
+    const classes = (attributes.class || '').split(/\s+/u);
+    const inUniverse = state.inUniverse || classes.includes('universe-generated');
+    let mapIndex = state.mapIndex ?? null;
+    if (inUniverse && tag === 'details') {
+      mapIndex = maps.length;
+      maps.push({
+        summary: null,
+        svg: null,
+        svgLinks: [],
+        outlineItems: [],
+      });
+    }
+
+    const inDiagram = state.inDiagram || classes.includes('universe-diagram');
+    const inSvg = state.inSvg || tag === 'svg';
+    const inList = state.inList || tag === 'ul';
+    let outlineItem = state.outlineItem || null;
+    if (mapIndex !== null && tag === 'li' && inList) {
+      outlineItem = {
+        backendNodeId: node.backendNodeId ?? null,
+        text: domNodeText(node).trim(),
+        link: null,
+      };
+      maps[mapIndex].outlineItems.push(outlineItem);
+    }
+
+    if (mapIndex !== null && tag === 'summary') {
+      maps[mapIndex].summary = {
+        backendNodeId: node.backendNodeId ?? null,
+        text: domNodeText(node).trim(),
+      };
+    }
+    if (mapIndex !== null && tag === 'svg' && inDiagram && !maps[mapIndex].svg) {
+      maps[mapIndex].svg = {
+        backendNodeId: node.backendNodeId ?? null,
+        role: attributes.role || '',
+        ariaLabel: attributes['aria-label'] || '',
+      };
+    }
+    if (mapIndex !== null && tag === 'a' && inSvg) {
+      maps[mapIndex].svgLinks.push({
+        backendNodeId: node.backendNodeId ?? null,
+        href: attributes.href || '',
+        ariaLabel: attributes['aria-label'] || '',
+      });
+    } else if (mapIndex !== null && tag === 'a' && inList && outlineItem) {
+      outlineItem.link = {
+        backendNodeId: node.backendNodeId ?? null,
+        href: attributes.href || '',
+        text: domNodeText(node).trim(),
+      };
+    }
+
+    const childState = {inUniverse, mapIndex, inDiagram, inSvg, inList, outlineItem};
+    for (const child of node.children || []) visit(child, childState);
+  }
+  visit(rootNode);
+  return maps;
+}
+
+async function assertUniverseComputedAX(page, viewportWidth) {
+  const client = await page.context().newCDPSession(page);
+  let axNodes;
+  let domRoot;
+  try {
+    await client.send('Accessibility.enable');
+    ({nodes: axNodes} = await client.send('Accessibility.getFullAXTree'));
+    ({root: domRoot} = await client.send('DOM.getDocument', {depth: -1, pierce: true}));
+  } finally {
+    await client.detach().catch(() => {});
+  }
+
+  const maps = collectUniverseMapDOM(domRoot);
+  assert.equal(maps.length, 6, `${viewportWidth}px: expected all six Universe map disclosures in the DOM`);
+  const expectedLinkCount = maps.reduce((total, map) => total + map.outlineItems.length, 0);
+  assert.ok(expectedLinkCount > 0, `${viewportWidth}px: generated map outline is empty`);
+  const includedAXNodes = axNodes.filter((node) => !node.ignored);
+  const nodesById = new Map(axNodes.map((node) => [node.nodeId, node]));
+  function axNodeFor(backendNodeId, expectedRole, label, {requireName = true} = {}) {
+    assert.ok(Number.isInteger(backendNodeId), `${label}: DOM backend node ID is missing`);
+    const matches = includedAXNodes.filter((node) => (
+      node.backendDOMNodeId === backendNodeId && node.role?.value === expectedRole
+    ));
+    assert.equal(matches.length, 1, `${label}: expected one AX ${expectedRole} node, found ${matches.length}`);
+    if (requireName) {
+      assert.ok(normalizeAXText(matches[0].name?.value), `${label}: AX ${expectedRole} has no accessible name`);
+    }
+    return matches[0];
+  }
+  function axDescendants(node) {
+    const result = [];
+    const pending = [...(node.childIds || [])];
+    const visited = new Set();
+    while (pending.length) {
+      const nodeId = pending.pop();
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+      const child = nodesById.get(nodeId);
+      if (!child) continue;
+      result.push(child);
+      pending.push(...(child.childIds || []));
+    }
+    return result;
+  }
+
+  let svgLinkCount = 0;
+  let outlineLinkCount = 0;
+  let namedSVGLinkCount = 0;
+  let namedOutlineLinkCount = 0;
+  let outlineDescriptionCount = 0;
+  for (const [mapIndex, map] of maps.entries()) {
+    const prefix = `${viewportWidth}px map ${mapIndex + 1}`;
+    assert.ok(map.summary, `${prefix}: native summary is missing`);
+    assert.ok(map.svg, `${prefix}: rendered SVG root is missing`);
+    assert.ok(map.svgLinks.length > 0, `${prefix}: no SVG links were rendered`);
+    assert.ok(map.outlineItems.length > 0, `${prefix}: no text-outline items were rendered`);
+
+    const summaryName = normalizeAXText(map.summary.text);
+    const summaryAX = axNodeFor(map.summary.backendNodeId, 'DisclosureTriangle', `${prefix} summary`);
+    assert.equal(
+      normalizeAXText(summaryAX.name?.value),
+      summaryName,
+      `${prefix}: computed disclosure name must match its summary text`,
+    );
+
+    const svgAX = axNodeFor(map.svg.backendNodeId, 'graphics-document', `${prefix} SVG root`);
+    assert.equal(
+      normalizeAXText(svgAX.name?.value),
+      summaryName,
+      `${prefix}: SVG accessible name must match its disclosure`,
+    );
+    assert.equal(
+      normalizeAXText(map.svg.ariaLabel),
+      summaryName,
+      `${prefix}: SVG aria-label must continue to name its disclosure`,
+    );
+    assert.equal(
+      map.svgLinks.length,
+      map.outlineItems.length,
+      `${prefix}: SVG and outline link counts must match`,
+    );
+
+    for (const [linkIndex, svgLink] of map.svgLinks.entries()) {
+      const item = map.outlineItems[linkIndex];
+      const itemLabel = `${prefix} link ${linkIndex + 1}`;
+      assert.ok(item.link, `${itemLabel}: text-outline anchor is missing`);
+      assert.ok(svgLink.href, `${itemLabel}: SVG destination is missing`);
+      assert.ok(item.link.href, `${itemLabel}: outline destination is missing`);
+      assert.equal(svgLink.href, item.link.href, `${itemLabel}: SVG and outline destinations differ`);
+
+      const svgLinkAX = axNodeFor(svgLink.backendNodeId, 'link', `${itemLabel} SVG link`);
+      const outlineLinkAX = axNodeFor(item.link.backendNodeId, 'link', `${itemLabel} outline link`);
+      const expectedLinkName = normalizeAXText(item.link.text);
+      assert.equal(
+        normalizeAXText(svgLinkAX.name?.value),
+        expectedLinkName,
+        `${itemLabel}: SVG AX link name must match its text-outline title`,
+      );
+      assert.equal(
+        normalizeAXText(outlineLinkAX.name?.value),
+        expectedLinkName,
+        `${itemLabel}: outline AX link name must match its visible title`,
+      );
+      assert.equal(
+        normalizeAXText(svgLinkAX.name?.value),
+        normalizeAXText(outlineLinkAX.name?.value),
+        `${itemLabel}: computed SVG and outline link names differ`,
+      );
+      namedSVGLinkCount += 1;
+      namedOutlineLinkCount += 1;
+      svgLinkCount += 1;
+      outlineLinkCount += 1;
+
+      const fullOutlineText = normalizeAXText(item.text);
+      assert.ok(
+        fullOutlineText.startsWith(expectedLinkName),
+        `${itemLabel}: outline item must begin with its linked title`,
+      );
+      const afterTitle = fullOutlineText.slice(expectedLinkName.length).trim();
+      const description = afterTitle.replace(/^\(Published page\)\s*/u, '').trim();
+      assert.ok(description, `${itemLabel}: outline description is missing`);
+
+      const listItemAX = axNodeFor(item.backendNodeId, 'listitem', `${itemLabel} outline item`, {requireName: false});
+      const itemAXSubtree = axDescendants(listItemAX);
+      assert.ok(
+        itemAXSubtree.some((node) => node.nodeId === outlineLinkAX.nodeId),
+        `${itemLabel}: outline link is not inside its list-item AX subtree`,
+      );
+      const descriptionText = itemAXSubtree
+        .filter((node) => !node.ignored && node.role?.value === 'StaticText')
+        .map((node) => normalizeAXText(node.name?.value));
+      assert.ok(
+        descriptionText.some((text) => text.includes(description)),
+        `${itemLabel}: description is missing from its own list-item AX subtree`,
+      );
+      outlineDescriptionCount += 1;
+    }
+  }
+
+  assert.equal(svgLinkCount, expectedLinkCount, `${viewportWidth}px: SVG links must cover the generated outline`);
+  assert.equal(outlineLinkCount, expectedLinkCount, `${viewportWidth}px: outline link inventory differs`);
+  assert.equal(namedSVGLinkCount, expectedLinkCount, `${viewportWidth}px: not all SVG links have names`);
+  assert.equal(namedOutlineLinkCount, expectedLinkCount, `${viewportWidth}px: not all outline links have names`);
+  assert.equal(outlineDescriptionCount, expectedLinkCount, `${viewportWidth}px: not all outline descriptions are exposed`);
+  return {
+    mapCount: maps.length,
+    svgLinkCount,
+    outlineLinkCount,
+    outlineDescriptionCount,
+  };
+}
+
 async function runKeyboardJourney(browser, width, height) {
   const context = await browser.newContext({viewport: {width, height}, deviceScaleFactor: 1});
   await context.addInitScript((key) => {
@@ -168,6 +412,7 @@ async function runKeyboardJourney(browser, width, height) {
   }, announcementKey);
   const page = await context.newPage();
   const errors = [];
+  let axSummary = null;
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
@@ -335,9 +580,31 @@ async function runKeyboardJourney(browser, width, height) {
         });
       }, {total, minimumWidth: minimumDiagramWidthFor(width)});
     }
+    if (width === 1280) {
+      if (negativeControlMode === 'remove-svg-name') {
+        await details.nth(0).locator('.universe-diagram svg').evaluate((svg) => {
+          svg.removeAttribute('aria-label');
+        });
+        let caughtError = null;
+        try {
+          await assertUniverseComputedAX(page, width);
+        } catch (error) {
+          caughtError = error;
+        }
+        assert.ok(caughtError, 'negative control did not reject a map with its SVG accessible name removed');
+        assert.match(
+          caughtError.message,
+          /1280px map 1 SVG root: AX graphics-document has no accessible name/u,
+          'negative control must fail specifically on the computed SVG name assertion',
+        );
+        console.log('PASS negative control: removing map 1 SVG aria-label was rejected by the computed AX assertion');
+      } else {
+        axSummary = await assertUniverseComputedAX(page, width);
+      }
+    }
     assert.deepEqual(errors, [], `${width}px browser errors`);
     await context.close();
-    return {focusStops, errors};
+    return {focusStops, errors, axSummary};
   } catch (error) {
     await context.close();
     throw error;
@@ -365,12 +632,17 @@ try {
   }
   browser = await chromium.launch(launchOptions);
   let focusStops = 0;
+  let axSummary = null;
   for (const [width, height] of [[320, 874], [1280, 900]]) {
     const result = await runKeyboardJourney(browser, width, height);
     focusStops += result.focusStops;
+    if (result.axSummary) axSummary = result.axSummary;
   }
   await runNoJavaScriptCheck(browser);
-  console.log(`PASS: six native disclosures; ${focusStops} sequential Tab stops at 320px and 1280px; visible node focus and rings; resize, light/dark rerender, descriptions, no-JavaScript fallback`);
+  const axResult = negativeControlMode === 'remove-svg-name'
+    ? 'browser-only SVG accessible-name negative control rejected'
+    : `${axSummary.mapCount} named AX disclosures and graphics roots; ${axSummary.svgLinkCount} SVG/outline links; ${axSummary.outlineDescriptionCount} outline descriptions`;
+  console.log(`PASS: six native disclosures; ${focusStops} sequential Tab stops at 320px and 1280px; visible node focus and rings; resize, light/dark rerender, descriptions, no-JavaScript fallback; ${axResult}`);
 } finally {
   if (browser) await browser.close();
   await new Promise((resolve) => server.close(resolve));
