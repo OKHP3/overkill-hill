@@ -201,16 +201,36 @@ def main():
              f"Workflow checkout SHA: {cell(os.environ.get('GITHUB_SHA', 'local'))}",
              f"Run / attempt: {cell(os.environ.get('GITHUB_RUN_ID', 'local'))} / {cell(os.environ.get('GITHUB_RUN_ATTEMPT', 'local'))}",
              '', '| Area | State | Evidence |', '| --- | --- | --- |']
+    report_available = False
     try:
         report = json.loads(args.report.read_text(encoding='utf-8'))
         if not isinstance(report, dict):
             raise ValueError('report must be a JSON object')
         details, failed = (edge_summary if args.kind == 'edge' else external_summary)(report)
         lines.extend(details)
+        report_available = True
     except (OSError, ValueError) as exc:
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
-    if args.artifact_url:
+    if args.kind == 'external' and args.artifact_url:
+        evidence = markdown_link(args.report.name, args.artifact_url)
+        lines += ['', f'Full route evidence artifact: {evidence} (direct artifact link)', '']
+    elif args.kind == 'external' and report_available:
+        lines += [
+            '',
+            f'External report download unavailable: only the local runner file '
+            f'{cell(args.report.name)} is available; it is not downloadable from '
+            'this summary. Check the upload step.',
+            '',
+        ]
+    elif args.kind == 'external':
+        lines += [
+            '',
+            f'External report download unavailable: no usable local report file '
+            f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
+            '',
+        ]
+    elif args.artifact_url:
         evidence = markdown_link(args.report.name, args.artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
     else:
