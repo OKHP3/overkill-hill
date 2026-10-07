@@ -11,6 +11,10 @@ Usage:
     python3 scripts/verify-live-edge.py --base https://example.com \
         --expected-commit "$GITHUB_SHA" \
         --report assets/audit/live-edge-report.json
+
+This verifier accepts and emits only the current report envelope. The summary
+writer has a deliberately narrow compatibility path for archived checks-only
+reports; those reports are not valid input to a new live-edge verification.
 """
 
 from __future__ import annotations
@@ -127,6 +131,7 @@ LIVE_EDGE_REPORT_FIELDS = (
 )
 LIVE_EDGE_SUMMARY_FIELDS = ("checks", "failures", "blocked", "warnings")
 LIVE_EDGE_CHECK_FIELDS = ("check", "status", "evidence")
+LEGACY_LIVE_EDGE_REPORT_FIELDS = frozenset({"checks"})
 
 
 def canonical_text_bytes(path: Path) -> bytes:
@@ -149,10 +154,22 @@ def validate_report_shape(report: Any) -> None:
     if not isinstance(report, dict):
         raise ValueError("live-edge report must be a JSON object")
 
+    if set(report) == LEGACY_LIVE_EDGE_REPORT_FIELDS:
+        raise ValueError(
+            "legacy live-edge report uses the checks-only shape; this verifier "
+            "accepts only the current report envelope. Required action: render "
+            "the archived report with scripts/write-actions-summary.py or rerun "
+            "scripts/verify-live-edge.py to produce a current report."
+        )
+
     missing = [field for field in LIVE_EDGE_REPORT_FIELDS if field not in report]
     if missing:
         raise ValueError(
-            "live-edge report is missing required field(s): " + ", ".join(missing)
+            "live-edge report is missing required field(s): "
+            + ", ".join(missing)
+            + "; required action: rerun scripts/verify-live-edge.py for the "
+            "current envelope, or use scripts/write-actions-summary.py for the "
+            "documented checks-only legacy shape."
         )
     if report["verifier"] != "verify-live-edge.py":
         raise ValueError("live-edge report.verifier must be 'verify-live-edge.py'")

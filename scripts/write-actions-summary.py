@@ -8,6 +8,15 @@ import os
 from pathlib import Path
 
 
+CURRENT_EDGE_REPORT_FIELDS = frozenset({
+    'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
+    'hosting', 'status', 'summary', 'checks',
+})
+LEGACY_EDGE_REPORT_FIELDS = frozenset({'checks'})
+EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
+EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
+
+
 def cell(value):
     return html.escape(str(value)).replace('|', '&#124;').replace('\n', ' ').replace('\r', ' ')
 
@@ -25,14 +34,79 @@ def state(checks):
     return 'PASS' if statuses else 'NOT RUN'
 
 
-def edge_summary(report):
+def prepare_edge_report(report):
+    if not isinstance(report, dict):
+        raise ValueError('live-edge report must be a JSON object')
+
+    legacy = set(report) == LEGACY_EDGE_REPORT_FIELDS
+    if not legacy and not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+        raise ValueError(
+            'unsupported live-edge report shape; required action: migrate it to '
+            'the current scripts/verify-live-edge.py envelope or use the '
+            'documented checks-only legacy shape with check, status, and evidence '
+            'fields.'
+        )
+
     checks = report.get('checks')
     if not isinstance(checks, list) or not checks:
-        raise ValueError('live-edge report has no checks')
-    for item in checks:
-        if (not isinstance(item, dict) or item.get('status') not in {'PASS', 'FAIL', 'WARN', 'BLOCKED'}
-                or not isinstance(item.get('check'), str) or not isinstance(item.get('evidence'), str)):
-            raise ValueError('live-edge report has a malformed check')
+        label = 'legacy checks-only live-edge report' if legacy else 'live-edge report'
+        raise ValueError(
+            f'{label} has no checks; required action: migrate or regenerate the report.'
+        )
+
+    for index, item in enumerate(checks):
+        if not isinstance(item, dict):
+            if legacy:
+                raise ValueError(
+                    f'unsupported legacy check shape at checks[{index}]; required action: '
+                    'migrate it to the current report shape or provide check, status, '
+                    'and evidence.'
+                )
+            raise ValueError(f'live-edge report has a malformed check at index {index}')
+        missing = EDGE_CHECK_FIELDS - item.keys()
+        if missing:
+            label = (
+                'unsupported legacy check shape'
+                if legacy
+                else 'live-edge report has a malformed check'
+            )
+            raise ValueError(
+                f'{label} at checks[{index}]; missing required field(s): '
+                + ', '.join(sorted(missing))
+                + '; required action: migrate it to the current report shape or '
+                'provide check, status, and evidence.'
+            )
+        if (
+            not isinstance(item['check'], str)
+            or not item['check']
+            or not isinstance(item['evidence'], str)
+            or not isinstance(item['status'], str)
+            or item['status'] not in EDGE_CHECK_STATUSES
+        ):
+            if legacy and isinstance(item['status'], str) and item['status'] not in EDGE_CHECK_STATUSES:
+                raise ValueError(
+                    f'unsupported legacy live-edge status convention at checks[{index}]: '
+                    f'{item["status"]!r}; required action: map it to PASS, FAIL, WARN, '
+                    'or BLOCKED, or migrate the report to the current verifier format.'
+                )
+            if legacy:
+                raise ValueError(
+                    f'unsupported legacy check shape at checks[{index}]; required action: '
+                    'provide a non-empty check name and string evidence, or migrate it '
+                    'to the current report shape.'
+                )
+            raise ValueError(f'live-edge report has a malformed check at index {index}')
+
+    if legacy:
+        report = dict(report)
+        report['expected_commit'] = None
+        report['run_at'] = 'unknown'
+    return report, legacy
+
+
+def edge_summary(report):
+    report, legacy = prepare_edge_report(report)
+    checks = report['checks']
     # The verifier currently labels policy checks rather than emitting categories.
     # Unrecognized checks stay in content, so a new failure cannot be hidden.
     def policy(item):
@@ -48,7 +122,16 @@ def edge_summary(report):
         edge_evidence = f'{len(edge)} checks; BLOCKED hosting limitations do not prove enforcement'
     else:
         edge_evidence = f'{len(edge)} checks; policy checks were evaluated'
-    lines = [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),
+    lines = []
+    if legacy:
+        lines.append(
+            row(
+                'Report format',
+                'LEGACY',
+                'checks-only compatibility; no release SHA or report time was recorded',
+            )
+        )
+    lines += [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),
              row('Edge policy', edge_state, edge_evidence),
              row('External availability', 'NOT RUN', 'Use the separate third-party runtime report')]
     binding = next((item for item in checks if item['check'] == 'release manifest'), None)

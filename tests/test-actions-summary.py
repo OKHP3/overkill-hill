@@ -365,6 +365,12 @@ if VERIFY_SPEC is None or VERIFY_SPEC.loader is None:
 VERIFY = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(VERIFY)
 
+SUMMARY_SPEC = importlib.util.spec_from_file_location('write_actions_summary', SCRIPT)
+if SUMMARY_SPEC is None or SUMMARY_SPEC.loader is None:
+    raise RuntimeError('could not load scripts/write-actions-summary.py')
+SUMMARY_WRITER = importlib.util.module_from_spec(SUMMARY_SPEC)
+SUMMARY_SPEC.loader.exec_module(SUMMARY_WRITER)
+
 
 class SummaryTests(unittest.TestCase):
     def create_symlink_or_skip_when_windows_privilege_is_missing(
@@ -1043,9 +1049,7 @@ class SummaryTests(unittest.TestCase):
             REPORT_ACTIONS['legacy'],
         )
         report = self.load_fixture(LEGACY_LIVE_EDGE_FIXTURE['fixture'])
-
-        with self.assertRaises(ValueError):
-            VERIFY.validate_report_shape(report)
+        self.assertEqual(set(report), VERIFY.LEGACY_LIVE_EDGE_REPORT_FIELDS)
 
         code, summary = self.run_summary(report)
         self.assertEqual(code, 0)
@@ -1053,6 +1057,60 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('| Edge policy | PARTIAL |', summary)
         self.assertIn('not specified (monitoring)', summary)
         self.assertIn('Report time: unknown', summary)
+        self.assertIn(
+            '| Report format | LEGACY | checks-only compatibility; no release SHA or report time was recorded |',
+            summary,
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            r'legacy live-edge report uses the checks-only shape.*write-actions-summary\.py',
+        ):
+            VERIFY.validate_report_shape(report)
+
+    def test_summary_format_contract_matches_verifier_and_legacy_shape(self):
+        self.assertEqual(
+            SUMMARY_WRITER.CURRENT_EDGE_REPORT_FIELDS,
+            frozenset(VERIFY.LIVE_EDGE_REPORT_FIELDS),
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.LEGACY_EDGE_REPORT_FIELDS,
+            VERIFY.LEGACY_LIVE_EDGE_REPORT_FIELDS,
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.EDGE_CHECK_FIELDS,
+            frozenset(VERIFY.LIVE_EDGE_CHECK_FIELDS),
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.EDGE_CHECK_STATUSES,
+            VERIFY.LIVE_EDGE_CHECK_STATUSES,
+        )
+
+    def test_unsupported_legacy_report_shapes_fail_with_migration_guidance(self):
+        unsupported_reports = (
+            (
+                'alternate envelope',
+                {'results': [{'name': 'route /', 'result': 'OK'}]},
+                'unsupported live-edge report shape',
+            ),
+            (
+                'legacy status alias',
+                {'checks': [{'check': 'route /', 'status': 'OK', 'evidence': 'HTTP 200'}]},
+                'unsupported legacy live-edge status convention',
+            ),
+            (
+                'missing legacy evidence',
+                {'checks': [{'check': 'route /', 'status': 'PASS'}]},
+                'unsupported legacy check shape',
+            ),
+        )
+        for label, report, diagnostic in unsupported_reports:
+            with self.subTest(shape=label):
+                code, summary = self.run_summary(report)
+                self.assertEqual(code, 1)
+                self.assertIn('| Evidence | UNKNOWN |', summary)
+                self.assertIn(diagnostic, summary)
+                self.assertIn('required action:', summary)
+                self.assertIn('migrate', summary.lower())
 
     def test_historical_partial_is_not_an_outage_or_full_policy_pass(self):
         path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
