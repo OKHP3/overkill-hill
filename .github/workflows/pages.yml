@@ -13,6 +13,34 @@ jobs:
     name: Validate the exact release revision
     uses: ./.github/workflows/validate.yml
 
+  # This read-only companion-repo check reports Glee drift without gating this
+  # repository's independent Pages deployment.
+  foundation-freshness:
+    name: Check Glee foundation PR freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the exact release revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Check open Glee foundation-sync pull requests
+        run: |
+          python3 scripts/check-foundation-pr-freshness.py \
+            --report "$RUNNER_TEMP/glee-foundation-pr-freshness.json"
+
+      - name: Upload Glee foundation freshness evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: glee-foundation-freshness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/glee-foundation-pr-freshness.json
+          if-no-files-found: error
+          retention-days: 30
+
   deploy:
     name: Deploy validated site to GitHub Pages
     needs: validate
