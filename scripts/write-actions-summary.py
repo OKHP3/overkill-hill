@@ -6,6 +6,7 @@ import html
 import json
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 
 CURRENT_EDGE_REPORT_FIELDS = frozenset({
@@ -15,10 +16,20 @@ CURRENT_EDGE_REPORT_FIELDS = frozenset({
 LEGACY_EDGE_REPORT_FIELDS = frozenset({'checks'})
 EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
 EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
+MARKDOWN_DESTINATION_SAFE = ":/?#[]@!$&'()*+,;=%"
 
 
 def cell(value):
     return html.escape(str(value)).replace('|', '&#124;').replace('\n', ' ').replace('\r', ' ')
+
+
+def markdown_label(value):
+    return cell(value).replace('\\', '\\\\').replace('[', r'\[').replace(']', r'\]')
+
+
+def markdown_link(label, destination):
+    escaped_destination = quote(str(destination), safe=MARKDOWN_DESTINATION_SAFE)
+    return f'[{markdown_label(label)}](<{escaped_destination}>)'
 
 
 def row(label, status, evidence):
@@ -200,7 +211,7 @@ def main():
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
     if args.artifact_url:
-        evidence = f'[{cell(args.report.name)}]({cell(args.artifact_url)})'
+        evidence = markdown_link(args.report.name, args.artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']

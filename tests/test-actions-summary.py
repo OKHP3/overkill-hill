@@ -525,9 +525,9 @@ class SummaryTests(unittest.TestCase):
         ):
             VERIFY.validate_report_shape(malformed)
 
-    def run_summary(self, report, kind='edge', artifact_url=None):
+    def run_summary(self, report, kind='edge', artifact_url=None, report_name='report.json'):
         with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / 'report.json'
+            source = Path(directory) / report_name
             output = Path(directory) / 'summary.md'
             source.write_text(json.dumps(report), encoding='utf-8')
             command = [sys.executable, str(SCRIPT), '--kind', kind,
@@ -1156,7 +1156,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -1434,7 +1434,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -1480,9 +1480,39 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('| External availability | DEGRADED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
+
+    def test_external_artifact_link_escapes_label_and_special_url_characters(self):
+        artifact_url = (
+            'https://github.com/example/site/actions/runs/123/artifacts/987'
+            '?download=1&name=report [review](draft)&next=](https://evil.example)\\path'
+            '&close=>'
+        )
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+            artifact_url=artifact_url,
+            report_name='report [route].json',
+        )
+
+        self.assertEqual(code, 0)
+        link_lines = [
+            line for line in summary.splitlines()
+            if line.startswith('Full route evidence artifact:')
+        ]
+        self.assertEqual(len(link_lines), 1)
+        self.assertEqual(
+            link_lines[0],
+            'Full route evidence artifact: '
+            '[report \\[route\\].json](<https://github.com/example/site/actions/runs/123/'
+            'artifacts/987?download=1&name=report%20[review](draft)&next=]'
+            '(https://evil.example)%5Cpath&close=%3E>)',
+        )
+        self.assertEqual(link_lines[0].count('](<https://'), 1)
+        self.assertIn('&name=', link_lines[0])
+        self.assertIn('%5Cpath&close=%3E>)', link_lines[0])
 
     def test_external_local_failure_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/988'
@@ -1494,7 +1524,7 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('| Content delivery | FAILED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
