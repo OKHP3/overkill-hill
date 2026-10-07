@@ -32,6 +32,14 @@ def markdown_link(label, destination):
     return f'[{markdown_label(label)}](<{escaped_destination}>)'
 
 
+def artifact_link_label(report_name):
+    run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
+    run_attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '').strip()
+    if run_id and run_attempt:
+        return f'{report_name} (run {run_id}, attempt {run_attempt})'
+    return report_name
+
+
 def row(label, status, evidence):
     return f'| {cell(label)} | {cell(status)} | {cell(evidence)} |'
 
@@ -213,7 +221,7 @@ def main():
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
     if args.kind == 'external' and args.artifact_url:
-        evidence = markdown_link(args.report.name, args.artifact_url)
+        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence} (direct artifact link)', '']
     elif args.kind == 'external' and report_available:
         lines += [
@@ -231,7 +239,7 @@ def main():
             '',
         ]
     elif args.artifact_url:
-        evidence = markdown_link(args.report.name, args.artifact_url)
+        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']

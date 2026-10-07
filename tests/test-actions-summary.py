@@ -580,7 +580,15 @@ class SummaryTests(unittest.TestCase):
         ):
             VERIFY.validate_report_shape(malformed)
 
-    def run_summary(self, report, kind='edge', artifact_url=None, report_name='report.json'):
+    def run_summary(
+        self,
+        report,
+        kind='edge',
+        artifact_url=None,
+        report_name='report.json',
+        run_id=None,
+        run_attempt=None,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / report_name
             output = Path(directory) / 'summary.md'
@@ -590,7 +598,16 @@ class SummaryTests(unittest.TestCase):
             if artifact_url:
                 command.extend(['--artifact-url', artifact_url])
             command_env = os.environ.copy()
-            command_env.pop('ACTIONS_ARTIFACT_URL', None)
+            for key in (
+                'ACTIONS_ARTIFACT_URL',
+                'GITHUB_RUN_ID',
+                'GITHUB_RUN_ATTEMPT',
+            ):
+                command_env.pop(key, None)
+            if run_id is not None:
+                command_env['GITHUB_RUN_ID'] = str(run_id)
+            if run_attempt is not None:
+                command_env['GITHUB_RUN_ATTEMPT'] = str(run_attempt)
             result = subprocess.run(command,
                                     capture_output=True, text=True, env=command_env)
             return result.returncode, output.read_text(encoding='utf-8') if output.exists() else ''
@@ -1721,6 +1738,62 @@ class SummaryTests(unittest.TestCase):
             summary,
         )
         self.assertIn('Check the monitor and upload steps.', summary)
+
+    def test_direct_monitor_artifact_links_show_first_attempt_and_retry(self):
+        cases = (
+            (
+                'external',
+                self.load_fixture('external-runtime-degraded.json'),
+                'https://github.com/example/site/actions/runs/100/artifacts/987',
+            ),
+            (
+                'edge',
+                self.load_fixture('live-edge-failure.json'),
+                'https://github.com/example/site/actions/runs/100/artifacts/456',
+            ),
+        )
+        for kind, report, artifact_url in cases:
+            for attempt in ('1', '2'):
+                with self.subTest(kind=kind, attempt=attempt):
+                    _, summary = self.run_summary(
+                        report,
+                        kind,
+                        artifact_url=artifact_url,
+                        run_id='100',
+                        run_attempt=attempt,
+                    )
+                    self.assertIn(
+                        f'[report.json (run 100, attempt {attempt})](<{artifact_url}>)',
+                        summary,
+                    )
+                    self.assertNotIn('${{ github.run_id }}', summary)
+                    self.assertNotIn('${{ github.run_attempt }}', summary)
+
+    def test_manual_direct_links_and_local_fallbacks_keep_their_existing_labels(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
+        _, manual_summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+            artifact_url=artifact_url,
+        )
+        self.assertIn(
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
+            manual_summary,
+        )
+        self.assertNotIn('(run 100, attempt', manual_summary)
+
+        _, external_fallback = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+        )
+        self.assertIn('only the local runner file report.json is available', external_fallback)
+
+        _, edge_fallback = self.run_summary(
+            self.load_fixture('live-edge-failure.json'),
+            'edge',
+        )
+        self.assertIn('Full route evidence file: report.json.', edge_fallback)
+        self.assertNotIn('(run 100, attempt', edge_fallback)
 
     def test_invalid_reports_fail_closed(self):
         for report in ({}, {'checks': []}, {'checks': [{'status': 'MAYBE'}]}, []):
