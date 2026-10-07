@@ -1272,6 +1272,45 @@ class SummaryTests(unittest.TestCase):
             summary.group(1),
         )
 
+    def test_validation_monitor_summaries_use_their_own_upload_outputs(self):
+        source = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        monitors = (
+            (
+                'monitor-third-party-runtime',
+                'Summarize external availability and first-party failures',
+                'upload-third-party-runtime-report',
+            ),
+            (
+                'monitor-live-edge',
+                'Summarize content delivery and edge policy',
+                'upload-live-edge-report',
+            ),
+        )
+        for job_name, summary_name, upload_id in monitors:
+            with self.subTest(job=job_name):
+                job_match = re.search(
+                    rf'(?ms)^  {re.escape(job_name)}:\n(.*?)(?=^  [\w-]+:|\Z)',
+                    source,
+                )
+                self.assertIsNotNone(job_match, f'missing workflow job {job_name}')
+                job_source = job_match.group(1)
+                summary_match = re.search(
+                    rf'(?ms)^      - name: {re.escape(summary_name)}\n'
+                    r'(.*?)(?=^      - name: |\Z)',
+                    job_source,
+                )
+                self.assertIsNotNone(summary_match, f'missing summary step in {job_name}')
+                self.assertIn(f'id: {upload_id}', job_source)
+                artifact_outputs = re.findall(
+                    r'steps\.([a-z0-9-]+)\.outputs\.artifact-url',
+                    summary_match.group(1),
+                )
+                self.assertEqual(
+                    artifact_outputs,
+                    [upload_id],
+                    f'{job_name} summary must use its own upload step output',
+                )
+
     def test_validation_evidence_uploads_declare_retention_and_file_policy(self):
         for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
             source = (ROOT / workflow).read_text(encoding='utf-8')

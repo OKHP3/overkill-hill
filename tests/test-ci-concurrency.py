@@ -327,6 +327,23 @@ class ConcurrencyTests(unittest.TestCase):
                     step(source, summary_step),
                 )
 
+        same_attempt = context(run_id='200', run_attempt='3')
+        third_party_name = artifact_name(
+            job(VALIDATE, 'monitor-third-party-runtime'),
+            'Upload third-party runtime inventory',
+            same_attempt,
+        )
+        live_edge_name = artifact_name(
+            job(VALIDATE, 'monitor-live-edge'),
+            'Upload live-edge monitoring report',
+            same_attempt,
+        )
+        self.assertEqual(third_party_name, 'third-party-runtime-200-3')
+        self.assertEqual(live_edge_name, 'live-edge-monitor-200-3')
+        self.assertTrue(third_party_name.startswith('third-party-runtime-'))
+        self.assertTrue(live_edge_name.startswith('live-edge-monitor-'))
+        self.assertNotEqual(third_party_name, live_edge_name)
+
 
 if __name__ == '__main__':
     unittest.main()
