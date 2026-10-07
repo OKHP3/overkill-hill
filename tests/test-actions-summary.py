@@ -394,6 +394,27 @@ class SummaryTests(unittest.TestCase):
         fixture_path = resolve_compatibility_fixture(ROOT, name)
         if not fixture_path.is_file():
             raise FileNotFoundError(f'fixture not found: {name}')
+    def create_symlink_or_skip_when_windows_privilege_is_missing(
+        self,
+        link,
+        target,
+        *,
+        target_is_directory=False,
+    ):
+        try:
+            link.symlink_to(target, target_is_directory=target_is_directory)
+        except OSError as exc:
+            if os.name == 'nt' and getattr(exc, 'winerror', None) == 1314:
+                self.skipTest(
+                    'Windows symlink creation requires privileges unavailable to this runner; '
+                    'the separate junction regression remains active.'
+                )
+            raise
+
+    def load_fixture(self, name):
+        fixture_path = resolve_compatibility_fixture(ROOT, name)
+        if not fixture_path.is_file():
+            raise FileNotFoundError(f'fixture not found: {name}')
         return json.loads(fixture_path.read_bytes())
 
     def test_committed_generated_fixtures_are_current(self):
@@ -452,6 +473,40 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('-  "status": "EXTERNAL_OUTAGE"', checked.stdout)
         self.assertIn('+  "status": "PASS"', checked.stdout)
         self.assertEqual(unchanged_content, actual_content)
+
+    def test_generated_fixture_check_detects_malformed_fixture_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_directory = Path(directory)
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--write',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+
+            fixture = output_directory / 'external-runtime-degraded.json'
+            fixture.write_text('{"summary": {}}\n', encoding='utf-8')
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--check',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
+        self.assertIn('generated fixture is stale', checked.stdout + checked.stderr)
+        self.assertIn('external-runtime-degraded.json', checked.stdout + checked.stderr)
 
     def test_generated_fixture_check_keeps_missing_and_unexpected_files_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1525,6 +1580,670 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('| Content delivery | FAILED |', summary)
         self.assertIn(
             f'Full route evidence artifact: [report.json](<{artifact_url}>)',
+            summary,
+        )
+
+    def test_invalid_reports_fail_closed(self):
+        for report in ({}, {'checks': []}, {'checks': [{'status': 'MAYBE'}]}, []):
+            with self.subTest(report=report):
+                code, summary = self.run_summary(report)
+                self.assertEqual(code, 1)
+                self.assertIn('UNKNOWN', summary)
+
+    def test_report_text_is_escaped(self):
+        code, summary = self.run_summary({'checks': [{'check': '<script>|bad', 'status': 'FAIL', 'evidence': '<img>\n|bad'}]})
+        self.assertEqual(code, 1)
+        self.assertNotIn('<script>', summary)
+        self.assertNotIn('<img>', summary)
+
+    def test_absent_and_invalid_json_leave_unknown_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'report.json'
+            for content in (None, '{'):
+                if content:
+                    source.write_text(content, encoding='utf-8')
+                output = Path(directory) / 'summary.md'
+                result = subprocess.run([sys.executable, str(SCRIPT), '--kind', 'edge',
+                    '--report', str(source), '--summary', str(output)], capture_output=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('UNKNOWN', output.read_text(encoding='utf-8'))
+
+    def test_empty_external_sample_does_not_pass(self):
+        report = self.load_fixture('external-runtime-pass.json')
+        report['summary']['routes'] = 0
+        code, summary = self.run_summary(report, 'external')
+        self.assertEqual(code, 1)
+        self.assertIn('UNKNOWN', summary)
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / report_path
+            source.parent.mkdir(parents=True)
+            source_bytes = b'{"synthetic":"reparse directory"}\n'
+            source.write_bytes(source_bytes)
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(source_bytes)
+
+            reparse_directory = root / 'assets/audit/redirect'
+            original_lstat = Path.lstat
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def mark_as_reparse_point(path):
+                metadata = original_lstat(path)
+                if path == reparse_directory:
+                    return SimpleNamespace(
+                        st_mode=metadata.st_mode,
+                        st_file_attributes=0x400,
+                    )
+                return metadata
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, 'lstat', mark_as_reparse_point):
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+
+        self.assertTrue(
+            any(
+                'assets/audit/redirect' in issue
+                and 'Windows reparse point' in issue
+                for issue in issues
+            ),
+            '\n'.join(issues),
+        )
+        self.assertEqual(
+            read_attempts,
+            [],
+            'archive or fixture content was read before recursive discovery rejected the reparse point',
+        )
+
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows junction semantics')
+    def test_windows_assets_junction_to_private_is_rejected_before_reading(self):
+        report_path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / 'private'
+            source = private / 'audit/assessment-2026-09-07/delivery/live-edge.json'
+            source.parent.mkdir(parents=True)
+            source_bytes = b'{"synthetic":"junction target"}\n'
+            source.write_bytes(source_bytes)
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(source_bytes)
+
+            assets_junction = root / 'assets'
+            created = subprocess.run(
+                ['cmd', '/c', 'mklink', '/J', str(assets_junction), str(private)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            try:
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+            finally:
+                assets_junction.rmdir()
+
+        self.assertTrue(
+            any(
+                'Windows reparse point' in issue and 'assets' in issue
+                for issue in issues
+            ),
+            '\n'.join(issues),
+        )
+        self.assertEqual(
+            read_attempts,
+            [],
+            'the strict registry audit read the in-repository private junction target before rejecting it',
+        )
+
+    def test_strict_archive_audit_switch_accepts_documented_values(self):
+        self.assertFalse(strict_archive_audit_enabled({}))
+        self.assertFalse(strict_archive_audit_enabled({STRICT_ARCHIVE_AUDIT_ENV: '0'}))
+        self.assertTrue(strict_archive_audit_enabled({STRICT_ARCHIVE_AUDIT_ENV: '1'}))
+        self.assertTrue(strict_archive_audit_enabled({STRICT_ARCHIVE_AUDIT_ENV: 'true'}))
+        with self.assertRaisesRegex(ValueError, 'must be set to 1 or 0'):
+            strict_archive_audit_enabled({STRICT_ARCHIVE_AUDIT_ENV: 'sometimes'})
+
+    def test_unlisted_archive_report_names_exact_path_and_required_action(self):
+        report_path = 'assets/audit/unlisted/deep/delivery/live-edge.json'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / report_path
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            archive_path.write_text('{}\n', encoding='utf-8')
+            issues = archive_registry_issues(root, {}, fixture_root=ROOT)
+
+        self.assertEqual(len(issues), 1)
+        self.assertIn(report_path, issues[0])
+        self.assertIn('add this exact path', issues[0])
+        self.assertIn("'current'", issues[0])
+        self.assertIn("'legacy'", issues[0])
+
+    def test_missing_registered_archive_report_names_exact_path_and_required_action(self):
+        report_path = next(iter(ARCHIVED_LIVE_EDGE_REPORTS))
+        with tempfile.TemporaryDirectory() as directory:
+            clean_checkout_issues = archive_registry_issues(
+                Path(directory),
+                ARCHIVED_LIVE_EDGE_REPORTS,
+                fixture_root=ROOT,
+                require_registered_files=False,
+            )
+            strict_audit_issues = archive_registry_issues(
+                Path(directory),
+                ARCHIVED_LIVE_EDGE_REPORTS,
+                fixture_root=ROOT,
+                require_registered_files=True,
+            )
+
+        self.assertEqual(clean_checkout_issues, [])
+        missing = [issue for issue in strict_audit_issues if 'is missing' in issue]
+        self.assertEqual(len(missing), 1, '\n'.join(strict_audit_issues))
+        self.assertIn(report_path, missing[0])
+        self.assertIn('restore the archived report', missing[0])
+        self.assertIn('fixture alone does not prove archive coverage', missing[0])
+
+    def test_malformed_archive_registry_entries_name_path_and_required_action(self):
+        report_path = next(iter(ARCHIVED_LIVE_EDGE_REPORTS))
+        malformed_entries = (
+            (
+                {'classification': 'unknown', 'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set classification to 'current' or 'legacy'",
+            ),
+            (
+                {'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set classification to 'current' or 'legacy'",
+            ),
+            (
+                {'classification': 'current', 'fixture': 'archived-live-edge-2026-09-07.json'},
+                "set required_action to 'validate_report_shape'",
+            ),
+            (
+                {
+                    'classification': 'current',
+                    'fixture': '../outside.json',
+                    'required_action': 'validate_report_shape',
+                },
+                'name a fixture file under tests/fixtures/actions-summary/',
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for entry, required_action in malformed_entries:
+                with self.subTest(entry=entry):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=ROOT,
+                    )
+                    matching = [issue for issue in issues if required_action in issue]
+                    self.assertTrue(matching, '\n'.join(issues))
+                    self.assertIn(report_path, matching[0])
+
+    def test_main_validation_gate_documents_and_wires_strict_archive_mode(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        step = re.search(
+            r'(?ms)^      - name: Test Actions reporting and concurrency contracts\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(step, 'missing main Actions-summary test step')
+        self.assertIn(
+            f"{STRICT_ARCHIVE_AUDIT_ENV}: ${{{{ vars.{STRICT_ARCHIVE_AUDIT_ENV} || '0' }}}}",
+            step.group(1),
+        )
+        documentation = (ROOT / 'scripts/README.md').read_text(encoding='utf-8')
+        self.assertIn(STRICT_ARCHIVE_AUDIT_ENV, documentation)
+        self.assertIn('fixture-only compatibility', documentation)
+        self.assertIn('actual retained archive coverage', documentation)
+
+    def test_registered_current_report_obeys_contract_in_selected_coverage_mode(self):
+        for path, entry in ARCHIVED_LIVE_EDGE_REPORTS.items():
+            with self.subTest(report=path):
+                report_bytes = registered_report_bytes(
+                    ROOT,
+                    path,
+                    entry,
+                    fixture_root=ROOT,
+                    require_source=strict_archive_audit_enabled(),
+                )
+                report = json.loads(report_bytes)
+                self.assert_archived_report_contract(path, report, entry)
+
+    def test_archived_contract_drift_has_an_actionable_failure(self):
+        path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        report = self.load_fixture(entry['fixture'])
+        del report['summary']['warnings']
+
+        with self.assertRaisesRegex(
+            AssertionError,
+            r'Required action: migrate the archived report to the current shape',
+        ):
+            self.assert_archived_report_contract(path, report, entry)
+
+    def test_legacy_report_is_explicitly_classified_and_renders_in_summary_cli(self):
+        self.assertEqual(LEGACY_LIVE_EDGE_FIXTURE['classification'], 'legacy')
+        self.assertEqual(
+            LEGACY_LIVE_EDGE_FIXTURE['required_action'],
+            REPORT_ACTIONS['legacy'],
+        )
+        report = self.load_fixture(LEGACY_LIVE_EDGE_FIXTURE['fixture'])
+
+        with self.assertRaises(ValueError):
+            VERIFY.validate_report_shape(report)
+
+        code, summary = self.run_summary(report)
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| Edge policy | PARTIAL |', summary)
+        self.assertIn('not specified (monitoring)', summary)
+        self.assertIn('Report time: unknown', summary)
+
+    def test_historical_partial_is_not_an_outage_or_full_policy_pass(self):
+        path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
+        report = self.load_fixture(entry['fixture'])
+        self.assert_archived_report_contract(path, report, entry)
+        code, summary = self.run_summary(report)
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| Edge policy | PARTIAL |', summary)
+        self.assertIn('| External availability | NOT RUN |', summary)
+        self.assertIn('ca38d5b9fc46746ea8b41e2ba32e39685c53f511', summary)
+        self.assertLess(len(summary.splitlines()), 45)
+
+    def test_generated_pass_fixture_renders_as_a_full_pass(self):
+        code, summary = self.run_summary(self.load_fixture('live-edge-pass.json'))
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| Edge policy | PASS |', summary)
+
+    def test_first_party_failure_remains_distinct(self):
+        code, summary = self.run_summary({'checks': [
+            {'check': 'route /', 'status': 'FAIL', 'evidence': 'HTTP 404'},
+            {'check': 'route / observed header x-frame-options', 'status': 'WARN', 'evidence': 'absent; GitHub Pages may omit repository headers at the edge'}]})
+        self.assertEqual(code, 1)
+        self.assertIn('| Content delivery | FAILED |', summary)
+        self.assertIn('HTTP 404', summary)
+
+    def test_confirmed_live_edge_failures_remain_visible_in_their_area(self):
+        code, summary = self.run_summary(self.load_fixture('live-edge-failure.json'))
+
+        self.assertEqual(code, 1)
+        self.assertIn('| Content delivery | FAILED |', summary)
+        self.assertIn('| Edge policy | FAILED |', summary)
+        self.assertIn('release manifest', summary)
+        self.assertIn('x-frame-options', summary)
+        self.assertIn('confirmed policy failures remain visible', summary)
+
+    def test_confirmed_failure_links_to_uploaded_report_artifact(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/456'
+        code, summary = self.run_summary(
+            self.load_fixture('live-edge-failure.json'), artifact_url=artifact_url
+        )
+
+        self.assertEqual(code, 1)
+        self.assertIn(
+            f'Full route evidence artifact: [report.json]({artifact_url})',
+            summary,
+        )
+
+    def test_live_edge_workflows_pass_uploaded_artifact_url_to_summary(self):
+        for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
+            with self.subTest(workflow=workflow):
+                source = (ROOT / workflow).read_text(encoding='utf-8')
+                self.assertIn('id: upload-live-edge-report', source)
+                self.assertIn(
+                    'steps.upload-live-edge-report.outputs.artifact-url',
+                    source,
+                )
+
+    def test_external_workflow_passes_uploaded_artifact_url_to_summary(self):
+        source = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        self.assertIn('id: upload-third-party-runtime-report', source)
+        self.assertIn(
+            'steps.upload-third-party-runtime-report.outputs.artifact-url',
+            source,
+        )
+
+    def test_validation_evidence_uploads_declare_retention_and_file_policy(self):
+        for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
+            source = (ROOT / workflow).read_text(encoding='utf-8')
+            upload_steps = re.findall(
+                r'(?ms)^      - name: [^\n]+\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                source,
+            )
+            artifact_steps = [
+                step for step in upload_steps
+                if 'uses: actions/upload-artifact@' in step
+            ]
+            self.assertTrue(artifact_steps, f'{workflow} has no diagnostic artifact uploads')
+            for step in artifact_steps:
+                self.assertRegex(
+                    step,
+                    r'(?m)^          if-no-files-found: (?:warn|error)$',
+                )
+                self.assertRegex(
+                    step,
+                    r'(?m)^          retention-days: [1-9][0-9]*$',
+                )
+
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        local_qa = re.search(
+            r'(?ms)^      - name: Upload local QA reports\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(local_qa, 'missing local QA evidence upload step')
+        self.assertIn('if-no-files-found: warn', local_qa.group(1))
+        self.assertIn('retention-days: 7', local_qa.group(1))
+        self.assertIn('test-results/responsive-qa/', local_qa.group(1))
+        self.assertIn('test-results/audit-site/', local_qa.group(1))
+        self.assertNotIn('site-release', local_qa.group(1))
+        self.assertNotIn('third-party-runtime-report.json', local_qa.group(1))
+
+    def test_failed_csp_fixtures_upload_only_the_short_lived_focused_report(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        match = re.search(
+            r'(?ms)^      - name: Upload failed CSP fixture report\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        self.assertIsNotNone(match, 'missing focused CSP fixture report upload step')
+        upload = match.group(1)
+        self.assertIn(
+            "if: always() && steps.csp-fixtures.outcome == 'failure'",
+            upload,
+        )
+        self.assertIn('id: upload-csp-fixture-report', upload)
+        self.assertIn('uses: actions/upload-artifact@', upload)
+        self.assertIn('path: csp-fixture-report.json', upload)
+        self.assertIn('if-no-files-found: warn', upload)
+        self.assertIn('retention-days: 7', upload)
+        self.assertNotIn('third-party-runtime-report.json', upload)
+        self.assertNotIn('site-release', upload)
+
+        summary_step = re.search(
+            r'(?ms)^      - name: Summarize failed CSP fixture regressions\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        self.assertIsNotNone(summary_step, 'missing focused CSP fixture summary step')
+        summary = summary_step.group(1)
+        self.assertIn('node scripts/csp-qa.mjs', summary)
+        self.assertIn('--fixture-summary=csp-fixture-report.json', summary)
+        self.assertIn(
+            '--artifact-url="${{ steps.upload-csp-fixture-report.outputs.artifact-url }}"',
+            summary,
+        )
+        self.assertNotIn('third-party-runtime-report.json', summary)
+        self.assertNotIn('site-release', summary)
+        self.assertLess(
+            workflow.index('Upload failed CSP fixture report'),
+            workflow.index('Summarize failed CSP fixture regressions'),
+            'focused summary must run after the focused report upload',
+        )
+
+        fixture_step = re.search(
+            r'(?ms)^      - name: Run CSP fixture regressions\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        self.assertIsNotNone(fixture_step, 'missing CSP fixture regression step')
+        self.assertIn('continue-on-error: true', fixture_step.group(1))
+
+    def test_missing_optional_csp_report_preserves_originating_failure(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        names = (
+            'Run CSP fixture regressions',
+            'Upload failed CSP fixture report',
+            'Summarize failed CSP fixture regressions',
+            'Preserve CSP fixture regression failure',
+        )
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        steps = {name: step(name) for name in names}
+        step_positions = [workflow.index(f'      - name: {name}\n') for name in names]
+        self.assertEqual(
+            step_positions,
+            sorted(step_positions),
+            'the originating check, optional upload, summary, and failure guard must stay ordered',
+        )
+        fixture_step, upload_step, summary_step, preserve_step = (
+            steps[name] for name in names
+        )
+        self.assertIn('id: csp-fixtures', fixture_step)
+        # continue-on-error can make conclusion success while outcome retains the original failure.
+        self.assertIn('continue-on-error: true', fixture_step)
+        self.assertIn('run: npm run test:csp:regressions', fixture_step)
+        report_name_match = re.search(
+            r'(?m)^          CSP_FIXTURE_REPORT: ([^\s]+)$',
+            fixture_step,
+        )
+        self.assertIsNotNone(report_name_match, 'CSP fixture report path is not declared')
+        report_name = report_name_match.group(1)
+        expected_failure_condition = "if: always() && steps.csp-fixtures.outcome == 'failure'"
+        for follow_up_step in (upload_step, summary_step, preserve_step):
+            self.assertIn(expected_failure_condition, follow_up_step)
+            self.assertNotIn('steps.csp-fixtures.conclusion', follow_up_step)
+        preserve_error_policy = re.search(
+            r'(?m)^        continue-on-error: ([^\r\n]+)$', preserve_step,
+        )
+        if preserve_error_policy is not None:
+            self.assertEqual(
+                preserve_error_policy.group(1).strip(), 'false',
+                'the failure-preservation step must not continue after its nonzero exit',
+            )
+        self.assertIn('id: upload-csp-fixture-report', upload_step)
+        self.assertIn('uses: actions/upload-artifact@', upload_step)
+        self.assertRegex(upload_step, rf'(?m)^          path: {re.escape(report_name)}$')
+        self.assertIn('if-no-files-found: warn', upload_step)
+        self.assertIn('retention-days: 7', upload_step)
+
+        run_match = re.search(
+            r'(?ms)^        run: >-\n((?:^          [^\n]*\n?)+)',
+            summary_step,
+        )
+        self.assertIsNotNone(run_match, 'CSP summary run block is not the supported folded form')
+        summary_command = ' '.join(line.strip() for line in run_match.group(1).splitlines())
+        try:
+            summary_tokens = shlex.split(summary_command, posix=True)
+        except ValueError as exc:
+            self.fail(f'CSP summary command is not in the supported form: {exc}')
+        self.assertEqual(
+            summary_tokens,
+            [
+                'node',
+                'scripts/csp-qa.mjs',
+                f'--fixture-summary={report_name}',
+                '--artifact-url=${{ steps.upload-csp-fixture-report.outputs.artifact-url }}',
+            ],
+            'CSP summary must keep using the workflow report and its upload output',
+        )
+        node = shutil.which(summary_tokens[0])
+        self.assertIsNotNone(node, 'the existing Node.js runtime is required')
+        summary_script = ROOT / summary_tokens[1]
+        self.assertEqual(summary_script, ROOT / 'scripts/csp-qa.mjs')
+        self.assertTrue(summary_script.is_file())
+
+        with self.subTest('missing-report summary entry point'):
+            # Python compatibility jobs omit optional Node QA packages. Their
+            # source-contract and failure-command assertions still run below.
+            dependency = subprocess.run(
+                [node, '--input-type=module', '--eval', "import.meta.resolve('playwright')"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            dependency_output = dependency.stdout + dependency.stderr
+            if (
+                dependency.returncode != 0
+                and 'ERR_MODULE_NOT_FOUND' in dependency_output
+                and "Cannot find package 'playwright'" in dependency_output
+            ):
+                self.skipTest('optional Playwright QA package is absent; summary execution was not run')
+            self.assertEqual(dependency.returncode, 0, dependency_output)
+            with tempfile.TemporaryDirectory() as directory:
+                report_path = Path(directory) / report_name
+                summary_path = Path(directory) / 'github-step-summary.md'
+                self.assertFalse(report_path.exists())
+                environment = os.environ.copy()
+                environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+                result = subprocess.run(
+                    [
+                        node,
+                        str(summary_script),
+                        f'--fixture-summary={report_path}',
+                        '--artifact-url=',
+                    ],
+                    cwd=directory,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                )
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 0, output)
+                self.assertTrue(summary_path.is_file(), output)
+                rendered = summary_path.read_text(encoding='utf-8')
+                self.assertIn(
+                    '| unavailable | unknown | Could not read focused CSP fixture report:',
+                    rendered,
+                )
+                self.assertIn(
+                    'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                    rendered,
+                )
+                self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
+
+        preserve_run = re.search(r'(?m)^        run: ([^\r\n]+)$', preserve_step)
+        self.assertIsNotNone(preserve_run, 'failure-preservation command is missing')
+        preserve_command = preserve_run.group(1).strip()
+        self.assertRegex(
+            preserve_command,
+            r'\Aexit [0-9]+\Z',
+            'only the portable single exit-code form is supported',
+        )
+        result = subprocess.run(
+            preserve_command,
+            shell=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(
+            result.returncode,
+            0,
+            'the failure-preservation command must remain nonzero',
+        )
+
+    def test_pages_only_blocked_fixture_is_partial_and_not_enforcement_proof(self):
+        code, summary = self.run_summary(self.load_fixture('live-edge-pages-blocked.json'))
+
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| Edge policy | PARTIAL |', summary)
+        self.assertIn('do not prove enforcement', summary)
+        self.assertNotIn('| Edge policy | FAILED |', summary)
+
+    def test_pages_only_partial_report_links_to_uploaded_report_artifact(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/789'
+        code, summary = self.run_summary(
+            self.load_fixture('live-edge-pages-blocked.json'), artifact_url=artifact_url
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn(
+            f'Full route evidence artifact: [report.json]({artifact_url})',
+            summary,
+        )
+
+    def test_transport_block_is_unknown_not_external_outage(self):
+        code, summary = self.run_summary({'checks': [{'check': 'route /', 'status': 'BLOCKED', 'evidence': 'timeout'}]})
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PARTIAL |', summary)
+        self.assertIn('NOT RUN', summary)
+
+    def test_mixed_external_and_local_failure(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-mixed-failure.json'), 'external'
+        )
+        self.assertEqual(code, 1)
+        self.assertIn('| Content delivery | FAILED |', summary)
+        self.assertIn('| External availability | DEGRADED |', summary)
+        self.assertIn('| Browser CSP diagnostics | WARN |', summary)
+
+    def test_external_runtime_pass_summary(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-pass.json'), 'external'
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+        self.assertIn('| External availability | PASS |', summary)
+        self.assertIn('| Browser CSP diagnostics | PASS |', summary)
+
+    def test_external_only_is_nonblocking(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'), 'external'
+        )
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED |', summary)
+
+    def test_external_degraded_summary_links_to_uploaded_report(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/987'
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+            artifact_url=artifact_url,
+        )
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED |', summary)
+        self.assertIn(
+            f'Full route evidence artifact: [report.json]({artifact_url})',
+            summary,
+        )
+
+    def test_external_local_failure_summary_links_to_uploaded_report(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/988'
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-local-failure.json'),
+            'external',
+            artifact_url=artifact_url,
+        )
+        self.assertEqual(code, 1)
+        self.assertIn('| Content delivery | FAILED |', summary)
+        self.assertIn(
+            f'Full route evidence artifact: [report.json]({artifact_url})',
             summary,
         )
 
