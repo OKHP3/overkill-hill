@@ -589,8 +589,10 @@ class SummaryTests(unittest.TestCase):
                        '--report', str(source), '--summary', str(output)]
             if artifact_url:
                 command.extend(['--artifact-url', artifact_url])
+            command_env = os.environ.copy()
+            command_env.pop('ACTIONS_ARTIFACT_URL', None)
             result = subprocess.run(command,
-                                    capture_output=True, text=True)
+                                    capture_output=True, text=True, env=command_env)
             return result.returncode, output.read_text(encoding='utf-8') if output.exists() else ''
 
     def assert_archived_report_contract(self, path, report, entry):
@@ -1233,6 +1235,43 @@ class SummaryTests(unittest.TestCase):
             source,
         )
 
+    def test_external_upload_or_report_failure_still_reaches_summary(self):
+        source = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        job_match = re.search(
+            r'(?ms)^  monitor-third-party-runtime:\n(.*?)(?=^  monitor-live-edge:|\Z)',
+            source,
+        )
+        self.assertIsNotNone(job_match, 'missing external monitor workflow job')
+        job = job_match.group(1)
+        monitor = re.search(
+            r'(?ms)^      - name: Check deployed third-party runtime dependencies\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        upload = re.search(
+            r'(?ms)^      - name: Upload third-party runtime inventory\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        summary = re.search(
+            r'(?ms)^      - name: Summarize external availability and first-party failures\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        self.assertIsNotNone(monitor, 'missing external monitor command')
+        self.assertIsNotNone(upload, 'missing external report upload step')
+        self.assertIsNotNone(summary, 'missing external summary step')
+        self.assertIn('continue-on-error: true', monitor.group(1))
+        self.assertIn('if: always()', upload.group(1))
+        self.assertIn('if-no-files-found: error', upload.group(1))
+        self.assertIn('if: always()', summary.group(1))
+        self.assertIn('--report=third-party-runtime-report.json', monitor.group(1))
+        self.assertIn('--report third-party-runtime-report.json', summary.group(1))
+        self.assertIn(
+            'steps.upload-third-party-runtime-report.outputs.artifact-url',
+            summary.group(1),
+        )
+
     def test_validation_evidence_uploads_declare_retention_and_file_policy(self):
         for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
             source = (ROOT / workflow).read_text(encoding='utf-8')
@@ -1563,7 +1602,7 @@ class SummaryTests(unittest.TestCase):
             'Full route evidence artifact: '
             '[report \\[route\\].json](<https://github.com/example/site/actions/runs/123/'
             'artifacts/987?download=1&name=report%20[review](draft)&next=]'
-            '(https://evil.example)%5Cpath&close=%3E>)',
+            '(https://evil.example)%5Cpath&close=%3E>) (direct artifact link)',
         )
         self.assertEqual(link_lines[0].count('](<https://'), 1)
         self.assertIn('&name=', link_lines[0])
@@ -1582,6 +1621,67 @@ class SummaryTests(unittest.TestCase):
             f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
+
+    def test_external_upload_unavailable_keeps_report_results_visible(self):
+        for fixture, expected_code, expected_result in (
+            (
+                'external-runtime-degraded.json',
+                0,
+                '| External availability | DEGRADED |',
+            ),
+            (
+                'external-runtime-local-failure.json',
+                1,
+                '| Content delivery | FAILED |',
+            ),
+        ):
+            with self.subTest(fixture=fixture):
+                code, summary = self.run_summary(
+                    self.load_fixture(fixture),
+                    'external',
+                )
+                self.assertEqual(code, expected_code)
+                self.assertIn(expected_result, summary)
+                self.assertIn(
+                    'External report download unavailable: only the local runner file',
+                    summary,
+                )
+                self.assertIn('not downloadable from this summary', summary)
+
+    def test_external_missing_report_file_is_explicit_and_unknown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / 'third-party-runtime-report.json'
+            output = Path(directory) / 'summary.md'
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    '--kind',
+                    'external',
+                    '--report',
+                    str(report),
+                    '--summary',
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                env={
+                    **{
+                        key: value
+                        for key, value in os.environ.items()
+                        if key != 'ACTIONS_ARTIFACT_URL'
+                    }
+                },
+            )
+            summary = output.read_text(encoding='utf-8')
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('| Evidence | UNKNOWN | No usable external report:', summary)
+        self.assertIn(
+            'External report download unavailable: no usable local report file exists',
+            summary,
+        )
+        self.assertIn('Check the monitor and upload steps.', summary)
 
     def test_invalid_reports_fail_closed(self):
         for report in ({}, {'checks': []}, {'checks': [{'status': 'MAYBE'}]}, []):
@@ -1614,6 +1714,13 @@ class SummaryTests(unittest.TestCase):
         code, summary = self.run_summary(report, 'external')
         self.assertEqual(code, 1)
         self.assertIn('UNKNOWN', summary)
+
+    def test_reparse_point_is_rejected_before_archive_or_fixture_reads(self):
+        report_path = 'assets/audit/redirect/delivery/live-edge.json'
+        entry = {
+            'classification': 'current',
+            'fixture': 'archived-live-edge-2026-09-07.json',
+            'required_action': 'validate_report_shape',
         }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1905,7 +2012,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -2183,7 +2290,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -2229,7 +2336,7 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('| External availability | DEGRADED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -2243,7 +2350,7 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('| Content delivery | FAILED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
