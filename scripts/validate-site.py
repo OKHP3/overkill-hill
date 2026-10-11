@@ -82,10 +82,14 @@ THEME_STYLESHEET = ROOT / THEME_STYLESHEET_PATH.lstrip("/")
 APP_SCRIPT_PATH = "/assets/js/app.js"
 MERMAID_INIT_SCRIPT_PATH = "/assets/js/mermaid-init.js"
 SHARED_SCRIPT_PATHS = (APP_SCRIPT_PATH, MERMAID_INIT_SCRIPT_PATH)
-BRAND_THEME_CONTRACT = {
-    brand["bodyClass"]: brand
-    for brand in load_brand_theme_contract().values()
-}
+try:
+    BRAND_THEME_CONTRACT = {
+        brand["bodyClass"]: brand
+        for brand in load_brand_theme_contract().values()
+    }
+except ValueError as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(1) from exc
 THEME_COLOR_MEDIA = {
     "light": "(prefers-color-scheme: light)",
     "dark": "(prefers-color-scheme: dark)",
