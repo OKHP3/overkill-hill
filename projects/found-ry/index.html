@@ -390,11 +390,11 @@
 </div>
 </div>
 <p style="font-size:0.78rem;color:var(--color-muted);margin-top:0.75rem;line-height:1.6;">No surface duplicates another. A prompt is hardened at Stage 01, given a specification and a governance record at Stage 02, made discoverable at Stage 03, and preserved with its full change history at Stage 04.</p>
-<div class="mermaid">
+<div aria-describedby="forge-path-description" aria-label="The Forge Path" class="mermaid" role="img">
 
-%%{init: {'theme': 'dark', 'themeVariables': {'primaryTextColor': '#e5e7eb', 'textColor': '#e5e7eb', 'edgeLabelBackground': '#181f26'}}}%%
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryTextColor': '#e5e7eb', 'textColor': '#e5e7eb', 'edgeLabelBackground': '#181f26'}, 'flowchart': {'nodeSpacing': 20, 'rankSpacing': 30}}}%%
 
-flowchart LR
+flowchart TB
 
     A["Raw prompt\nthe ore"] --&gt; B["Prompt Forge\nheat and pressure"]
     B --&gt; C["Found-Ry\nnine stations on the anvil"]
@@ -405,6 +405,7 @@ flowchart LR
     F --&gt; G["GitHub\nthe record"]
 
               </div>
+<p id="forge-path-description">Raw prompt enters Prompt Forge, then Found-Ry's nine stations, followed by Test matrix and audit. If it fails the gate, it returns to Found-Ry for revision and another test. If it passes the gate, it moves to Ship and govern, then Skillz Forge for discovery and GitHub for its history and review record.</p>
 <p style="font-size:0.78rem;color:var(--color-muted);margin-top:0.5rem;line-height:1.6;font-style:italic;">The loop from the quench back to the anvil is the part most build guides leave out.</p>
 </div>
 <!-- THE NINE STATIONS ───────────────────────────────── -->
