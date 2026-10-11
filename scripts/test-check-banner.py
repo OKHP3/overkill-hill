@@ -6,7 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -460,6 +460,117 @@ def check_generated_build_blocks_release_disagreement() -> None:
                 )
 
 
+def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
+    source_relative = check_banner.FEATURED_ARTICLE_SOURCE
+    generated_relative = check_banner.FEATURED_ARTICLE_GENERATED
+    route = check_banner.FEATURED_ARTICLE_ROUTE
+    source_content = "<span>Article v0.6: Source release</span>"
+    previous_output = "<span>Article v0.5: Previously generated release</span>"
+    sitemap_content = "<urlset><url><loc>preserved</loc></url></urlset>"
+    scenarios = (
+        (
+            "missing manifest route",
+            [{"path": "about/index.html"}],
+            {"about/index.html": "<main>Other page</main>"},
+            generated_relative,
+        ),
+        (
+            "missing rendered label",
+            [{"path": generated_relative}],
+            {generated_relative: "<main>No release label</main>"},
+            generated_relative,
+        ),
+        (
+            "ambiguous rendered labels",
+            [{"path": generated_relative}],
+            {
+                generated_relative: (
+                    "<span>Article v0.6: First release</span>"
+                    "<strong>Article v0.7: Second release</strong>"
+                )
+            },
+            generated_relative,
+        ),
+    )
+    checker_data = {
+        "FEATURED_ARTICLE_SOURCE": source_relative,
+        "FEATURED_ARTICLE_GENERATED": generated_relative,
+        "FEATURED_ARTICLE_ROUTE": route,
+        "_ARTICLE_RELEASE_RE": check_banner._ARTICLE_RELEASE_RE,
+        "_featured_article_release": check_banner._featured_article_release,
+        "visible_html_markup": check_banner.visible_html_markup,
+    }
+
+    for check in (False, True):
+        for name, pages, rendered_by_path, expected_path in scenarios:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                source_path = root / source_relative
+                source_path.parent.mkdir(parents=True, exist_ok=True)
+                source_path.write_text(source_content, encoding="utf-8")
+                generated_path = root / generated_relative
+                generated_path.parent.mkdir(parents=True, exist_ok=True)
+                generated_path.write_text(previous_output, encoding="utf-8")
+                sitemap = root / "sitemap.xml"
+                sitemap.write_text(sitemap_content, encoding="utf-8")
+                manifest = root / "site-src" / "pages.json"
+                manifest.parent.mkdir(parents=True, exist_ok=True)
+                manifest.write_text(json.dumps({"pages": pages}), encoding="utf-8")
+
+                output = StringIO()
+                errors = StringIO()
+                namespace = build_site.build.__globals__
+                with (
+                    patch.dict(
+                        namespace,
+                        {
+                            "ROOT": root,
+                            "MANIFEST": manifest,
+                            "SITEMAP": sitemap,
+                            "policies": lambda: ({}, lambda _path: "document"),
+                            "render_page": lambda page, *_args: rendered_by_path[
+                                page["path"]
+                            ],
+                        },
+                    ),
+                    patch.object(
+                        namespace["runpy"], "run_path", return_value=checker_data
+                    ),
+                    patch.object(
+                        namespace["subprocess"],
+                        "run",
+                        return_value=SimpleNamespace(returncode=0),
+                    ),
+                    redirect_stdout(output),
+                    redirect_stderr(errors),
+                ):
+                    result = build_site.build(check=check)
+
+                mode = "--check" if check else "generation"
+                diagnostic = errors.getvalue()
+                if result != 1:
+                    raise AssertionError(
+                        f"build-site {mode} accepted {name}: {output.getvalue()}"
+                    )
+                if route not in diagnostic or expected_path not in diagnostic:
+                    raise AssertionError(
+                        f"build-site {mode} {name} lacks route/path diagnostic: "
+                        f"{diagnostic}"
+                    )
+                if source_path.read_text(encoding="utf-8") != source_content:
+                    raise AssertionError(
+                        f"build-site {mode} {name} changed source evidence"
+                    )
+                if generated_path.read_text(encoding="utf-8") != previous_output:
+                    raise AssertionError(
+                        f"build-site {mode} {name} overwrote generated evidence"
+                    )
+                if sitemap.read_text(encoding="utf-8") != sitemap_content:
+                    raise AssertionError(
+                        f"build-site {mode} {name} changed sitemap evidence"
+                    )
+
+
 def main() -> int:
     featured = "/writings/first-diagram-is-a-liar/#council-scoring"
     stale_release = "v0.6"
@@ -617,6 +728,7 @@ def main() -> int:
     check_update_and_dry_run_preserve_repair_behavior()
     check_update_is_atomic()
     check_generated_build_blocks_release_disagreement()
+    check_build_blocks_missing_or_ambiguous_featured_release()
     print("check-banner localized regression checks passed")
     return 0
 
