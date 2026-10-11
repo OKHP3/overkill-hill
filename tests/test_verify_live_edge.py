@@ -349,16 +349,6 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "headers": module_headers,
                 "body": module_source,
             }
-        for response_url, response_body in javascript_response_overrides.items():
-            module_path = verify_live_edge.urllib.parse.urlsplit(response_url).path
-            if module_path not in responses:
-                raise ValueError(
-                    f"JavaScript response override has no source module: {response_url}"
-                )
-            overridden = dict(responses[module_path])
-            overridden["body"] = response_body
-            responses[response_url] = overridden
-
         # The fixture serves the real canonical theme CSS for fingerprint tests.
         # Include its self-hosted font dependencies in the synthetic response set.
         # Explicit fixture responses still control negative MIME/status cases.
@@ -384,6 +374,16 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                         "body": module_file.read_bytes(),
                     },
                 )
+
+        for response_url, response_body in javascript_response_overrides.items():
+            module_path = verify_live_edge.urllib.parse.urlsplit(response_url).path
+            if module_path not in responses:
+                raise ValueError(
+                    f"JavaScript response override has no source module: {response_url}"
+                )
+            overridden = dict(responses[module_path])
+            overridden["body"] = response_body
+            responses[response_url] = overridden
 
         request_counts: dict[str, int] = {}
         guarded_redirect_paths: set[str] = set()
@@ -919,6 +919,28 @@ import(bareSpecifier);
         stale_check = checks["asset /assets/js/stale.mjs"]
         self.assertEqual(stale_check["status"], "FAIL")
         self.assertIn("!= live", stale_check["evidence"])
+
+    def test_real_mermaid_vendor_dependency_bad_bytes_fail_while_pages_cache_is_blocked(self) -> None:
+        vendor_path = "/assets/vendor/mermaid/mermaid.esm.min.mjs"
+        vendor_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / vendor_path.lstrip("/")
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+            javascript_response_overrides={
+                vendor_path: vendor_bytes + b"\n/* stale vendor response */\n"
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        vendor_check = checks[f"asset {vendor_path}"]
+        self.assertEqual(vendor_check["status"], "FAIL")
+        self.assertIn("differs from local", vendor_check["evidence"])
+        self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+        self.assertEqual(self.last_fixture_requests[vendor_path], 1)
 
     def test_imported_module_with_wrong_mime_fails_explicitly(self) -> None:
         modules = {
