@@ -2134,6 +2134,35 @@ test("enforces one external-health budget across routes and reports affected rou
   }
 });
 
+test("rejects invalid external-health budgets before browser startup or report creation", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-invalid-budget-"));
+  const invalidValues = ["not-a-number", "", "0", "-25", "1.5"];
+  try {
+    for (const value of invalidValues) {
+      const reportPath = join(
+        reportDirectory,
+        `report-${value.replace(/[^a-z0-9]/gi, "_") || "empty"}.json`,
+      );
+      const result = await runCspQaCommand([
+        "--external-health",
+        "--paths=/external-healthy-only.html",
+        `--external-budget-ms=${value}`,
+        `--report=${reportPath}`,
+      ]);
+      assert.equal(result.status, 1, `value=${JSON.stringify(value)}\n${result.output}`);
+      assert.match(
+        result.output,
+        /--external-budget-ms must be a positive integer number of milliseconds/,
+        `value=${JSON.stringify(value)}\n${result.output}`,
+      );
+      assert.doesNotMatch(result.output, /Browser engine:|External health:/);
+      assert.equal(existsSync(reportPath), false, `invalid value=${JSON.stringify(value)}`);
+    }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("reports a machine-readable failure when browser startup reaches the health budget", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-browser-start-timeout-"));
   const fakeBrowsersDirectory = await mkdtemp(join(tmpdir(), "csp-fake-browser-"));
