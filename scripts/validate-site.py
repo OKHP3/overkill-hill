@@ -50,6 +50,7 @@ from csp import CspPageInventoryError, build_policies, page_class, sha256_source
 from brand_theme import load_brand_theme_contract, validate_brand_theme_contract
 from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, iter_public_html_files
 from sitemap_xml import parse_sitemap_xml
+from article_release import visible_html_markup
 
 
 def configure_utf8_console() -> None:
@@ -1316,7 +1317,7 @@ def load_locale_seo_contract() -> tuple[dict[str, dict], list[Finding]]:
 
 def _release_matches(raw: str, pattern: re.Pattern[str]) -> list[str]:
     """Extract release labels from one semantic writing-page element."""
-    matches = pattern.findall(raw)
+    matches = pattern.findall(visible_html_markup(raw))
     return [match.lower() for match in matches]
 
 

@@ -87,6 +87,67 @@ def check_article_release_variations() -> None:
             )
 
 
+def check_hidden_article_release_decoys() -> None:
+    route = check_banner.FEATURED_ARTICLE_ROUTE
+    visible = "<span>Article v0.5: Council-Assisted Scoring</span>"
+    hidden_decoy = (
+        "<script>Article v0.7: decoy</script>"
+        "<style>.label::after { content: 'Article v0.8: decoy'; }</style>"
+        "<template><strong>Article v0.9: decoy</strong></template>"
+        "<!-- <b>Article v1.0: decoy</b> -->"
+        '<div hidden>Article v1.1: decoy</div>'
+    )
+    hub_markup = (
+        '<div class="writing-card-kicker--featured">'
+        f"{visible}</div>"
+    )
+    with tempfile.TemporaryDirectory(dir=ROOT / "tests" / "fixtures") as temp_dir:
+        root = Path(temp_dir)
+        hub = root / "hub.html"
+        hub.write_text(hub_markup, encoding="utf-8")
+
+        decoy_article = root / "article-with-hidden-decoy.html"
+        decoy_article.write_text(hidden_decoy + visible, encoding="utf-8")
+        release, error = check_banner._featured_article_release(
+            str(root), decoy_article.name
+        )
+        findings = validate_site.validate_writing_release_alignment(
+            hub, decoy_article, route
+        )
+        if release != "v0.5" or error is not None or findings:
+            raise AssertionError(
+                "hidden decoys must not change a visible release: "
+                f"banner={(release, error)!r}, shared={findings!r}"
+            )
+
+        hidden_only = root / "article-hidden-only.html"
+        hidden_only.write_text(
+            "<template><span>Article v0.5: hidden only</span></template>",
+            encoding="utf-8",
+        )
+        relative_path = hidden_only.relative_to(ROOT).as_posix()
+        release, error = check_banner._featured_article_release(
+            str(root), hidden_only.name
+        )
+        findings = validate_site.validate_writing_release_alignment(
+            hub, hidden_only, route
+        )
+        if release is not None or error is None:
+            raise AssertionError(
+                f"hidden-only label must fail banner check: {(release, error)!r}"
+            )
+        if route not in error or hidden_only.name not in error:
+            raise AssertionError(f"banner error lacks route/path: {error!r}")
+        if (
+            len(findings) != 1
+            or route not in findings[0].msg
+            or relative_path not in findings[0].page
+        ):
+            raise AssertionError(
+                f"hidden-only label must fail shared check with route/path: {findings!r}"
+            )
+
+
 def check_shared_article_release_contract() -> None:
     valid_labels = (
         '<SPAN class="article-release" data-version="current">\n'
@@ -404,6 +465,7 @@ def main() -> int:
     stale_release = "v0.6"
     check_article_release_variations()
     check_shared_article_release_contract()
+    check_hidden_article_release_decoys()
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
