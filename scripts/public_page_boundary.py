@@ -40,6 +40,23 @@ PUBLIC_PAGE_EXCLUDED_DIRS = frozenset(
     }
 )
 
+# Active scripts that discover HTML pages or source-page inputs. The policy
+# values name the shared boundary and any deliberate, tested extension.
+HTML_SCANNER_REGISTRY = {
+    "audit-site.py": "shared",
+    "build-release.py": "shared",
+    "build-search-index.py": "shared",
+    "build-site.py": "shared",
+    "cache-bust.py": "shared + maintained-source-inputs",
+    "check-banner.py": "shared + source-banner-partial",
+    "check-links.py": "shared",
+    "csp.py": "shared",
+    "lint-voice.py": "shared",
+    "project-status.py": "exception: source-project-detail-inventory",
+    "strip-google-fonts-links.py": "shared + declared-source-inputs",
+    "validate-site.py": "shared",
+}
+
 
 def is_public_page_path(path: Path, root: Path) -> bool:
     """Return whether an HTML path belongs to the published-page boundary."""

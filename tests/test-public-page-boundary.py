@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ from urllib.error import HTTPError
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+import public_page_boundary
 
 
 def load_script(name: str):
@@ -71,6 +73,81 @@ class ExternalArchiveRetryTests(unittest.TestCase):
 
 
 class PublicPageBoundaryTests(unittest.TestCase):
+    def test_active_html_scanners_are_registered_and_boundary_checked(self) -> None:
+        discovery = re.compile(
+            r"iter_public_html_files|is_public_page_path|"
+            r"\.(?:rglob|glob)\s*\(\s*[\"'][^\"']*\.html|"
+            r"os\.(?:walk|scandir)\s*\(|"
+            r"git\s+ls-files[^\n]*\.html|"
+            r"\b(?:find|iter)_html_files\s*\(",
+            re.IGNORECASE,
+        )
+        registry = public_page_boundary.HTML_SCANNER_REGISTRY
+        self.assertTrue(registry)
+
+        candidates = set()
+        # The active script directory is scanned one level only; archived
+        # historical tools are intentionally outside this inventory.
+        for path in SCRIPTS.iterdir():
+            if (
+                not path.is_file()
+                or path.name.startswith("test-")
+                or path.name == "public_page_boundary.py"
+                or path.suffix not in {".py", ".js", ".mjs"}
+            ):
+                continue
+            source = path.read_text(encoding="utf-8", errors="replace")
+            if discovery.search(source):
+                candidates.add(path.name)
+        self.assertEqual(
+            candidates,
+            set(registry),
+            "new or removed HTML discovery scripts must update the scanner registry",
+        )
+
+        active_scripts = {
+            name
+            for name in re.findall(
+                r"^\| `([^`]+)` \| active \|",
+                (SCRIPTS / "README.md").read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        }
+        self.assertTrue(
+            set(registry) <= active_scripts,
+            f"registry entries must be documented as active: {set(registry) - active_scripts}",
+        )
+        for scanner, policy in registry.items():
+            source = (SCRIPTS / scanner).read_text(encoding="utf-8")
+            if policy.startswith("shared"):
+                self.assertRegex(
+                    source,
+                    r"iter_public_html_files|is_public_page_path",
+                    f"{scanner} claims the shared policy but does not use it",
+                )
+            elif policy == "exception: source-project-detail-inventory":
+                self.assertIn("site-src/pages", source)
+                self.assertIn("index.main.html", source)
+                exception_test = ROOT / "tests" / "test-project-status.py"
+                self.assertTrue(exception_test.is_file())
+                test_source = exception_test.read_text(encoding="utf-8")
+                self.assertIn("scripts/project-status.py", test_source)
+                self.assertIn("test_missing_detail", test_source)
+            else:
+                self.fail(f"{scanner} has an unnamed or unsupported policy: {policy}")
+
+        readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
+        registry_rows = re.findall(
+            r"^\| `([^`]+)` \| ([^|]+) \|",
+            readme.split("### Active HTML scanner registry", 1)[-1].split("\n### ", 1)[0],
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            dict(registry_rows),
+            registry,
+            "README scanner inventory must match the executable registry",
+        )
+
     def test_html_inventories_share_boundary_and_keep_narrow_exceptions(self) -> None:
         csp = load_script("csp")
         validator = load_script("validate-site")

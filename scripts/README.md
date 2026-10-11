@@ -19,6 +19,7 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `murderbird-integration-qa.mjs` | active | Six-homepage and five-scene local browser checks; translation fallback receipt |
 | `accessibility-qa.mjs` | active | Accessibility QA (`npm run test:*`) |
 | `audit-site.py` | active | Site audit |
+| `build-release.py` | active | Build and verify allowlisted GitHub Pages release bundles |
 | `build-search-index.py` | active | Rebuild the generated search index |
 | `build-site.py` | active | Regenerate HTML from `site-src/` sources |
 | `generate-atom-feed.py` | active | Generate and freshness-check deterministic Atom XML from published English Article sources; packaged and SHA-bound in the GitHub Pages release |
@@ -41,6 +42,7 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `build-etch-webp.py` | active | Lossless ETCH-AI-SKETCH WebP derivative with exact RGBA validation; retains original PNG |
 | `check-etch-parity.mjs` | active | Phone/desktop light/dark image geometry and pixel comparison against PNG fallback; loopback preview required |
 | `post-merge.sh` | active | Post-merge rebuild and validation hook |
+| `project-status.py` | active | Validate project-status records against authored project-page inventories |
 | `responsive-qa.mjs` | active | Responsive QA entry point |
 | `screen-reader-tree-audit.mjs` | active | Screen-reader accessibility tree audit (`npm run test:*`) |
 | `sync-foundation-files.py` | active | Read-only audit/verification and explicit-revision sync of theme.css/app.js/mermaid-init.js across the three sibling repos |
@@ -48,6 +50,29 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `validate-site.py` | active | Structural site validation |
 | `verify-live-edge.py` | active | Live-edge deployment verification |
 | `write-actions-summary.py` | active | Compact Actions summaries from existing live-edge and external-runtime JSON; first-party failures remain distinct |
+
+### Active HTML scanner registry
+
+`public_page_boundary.HTML_SCANNER_REGISTRY` is the executable inventory of
+active scripts that discover HTML pages or source-page inputs. The contract
+test detects new top-level scanner patterns, requires each scanner to appear in
+the registry, and checks that the README mirrors the registry. Scripts under
+`scripts/archive/` are historical and intentionally excluded.
+
+| Script | Policy | Scope |
+| --- | --- | --- |
+| `audit-site.py` | shared | Published HTML pages |
+| `build-release.py` | shared | Published-page allowlist and release inputs |
+| `build-search-index.py` | shared | Published HTML pages |
+| `build-site.py` | shared | Tracked pages filtered by the shared boundary |
+| `cache-bust.py` | shared + maintained-source-inputs | Public pages plus declared maintained source fragments; exact exception is tested |
+| `check-banner.py` | shared + source-banner-partial | Public pages plus its single authoring partial; exact exception is tested |
+| `check-links.py` | shared | Published HTML pages |
+| `csp.py` | shared | Tracked pages filtered by the shared boundary |
+| `lint-voice.py` | shared | Published HTML pages |
+| `project-status.py` | exception: source-project-detail-inventory | Authored project-detail source pages; covered by `tests/test-project-status.py` |
+| `strip-google-fonts-links.py` | shared + declared-source-inputs | Public pages plus maintained source fragments; exact exception is tested |
+| `validate-site.py` | shared | Published HTML pages |
 
 ### Live-edge archive coverage
 
