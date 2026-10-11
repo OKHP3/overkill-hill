@@ -46,7 +46,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from csp import build_policies, page_class, sha256_source
+from csp import CspPageInventoryError, build_policies, page_class, sha256_source
 from brand_theme import load_brand_theme_contract, validate_brand_theme_contract
 from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, iter_public_html_files
 
@@ -2460,10 +2460,19 @@ def main() -> int:
     )
     all_findings.extend(validate_atom_feed())
     all_findings.extend(validate_sitemap_inventory(sitemap_urls))
-    all_findings.extend(validate_csp_hashes(pages))
+    try:
+        all_findings.extend(validate_csp_hashes(pages))
+        all_findings.extend(validate_mermaid_csp_alignment(pages))
+    except CspPageInventoryError as exc:
+        all_findings.append(
+            Finding(
+                "ERROR",
+                "CSP page inventory",
+                str(exc),
+            )
+        )
     all_findings.extend(validate_mermaid_runtime(pages))
     all_findings.extend(validate_mermaid_version_pin(pages))
-    all_findings.extend(validate_mermaid_csp_alignment(pages))
     expected_theme_url = current_content_hashed_url(THEME_STYLESHEET_PATH)
     expected_script_urls = {
         script_path: current_content_hashed_url(script_path)

@@ -340,6 +340,24 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         environment["PYTHONUTF8"] = "1"
         return environment
 
+    def test_validate_site_reports_missing_git_worktree_actionably(self) -> None:
+        shutil.rmtree(self.fixture / ".git")
+        result = subprocess.run(
+            [sys.executable, str(self.fixture / "scripts" / "validate-site.py")],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("CSP page inventory requires a Git worktree", output)
+        self.assertIn("Run the release validator from the repository checkout", output)
+        self.assertNotIn("Traceback", output)
+        self.assertNotIn("CalledProcessError", output)
+
     def test_validate_site_wrapper_preserves_failure_status_and_format(self) -> None:
         shutil.rmtree(self.fixture / "fr")
         subprocess.run(

@@ -28,6 +28,10 @@ class CspPageManifestError(ValueError):
     """Raised when a CSP source-manifest page declaration cannot be used."""
 
 
+class CspPageInventoryError(RuntimeError):
+    """Raised when tracked HTML pages cannot be discovered from Git."""
+
+
 META_RE = re.compile(
     rf'<meta\s+http-equiv=["\']{re.escape(CSP_HEADER)}["\']\s+content=(["\'])(.*?)\1\s*/?>',
     re.IGNORECASE,
@@ -93,13 +97,21 @@ def all_pages() -> list[Path]:
     ``is_public_page_path`` so source templates, fixtures, and translation
     evidence cannot become CSP pages by accident.
     """
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.html"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "*.html"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = (getattr(exc, "stderr", None) or str(exc)).strip()
+        raise CspPageInventoryError(
+            "CSP page inventory requires a Git worktree to discover tracked HTML pages. "
+            "Run the release validator from the repository checkout with its .git metadata; "
+            f"Git reported: {detail}"
+        ) from exc
     # Newly built routes must participate before git add, so local validation
     # and a fresh CI checkout compute the same policy inventory.
     names = set(tracked.stdout.splitlines())
