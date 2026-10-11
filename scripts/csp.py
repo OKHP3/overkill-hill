@@ -138,25 +138,32 @@ def all_pages() -> list[Path]:
             )
 
         root = ROOT.resolve()
+        errors: list[str] = []
         for index, page in enumerate(pages, start=1):
             if not isinstance(page, dict):
-                raise CspPageManifestError(
-                    f'{manifest_name}: page entry {index} must be an object with a "path"'
+                errors.append(
+                    f'{manifest_name}: page entry {index} path <unavailable> must be '
+                    'an object with a "path"'
                 )
+                continue
             raw_path = page.get("path")
             if not isinstance(raw_path, str) or not raw_path:
-                raise CspPageManifestError(
-                    f'{manifest_name}: page entry {index} must contain a non-empty string "path"'
+                display_path = repr(raw_path) if raw_path is not None else "<missing>"
+                errors.append(
+                    f'{manifest_name}: page entry {index} path {display_path} must contain '
+                    'a non-empty string "path"'
                 )
+                continue
             if (
                 raw_path.startswith("/")
                 or re.match(r"^[A-Za-z]:", raw_path)
                 or ".." in raw_path.split("/")
             ):
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} is outside or "
                     "could escape the repository root; use a contained relative path"
                 )
+                continue
             if (
                 raw_path != raw_path.strip()
                 or "\\" in raw_path
@@ -165,36 +172,42 @@ def all_pages() -> list[Path]:
                 or not raw_path.endswith(".html")
                 or any(part in {"", "."} for part in raw_path.split("/"))
             ):
-                raise CspPageManifestError(
+                errors.append(
                     f'{manifest_name}: page entry {index} path {raw_path!r} must be a '
                     "normalized repository-relative .html path without query or fragment"
                 )
+                continue
 
             candidate = root / raw_path
             try:
                 resolved = candidate.resolve()
             except (OSError, RuntimeError, ValueError) as exc:
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} "
                     f"cannot be resolved: {exc}"
-                ) from exc
+                )
+                continue
             try:
                 resolved.relative_to(root)
-            except ValueError as exc:
-                raise CspPageManifestError(
+            except ValueError:
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} "
                     "resolves outside the repository root; use a contained relative path"
-                ) from exc
+                )
+                continue
             if not candidate.is_file():
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} does not exist "
                     "as a regular HTML file; generate the page or correct/remove the stale "
                     "manifest entry"
                 )
+                continue
             # Validate declared evidence paths too, then deliberately leave
             # them out of the CSP inventory through the shared boundary.
             if is_public_page_path(candidate, root):
                 names.add(candidate.relative_to(root).as_posix())
+        if errors:
+            raise CspPageManifestError("\n".join(errors))
     return sorted(
         ROOT / name
         for name in names

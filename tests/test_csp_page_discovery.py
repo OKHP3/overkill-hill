@@ -89,7 +89,7 @@ class CspPageDiscoveryTests(unittest.TestCase):
 
     def test_invalid_manifest_route_fails_with_actionable_error(self) -> None:
         self.assert_manifest_route_error(
-            {}, r'pages\.json: page entry 1 must contain a non-empty string "path"'
+            {}, r'pages\.json: page entry 1 path <missing> must contain a non-empty string "path"'
         )
         self.assert_manifest_route_error(
             {"path": "new-story.txt"},
@@ -133,6 +133,66 @@ class CspPageDiscoveryTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(output.getvalue().strip(), f"CSP page manifest error: {message}")
         build_policies.assert_not_called()
+
+    def test_check_reports_all_broken_page_declarations_at_once(self) -> None:
+        generator_path = ROOT / "scripts" / "generate-csp.py"
+        generator_spec = importlib.util.spec_from_file_location(
+            "test_generate_csp_all_manifest_errors", generator_path
+        )
+        if generator_spec is None or generator_spec.loader is None:
+            self.fail("could not load scripts/generate-csp.py")
+        generator = importlib.util.module_from_spec(generator_spec)
+        generator_spec.loader.exec_module(generator)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            site_src = root / "site-src"
+            site_src.mkdir()
+            evidence = root / "tests" / "fixtures" / "evidence.html"
+            evidence.parent.mkdir(parents=True)
+            evidence.write_text("<main>Reviewed evidence</main>", encoding="utf-8")
+            valid_route = root / "valid.html"
+            valid_route.write_text("<main>Valid</main>", encoding="utf-8")
+            (site_src / "pages.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            None,
+                            {},
+                            {"path": "../outside.html"},
+                            {"path": "stale.html"},
+                            {"path": "nested//bad.html"},
+                            {"path": "tests/fixtures/evidence.html"},
+                            {"path": "valid.html"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(csp, "ROOT", root), patch.object(
+                csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+            ), patch.object(generator, "all_pages", csp.all_pages), patch.object(
+                generator, "CspPageManifestError", csp.CspPageManifestError
+            ):
+                output = io.StringIO()
+                with redirect_stderr(output):
+                    result = generator.main(["--check"])
+
+        self.assertEqual(result, 1)
+        message = output.getvalue()
+        self.assertIn("CSP page manifest error:", message)
+        self.assertIn('page entry 1 path <unavailable> must be an object with a "path"', message)
+        self.assertIn('page entry 2 path <missing> must contain a non-empty string "path"', message)
+        self.assertIn("page entry 3 path '../outside.html' is outside or could escape", message)
+        self.assertIn(
+            "page entry 4 path 'stale.html' does not exist as a regular HTML file", message
+        )
+        self.assertIn(
+            "page entry 5 path 'nested//bad.html' must be a normalized repository-relative",
+            message,
+        )
+        self.assertNotIn("tests/fixtures/evidence.html", message)
+        self.assertNotIn("valid.html", message)
 
     def test_test_fixtures_are_not_public_csp_pages(self) -> None:
         pages = {page.relative_to(ROOT).as_posix() for page in csp.all_pages()}
