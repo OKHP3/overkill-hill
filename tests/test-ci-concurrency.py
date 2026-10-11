@@ -38,6 +38,18 @@ def step(source, name):
     return match[1]
 
 
+def artifact_upload_steps(source):
+    return {
+        match[1]: match[2]
+        for match in re.finditer(
+            r'^      - name: ([^\n]+)\n(.*?)(?=^      - name: |^  [\w-]+:\s*$|\Z)',
+            source,
+            re.M | re.S,
+        )
+        if re.search(r'(?m)^\s+uses: actions/upload-artifact@', match[2])
+    }
+
+
 def artifact_name(source, step_name, context):
     upload_step = step(source, step_name)
     match = re.search(r'(?m)^\s+name: (.+)$', upload_step)
@@ -45,7 +57,7 @@ def artifact_name(source, step_name, context):
         raise AssertionError(f'missing artifact name in step {step_name}')
     template = match[1]
     return re.sub(
-        r'\$\{\{\s*github\.(run_id|run_attempt)\s*\}\}',
+        r'\$\{\{\s*github\.(run_id|run_attempt|sha)\s*\}\}',
         lambda found: context[found[1]],
         template,
     )
@@ -77,11 +89,62 @@ def group(source, context):
     return re.sub(r'\$\{\{(.*?)\}\}', expression, template)
 
 
-def context(workflow='Site Validation', event_name='push', ref='refs/heads/main', run_id='100', run_attempt='1'):
+def context(
+    workflow='Site Validation',
+    event_name='push',
+    ref='refs/heads/main',
+    run_id='100',
+    run_attempt='1',
+    sha='abcdef1234567890',
+):
     return locals()
 
 
 class ConcurrencyTests(unittest.TestCase):
+    def test_all_validation_artifact_names_are_unique_and_keep_their_purpose_prefixes(self):
+        expected_prefixes = {
+            'Upload shared-foundation fingerprint report': 'foundation-fingerprints-',
+            'Upload local QA reports': 'local-qa-',
+            'Upload failed CSP fixture report': 'csp-fixture-regressions-',
+            'Upload theme-control revision evidence': 'theme-control-revisions-',
+            'Upload contrast audit report for fork pull requests': 'contrast-audit-',
+            'Upload the validated Pages release artifact': 'validated-site-',
+            'Upload third-party runtime inventory': 'third-party-runtime-',
+            'Upload live-edge monitoring report': 'live-edge-monitor-',
+        }
+        uploads = artifact_upload_steps(VALIDATE)
+        self.assertEqual(
+            set(uploads),
+            set(expected_prefixes),
+            'update the expected purpose prefixes when validation artifact uploads change',
+        )
+
+        synthetic_run = context(run_id='200', run_attempt='3', sha='0123456789abcdef')
+        rendered_names = {}
+        for upload_step, prefix in expected_prefixes.items():
+            with self.subTest(upload_step=upload_step):
+                rendered_name = artifact_name(VALIDATE, upload_step, synthetic_run)
+                self.assertNotIn('${{', rendered_name, f'unrendered expression in {upload_step}')
+                self.assertTrue(
+                    rendered_name.startswith(prefix),
+                    f'{upload_step} must keep the {prefix!r} purpose prefix',
+                )
+                rendered_names.setdefault(rendered_name, []).append(upload_step)
+
+        collisions = {
+            rendered_name: upload_steps
+            for rendered_name, upload_steps in rendered_names.items()
+            if len(upload_steps) > 1
+        }
+        self.assertFalse(
+            collisions,
+            'validation artifact name collisions: '
+            + '; '.join(
+                f'{name!r} is shared by upload steps {", ".join(upload_steps)}'
+                for name, upload_steps in collisions.items()
+            ),
+        )
+
     def test_foundation_fingerprint_report_is_retained_after_verification(self):
         source = job(VALIDATE, 'validate')
         verify_step = step(source, 'Verify pinned cross-site foundation fingerprints')
