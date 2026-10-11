@@ -88,10 +88,18 @@ def is_valid_artifact_url(value):
     return True
 
 
-def artifact_link_label(report_name):
+def workflow_run_context():
     run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
     run_attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '').strip()
     if run_id and run_attempt:
+        return run_id, run_attempt
+    return None
+
+
+def artifact_link_label(report_name):
+    run_context = workflow_run_context()
+    if run_context:
+        run_id, run_attempt = run_context
         return f'{report_name} (run {run_id}, attempt {run_attempt})'
     return report_name
 
@@ -324,9 +332,15 @@ def main():
     parser.add_argument('--summary', type=Path, default=os.environ.get('GITHUB_STEP_SUMMARY'))
     args = parser.parse_args()
     artifact_url = args.artifact_url if is_valid_artifact_url(args.artifact_url) else ''
+    run_context = workflow_run_context()
+    run_label = (
+        f'{run_context[0]} / {run_context[1]}'
+        if run_context
+        else 'local / local'
+    )
     lines = ['## Site delivery evidence', '',
              f"Workflow checkout SHA: {cell(os.environ.get('GITHUB_SHA', 'local'))}",
-             f"Run / attempt: {cell(os.environ.get('GITHUB_RUN_ID', 'local'))} / {cell(os.environ.get('GITHUB_RUN_ATTEMPT', 'local'))}",
+             f"Run / attempt: {cell(run_label)}",
              '', '| Area | State | Evidence |', '| --- | --- | --- |']
     report_available = False
     try:

@@ -2026,6 +2026,27 @@ class SummaryTests(unittest.TestCase):
                     self.assertNotIn('${{ github.run_id }}', summary)
                     self.assertNotIn('${{ github.run_attempt }}', summary)
 
+    def test_partial_run_metadata_uses_local_header_and_plain_artifact_label(self):
+        cases = (
+            ('missing run ID', None, '2'),
+            ('missing attempt', '100', None),
+        )
+        artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
+        for label, run_id, run_attempt in cases:
+            with self.subTest(metadata=label):
+                _, summary = self.run_summary(
+                    self.load_fixture('external-runtime-degraded.json'),
+                    'external',
+                    artifact_url=artifact_url,
+                    run_id=run_id,
+                    run_attempt=run_attempt,
+                )
+                self.assertIn('Run / attempt: local / local', summary)
+                self.assertIn(
+                    f'Full route evidence artifact: [report.json](<{artifact_url}>)',
+                    summary,
+                )
+
     def test_manual_direct_links_and_local_fallbacks_keep_their_existing_labels(self):
         artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
         _, manual_summary = self.run_summary(
@@ -2033,6 +2054,7 @@ class SummaryTests(unittest.TestCase):
             'external',
             artifact_url=artifact_url,
         )
+        self.assertIn('Run / attempt: local / local', manual_summary)
         self.assertIn(
             f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             manual_summary,
