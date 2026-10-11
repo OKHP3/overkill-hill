@@ -1,5 +1,24 @@
 # Shared foundation release — 2026-09-09
 
+The JSON block below is the machine-readable approval record used by CI. Update
+it only as part of an owner-reviewed foundation release; CI never selects a
+newer source revision or sibling pin.
+
+```json
+{
+  "schema": "okhp3-shared-foundation-release-v1",
+  "source": {
+    "repository": "overkill-hill",
+    "revision": "9e0c2f80ed33a53b61cde9a59a33f87a86bc33a0"
+  },
+  "site_revisions": {
+    "overkill-hill": "062e09659edf02b715b99aaf2dc7f73a675fee58",
+    "glee-fullytools": "4b249b5c8ec63f9d15c372524253053f6f602cbf",
+    "askjamie": "7e1bc496c0ea47d774e9f6807f65b7a5f118d398"
+  }
+}
+```
+
 ## Decision
 
 The reviewed compatible superset was selected from an explicit immutable source

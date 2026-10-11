@@ -44,6 +44,8 @@ SITE_LABELS = {
 }
 POST_WRITE_HOOKS = {"glee-fullytools": {"assets/css/theme.css": [["python3", "scripts/sync-css-version.py"], ["python3", "scripts/sync-portfolio-stats.py"]]}}
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+RELEASE_RECORD_SCHEMA = "okhp3-shared-foundation-release-v1"
+RELEASE_RECORD_RE = re.compile(r"```json\s*\n(.*?)\n```", re.DOTALL)
 
 
 def run(repo: Path, command: list[str], timeout: int = 30):
@@ -150,6 +152,61 @@ def resolve_revision(repo: Path, revision: str) -> tuple[str | None, str | None]
         return None, result.stderr.strip() or "source revision is not a commit in the selected source repository"
     resolved = result.stdout.strip()
     return (resolved, None) if resolved.lower() == revision.lower() else (None, "source revision did not resolve exactly")
+
+
+def load_release_record(path: Path) -> dict:
+    """Read the single fenced JSON approval record from the release audit."""
+    text = path.read_text(encoding="utf-8")
+    matches = RELEASE_RECORD_RE.findall(text)
+    if len(matches) != 1:
+        raise ValueError(f"{path}: expected exactly one fenced JSON release record")
+    record = json.loads(matches[0])
+    if not isinstance(record, dict) or record.get("schema") != RELEASE_RECORD_SCHEMA:
+        raise ValueError(f"{path}: unsupported or missing release-record schema")
+    source = record.get("source")
+    pins = record.get("site_revisions")
+    if not isinstance(source, dict) or source.get("repository") not in REPO_DIRS:
+        raise ValueError(f"{path}: source.repository must name a configured site")
+    if not isinstance(source.get("revision"), str) or not SHA_RE.fullmatch(source["revision"]):
+        raise ValueError(f"{path}: source.revision must be a full 40-character commit SHA")
+    if not isinstance(pins, dict) or set(pins) != set(REPO_DIRS):
+        raise ValueError(f"{path}: site_revisions must pin exactly {', '.join(REPO_DIRS)}")
+    for name, revision in pins.items():
+        if not isinstance(revision, str) or not SHA_RE.fullmatch(revision):
+            raise ValueError(f"{path}: site_revisions.{name} must be a full 40-character commit SHA")
+    return record
+
+
+def emit_release_record(record: dict, github_env: Path | None, github_output: Path | None) -> None:
+    """Expose validated immutable pins to later Actions steps."""
+    values = {
+        "THEME_CONTROL_SOURCE_REPOSITORY": record["source"]["repository"],
+        "THEME_CONTROL_SOURCE_REVISION": record["source"]["revision"],
+        "THEME_CONTROL_OKH_REVISION": record["site_revisions"]["overkill-hill"],
+        "THEME_CONTROL_GLEE_REVISION": record["site_revisions"]["glee-fullytools"],
+        "THEME_CONTROL_ASKJAMIE_REVISION": record["site_revisions"]["askjamie"],
+    }
+    if github_env:
+        with github_env.open("a", encoding="utf-8") as stream:
+            for name, value in values.items():
+                stream.write(f"{name}={value}\n")
+    if github_output:
+        with github_output.open("a", encoding="utf-8") as stream:
+            for name, value in values.items():
+                stream.write(f"{name.lower()}={value}\n")
+
+
+def approved_source_drift(repo: Path, approved_revision: str, candidate_revision: str = "HEAD") -> list[str]:
+    """List foundation files changed since the explicitly approved source."""
+    drift = []
+    for relpath in FOUNDATION_FILES:
+        approved, approved_error = source_bytes(repo, approved_revision, relpath)
+        candidate, candidate_error = source_bytes(repo, candidate_revision, relpath)
+        if approved_error or candidate_error:
+            drift.append(f"{relpath} (could not compare immutable revisions)")
+        elif approved != candidate:
+            drift.append(relpath)
+    return drift
 
 
 def status_paths(repo: Path) -> list[str]:
@@ -348,18 +405,41 @@ def main() -> int:
     parser.add_argument("--source-revision", help="approved full 40-character source commit SHA")
     parser.add_argument("--site-revision", action="append", default=[], help="pinned site revision as name=full-commit-sha; repeat for all three sites")
     parser.add_argument("--repo-path", action="append", default=[], help="checkout path as name=path; repeat to override sibling layout")
+    parser.add_argument("--release-record", type=Path, help="use the owner-reviewed JSON record embedded in a foundation release audit")
+    parser.add_argument("--load-release-record", type=Path, help="validate a release record and emit its immutable pins for CI")
+    parser.add_argument("--github-env-file", type=Path, help="append validated release pins to a GitHub Actions environment file")
+    parser.add_argument("--github-output-file", type=Path, help="append validated release pins to a GitHub Actions output file")
     parser.add_argument("--no-hooks", action="store_true", help="explicitly skip configured post-write generators")
     parser.add_argument("--file", action="append", dest="requested_files", help="foundation basename or path; repeatable")
     parser.add_argument("--json", action="store_true", help="emit machine-readable report")
     args = parser.parse_args()
+    if args.load_release_record:
+        try:
+            record = load_release_record(args.load_release_record)
+            emit_release_record(record, args.github_env_file, args.github_output_file)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            print(json.dumps({"error": "invalid foundation release record", "detail": str(error)}, indent=2))
+            return 4
+        print(json.dumps({"status": "loaded", "source": record["source"], "site_revisions": record["site_revisions"]}, indent=2))
+        return 0
     writing = args.apply or args.commit
     if args.verify and writing:
         parser.error("--verify cannot be combined with --apply or --commit")
     root = mirror_root()
     try:
         repos = configured_repos(root, args.repo_path)
-        site_revisions = dict(parse_named_value(value, "--site-revision") for value in args.site_revision)
-    except ValueError as error:
+        if args.release_record:
+            record = load_release_record(args.release_record)
+            if args.source_repo or args.source_revision or args.site_revision:
+                parser.error("--release-record cannot be combined with explicit source or site revisions")
+            source_name = record["source"]["repository"]
+            source_revision = record["source"]["revision"]
+            site_revisions = record["site_revisions"]
+        else:
+            source_name = args.source_repo
+            source_revision = args.source_revision
+            site_revisions = dict(parse_named_value(value, "--site-revision") for value in args.site_revision)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
         parser.error(str(error))
     problems = validate_repos(repos)
     if problems:
@@ -374,13 +454,26 @@ def main() -> int:
     mode = "verify" if args.verify else "commit" if args.commit else "apply" if args.apply else "dry-run"
     report = {"mirror_root": str(root), "mode": mode, "foundation_contract": FOUNDATION_CONTRACT}
     if args.verify:
-        if not args.source_repo or not args.source_revision:
+        if not source_name or not source_revision:
             report["error"] = "--verify requires --source-repo and --source-revision"
             emit(report)
             return 4
         verification, verification_problems = verify_revisions(
-            files, repos, args.source_repo, args.source_revision, site_revisions
+            files, repos, source_name, source_revision, site_revisions
         )
+        if args.release_record and source_name == "overkill-hill":
+            drift = approved_source_drift(repos[source_name], source_revision)
+            verification["current_source_review"] = {
+                "candidate_revision": git_revision(repos[source_name]),
+                "approved_revision": source_revision,
+                "changed_assets": drift,
+                "status": "stale-approval" if drift else "current",
+            }
+            if drift:
+                verification_problems.append(
+                    "current shared foundation differs from the approved release record "
+                    f"at {source_revision}: {', '.join(drift)}; a new owner-reviewed approval is required"
+                )
         report["verification"] = verification
         if verification_problems:
             report.update({"error": "pinned foundation verification failed", "problems": verification_problems})

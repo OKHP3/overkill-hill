@@ -142,18 +142,18 @@ failure prevents every commit and leaves the written paths reported for manual,
 reviewed recovery. `--no-hooks` is an explicit exceptional mode, not a default.
 
 The browser-level theme synchronization check is opt-in because sibling
-checkouts are not guaranteed to be mounted in every workspace. It reads each
-configured checkout's actual `index.html`, `assets/css/theme.css`, and
-`assets/js/app.js`, compares the foundation bytes, and reports the site and
-revision for every drift:
+checkouts are not guaranteed to be mounted in every workspace. CI reads the
+reviewed source revision and all three immutable site pins from
+`docs/audit/foundation-release-2026-09-09.md`; do not copy pin values into a
+workflow or test configuration. The browser check reads each configured
+checkout's actual `index.html`, `assets/css/theme.css`, and `assets/js/app.js`,
+compares the foundation bytes, and reports the site and revision for every
+drift:
 
-```bash
-THEME_CONTROL_SITES='[
-  {"name":"OKH","root":"../overkill-hill","revision":"0ee6bc875a183ca2e065448d01fe97da62fc1ff7"},
-  {"name":"Glee","root":"../glee-fullytools","revision":"f5689fe4852b72e5d584db9d8f87cac9121b87c4"},
-  {"name":"AskJamie","root":"../askjamie","revision":"e800d4aebf0dc2543c5ced295ec78d10ba192473"}
-]' npm run test:theme-controls
-```
+For local cross-site mode, populate `THEME_CONTROL_SITES` with the three
+`site_revisions` values from that release record and the corresponding
+checkout paths. The default browser fixtures remain available when sibling
+repositories are absent.
 
 Each entry must include a reviewed full commit SHA as `revision` when the
 cross-site mode is enabled. The test reads all three files from that immutable

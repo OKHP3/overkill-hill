@@ -71,6 +71,30 @@ class SyncFoundationSafetyTests(unittest.TestCase):
     def source_revision(self) -> str:
         return git(self.repos["overkill-hill"], "rev-parse", "HEAD")
 
+    def write_release_record(self, source_revision: str, site_revisions: dict[str, str]) -> Path:
+        record_path = self.root / "foundation-release.md"
+        record = {
+            "schema": "okhp3-shared-foundation-release-v1",
+            "source": {"repository": "overkill-hill", "revision": source_revision},
+            "site_revisions": site_revisions,
+        }
+        record_path.write_text(
+            "Reviewed release record\n\n```json\n"
+            + json.dumps(record, indent=2)
+            + "\n```\n",
+            encoding="utf-8",
+        )
+        return record_path
+
+    def verify_release_record(self, record_path: Path):
+        return self.invoke(
+            "--verify",
+            "--release-record", str(record_path),
+            "--repo-path", "overkill-hill=.",
+            "--repo-path", f"glee-fullytools={self.repos['glee-fullytools']}",
+            "--repo-path", f"askjamie={self.repos['askjamie']}",
+        )
+
     def test_lock_is_untouched_and_blocks_writes(self):
         target = self.repos["askjamie"] / FILES[0]
         target.write_text("different\n", encoding="utf-8")
@@ -178,6 +202,56 @@ class SyncFoundationSafetyTests(unittest.TestCase):
             self.assertEqual(set(fingerprint["sites"]), set(self.repos))
             expected = fingerprint["expected"]["sha256"]
             self.assertTrue(all(site["sha256"] == expected for site in fingerprint["sites"].values()))
+
+    def test_release_record_is_single_source_and_detects_unreviewed_current_foundation(self):
+        pins = {
+            name: git(repo, "rev-parse", "HEAD")
+            for name, repo in self.repos.items()
+        }
+        record_path = self.write_release_record(self.source_revision(), pins)
+
+        baseline = self.verify_release_record(record_path)
+        self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+        baseline_report = json.loads(baseline.stdout)["verification"]["current_source_review"]
+        self.assertEqual(baseline_report["status"], "current")
+        self.assertEqual(baseline_report["changed_assets"], [])
+
+        source = self.repos["overkill-hill"]
+        (source / FILES[0]).write_text("proposed foundation change\n", encoding="utf-8")
+        git(source, "add", FILES[0])
+        git(source, "commit", "-m", "proposed unreviewed foundation change")
+
+        stale = self.verify_release_record(record_path)
+        self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
+        report = json.loads(stale.stdout)
+        review = report["verification"]["current_source_review"]
+        self.assertEqual(review["status"], "stale-approval")
+        self.assertEqual(review["changed_assets"], [FILES[0]])
+        self.assertIn("new owner-reviewed approval is required", report["problems"][0])
+
+    def test_release_record_loader_emits_validated_pins(self):
+        pins = {
+            name: git(repo, "rev-parse", "HEAD")
+            for name, repo in self.repos.items()
+        }
+        record_path = self.write_release_record(self.source_revision(), pins)
+        env_path = self.root / "github-env"
+        output_path = self.root / "github-output"
+
+        result = subprocess.run(
+            [
+                sys.executable, "scripts/sync-foundation-files.py",
+                "--load-release-record", str(record_path),
+                "--github-env-file", str(env_path),
+                "--github-output-file", str(output_path),
+            ],
+            cwd=self.repos["overkill-hill"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"THEME_CONTROL_OKH_REVISION={pins['overkill-hill']}", env_path.read_text())
+        self.assertIn(f"theme_control_glee_revision={pins['glee-fullytools']}", output_path.read_text())
 
     def test_verify_names_pinned_site_revision_asset_and_fingerprint(self):
         askjamie = self.repos["askjamie"]

@@ -112,6 +112,12 @@ class ConcurrencyTests(unittest.TestCase):
         fetch_position = source.index(
             '- name: Verify pinned theme-control foundation revisions are fetchable',
         )
+        record_position = source.index('- name: Load reviewed foundation release pins')
+        self.assertLess(
+            record_position,
+            fetch_position,
+            'release pins must be loaded from the reviewed record before fetch verification',
+        )
         for checkout_name in (
             'Checkout reviewed Glee foundation revision',
             'Checkout reviewed AskJamie foundation revision',
@@ -185,27 +191,15 @@ class ConcurrencyTests(unittest.TestCase):
                     f'{name} expected THEME_CONTROL_SITES root {expected_path}',
                 )
 
-                revision_match = re.search(
-                    rf'(?m)^      {re.escape(revision_variable)}: (?P<revision>[0-9a-f]{{40}})$',
-                    source,
-                )
-                self.assertIsNotNone(
-                    revision_match,
-                    f'{name} expected full-SHA {revision_variable} for {expected_path}',
-                )
-                revision = revision_match['revision'] if revision_match else None
+                output_name = revision_variable.lower()
+                revision = '${{ steps.foundation_release.outputs.' + output_name + ' }}'
                 self.assertEqual(
                     configured_site.get('revision') if configured_site else None,
                     revision,
-                    f'{name} expected THEME_CONTROL_SITES revision from {revision_variable} '
-                    f'for {expected_path}',
+                    f'{name} expected THEME_CONTROL_SITES revision from the reviewed release record',
                 )
                 if configured_site:
-                    self.assertRegex(
-                        configured_site.get('revision', ''),
-                        r'^[0-9a-f]{40}$',
-                        f'{name} expected a full-SHA THEME_CONTROL_SITES revision for {expected_path}',
-                    )
+                    self.assertIn(revision_variable, source)
 
                 try:
                     checkout_step = step(source, checkout_name)
@@ -240,7 +234,7 @@ class ConcurrencyTests(unittest.TestCase):
                         checkout_step,
                         f'{name} expected repository {expected_repository} at {expected_path}',
                     )
-                    expected_ref = '${{ env.' + revision_variable + ' }}'
+                    expected_ref = '${{ steps.foundation_release.outputs.' + revision_variable.lower() + ' }}'
                     self.assertIn(
                         f'ref: {expected_ref}',
                         checkout_step,

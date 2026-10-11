@@ -23,10 +23,6 @@ jobs:
     timeout-minutes: 20
     name: Validate site HTML, links, and structure
     if: github.event_name != 'schedule'
-    env:
-      THEME_CONTROL_OKH_REVISION: 0ee6bc875a183ca2e065448d01fe97da62fc1ff7
-      THEME_CONTROL_GLEE_REVISION: f5689fe4852b72e5d584db9d8f87cac9121b87c4
-      THEME_CONTROL_ASKJAMIE_REVISION: e800d4aebf0dc2543c5ced295ec78d10ba192473
     outputs:
       release_artifact_name: validated-site-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
     # Cancel obsolete PR validation only. Caller names separate reusable runs;
@@ -39,6 +35,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      - name: Load reviewed foundation release pins
+        id: foundation_release
+        run: |
+          python3 scripts/sync-foundation-files.py \
+            --load-release-record docs/audit/foundation-release-2026-09-09.md \
+            --github-env-file "$GITHUB_ENV" \
+            --github-output-file "$GITHUB_OUTPUT"
+
       - name: Checkout pull request head for contrast mapping
         if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -50,6 +54,7 @@ jobs:
         run: |
           cat <<EOF | tee theme-control-revisions.txt
           Theme-control audit foundation revisions
+          Approved source ${THEME_CONTROL_SOURCE_REPOSITORY}@${THEME_CONTROL_SOURCE_REVISION}
           OKH       ${THEME_CONTROL_OKH_REVISION}  (OKHP3/OverKill-Hill)
           Glee      ${THEME_CONTROL_GLEE_REVISION}  (OKHP3/Glee-fullyTools)
           AskJamie  ${THEME_CONTROL_ASKJAMIE_REVISION}  (OKHP3/AskJamie)
@@ -110,7 +115,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: OKHP3/Glee-fullyTools
-          ref: ${{ env.THEME_CONTROL_GLEE_REVISION }}
+          ref: ${{ steps.foundation_release.outputs.theme_control_glee_revision }}
           path: .ci/theme-sites/glee-fullytools
           fetch-depth: 1
 
@@ -118,7 +123,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: OKHP3/AskJamie
-          ref: ${{ env.THEME_CONTROL_ASKJAMIE_REVISION }}
+          ref: ${{ steps.foundation_release.outputs.theme_control_askjamie_revision }}
           path: .ci/theme-sites/askjamie
           fetch-depth: 1
 
@@ -200,14 +205,10 @@ jobs:
       - name: Verify pinned cross-site foundation fingerprints
         run: |
           python3 scripts/sync-foundation-files.py --verify \
-            --source-repo overkill-hill \
-            --source-revision "$THEME_CONTROL_OKH_REVISION" \
+            --release-record docs/audit/foundation-release-2026-09-09.md \
             --repo-path overkill-hill=. \
             --repo-path glee-fullytools=.ci/theme-sites/glee-fullytools \
-            --repo-path askjamie=.ci/theme-sites/askjamie \
-            --site-revision "overkill-hill=$THEME_CONTROL_OKH_REVISION" \
-            --site-revision "glee-fullytools=$THEME_CONTROL_GLEE_REVISION" \
-            --site-revision "askjamie=$THEME_CONTROL_ASKJAMIE_REVISION"
+            --repo-path askjamie=.ci/theme-sites/askjamie
 
       - name: Run published-locale release-gate regressions
         run: python3 -m unittest tests/test-i18n-release.py
@@ -389,9 +390,9 @@ jobs:
       - name: Run shared theme-control regressions
         env:
           THEME_CONTROL_SITES: >-
-            [{"name":"OKH","root":".","revision":"0ee6bc875a183ca2e065448d01fe97da62fc1ff7"},
-            {"name":"Glee","root":".ci/theme-sites/glee-fullytools","revision":"f5689fe4852b72e5d584db9d8f87cac9121b87c4"},
-            {"name":"AskJamie","root":".ci/theme-sites/askjamie","revision":"e800d4aebf0dc2543c5ced295ec78d10ba192473"}]
+            [{"name":"OKH","root":".","revision":"${{ steps.foundation_release.outputs.theme_control_okh_revision }}"},
+            {"name":"Glee","root":".ci/theme-sites/glee-fullytools","revision":"${{ steps.foundation_release.outputs.theme_control_glee_revision }}"},
+            {"name":"AskJamie","root":".ci/theme-sites/askjamie","revision":"${{ steps.foundation_release.outputs.theme_control_askjamie_revision }}"}]
         run: npm run test:theme-controls
 
       - name: Upload theme-control revision evidence
