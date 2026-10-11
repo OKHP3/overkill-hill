@@ -602,6 +602,23 @@ test("diagnoses missing attribution in nested dependency failures with parent ro
   });
 });
 
+test("diagnoses missing error text in nested dependency failures with route context", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].routeOutcomes = [{
+    route: report.routes[0],
+    failures: [{ route: report.routes[0], errorText: " " }],
+  }];
+
+  assertFailureDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].routeOutcomes[0].failures[0]",
+    reason: "failure.errorText",
+    parentRoute: report.routes[0],
+    actualRoute: report.routes[0],
+  });
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+});
+
 test("diagnoses blank error text in outage failures with URL and location", () => {
   const report = makeSyntheticExternalFailureReport();
   report.externalOutages[1].failures = [{

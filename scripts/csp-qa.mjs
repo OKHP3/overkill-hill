@@ -506,18 +506,29 @@ function serialiseExternalDependency(dependency, cspEvidence) {
   };
 }
 
-function groupFailureRecords(failures, publicRoutes = null) {
+function groupFailureRecords(
+  failures,
+  publicRoutes = null,
+  { dependencyUrl = "unknown dependency", location = "failures", parentRoute } = {},
+) {
   const grouped = new Map();
-  for (const failure of failures) {
+  for (const [failureIndex, failure] of failures.entries()) {
     const route = failure.route || "";
-    const errorText = failure.errorText || "unknown failure";
+    const errorText = failure.errorText;
+    const parentRouteContext = parentRoute === undefined
+      ? ""
+      : `; route outcome route: ${String(parentRoute)}`;
+    const actualRouteContext = route ? `; reported route: ${route}` : "";
+    const context =
+      `dependency ${dependencyUrl} at ${location}[${failureIndex}]` +
+      `${parentRouteContext}${actualRouteContext}`;
     if (publicRoutes && !publicRoutes.has(route)) {
       throw new Error(
-        `External failure route must match a checked public route: ${route || "(missing)"}`,
+        `${context}: failure.route must match a checked public route: ${route || "(missing)"}`,
       );
     }
     if (typeof errorText !== "string" || !errorText.trim()) {
-      throw new Error("External failure must include non-empty error text");
+      throw new Error(`${context}: failure.errorText must be non-empty`);
     }
     const key = JSON.stringify([route, errorText]);
     const existing = grouped.get(key);
@@ -779,8 +790,11 @@ function mergeExternalDependencies(results) {
       existing.state = classifyExternalDependency(existing);
     }
   }
-  for (const dependency of merged.values()) {
-    dependency.failures = groupFailureRecords(dependency.failures, publicRoutes);
+  for (const [dependencyIndex, dependency] of [...merged.values()].entries()) {
+    dependency.failures = groupFailureRecords(dependency.failures, publicRoutes, {
+      dependencyUrl: dependency.url,
+      location: `dependencies[${dependencyIndex}].failures`,
+    });
     const routeOutcomes = new Map();
     for (const outcome of dependency.routeOutcomes) {
       const existing = routeOutcomes.get(outcome.route);
@@ -805,9 +819,15 @@ function mergeExternalDependencies(results) {
       });
     }
     dependency.routeOutcomes = [...routeOutcomes.values()]
-      .map((outcome) => ({
+      .map((outcome, routeOutcomeIndex) => ({
         ...outcome,
-        failures: groupFailureRecords(outcome.failures, publicRoutes),
+        failures: groupFailureRecords(outcome.failures, publicRoutes, {
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            ".failures",
+          parentRoute: outcome.route,
+        }),
         timeouts: [...new Map(
           outcome.timeouts.map((timeout) => [
             JSON.stringify([timeout.route, timeout.url]),
