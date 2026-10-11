@@ -181,7 +181,27 @@ def external_summary(report):
         raise ValueError('third-party report has missing or invalid counts')
     if summary['routes'] == 0:
         raise ValueError('third-party report sampled no routes')
-    return [
+    outages = report.get('externalOutages', [])
+    if not isinstance(outages, list):
+        raise ValueError('third-party report has invalid external outage evidence')
+    failure_rows = []
+    for outage in outages:
+        if not isinstance(outage, dict):
+            raise ValueError('third-party report has malformed external outage evidence')
+        failures = outage.get('failures', [])
+        if not isinstance(failures, list):
+            raise ValueError('third-party report has malformed external failure evidence')
+        for failure in failures:
+            if not isinstance(failure, dict):
+                raise ValueError('third-party report has malformed external failure evidence')
+            # Archived v1 reports may predate route attribution. Keep the failure
+            # visible as "unknown route" rather than hiding its outage evidence.
+            route = failure.get('route') or 'unknown route'
+            url = outage.get('url') or 'unknown dependency'
+            error = failure.get('errorText') or 'unknown failure'
+            failure_rows.append((route, url, error))
+
+    lines = [
         row('Content delivery', 'FAILED' if summary['localFailures'] else 'PASS',
             f"{summary['localFailures']} local route failures across {summary['routes']} sampled routes"),
         row('Edge policy', 'NOT RUN', 'Use the separate live-edge report'),
@@ -191,7 +211,20 @@ def external_summary(report):
             f"{summary['cspDiagnostics']} diagnostics; inspect the JSON evidence"),
         '', 'External outages and CSP diagnostics are non-blocking health signals. Confirmed local route failures fail this monitor.',
         'This browser monitor does not verify the deployed release SHA.',
-    ], bool(summary['localFailures'])
+    ]
+    if failure_rows:
+        lines += [
+            '',
+            'External failure evidence (archived failures without route attribution are shown as unknown route):',
+            '',
+            '| Route | Dependency | Failure |',
+            '| --- | --- | --- |',
+        ]
+        lines += [
+            f'| {cell(route)} | {cell(url)} | {cell(error)} |'
+            for route, url, error in failure_rows
+        ]
+    return lines, bool(summary['localFailures'])
 
 
 def main():

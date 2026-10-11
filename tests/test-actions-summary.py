@@ -1809,6 +1809,19 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('| External availability | DEGRADED |', summary)
 
+    def test_archived_external_report_without_failure_routes_remains_readable(self):
+        code, summary = self.run_summary(
+            self.load_fixture('archived-external-runtime-no-route.json'), 'external'
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED | 1 outages;', summary)
+        self.assertIn(
+            '| unknown route | https://images.example/archived.webp '
+            '| net::ERR_CONNECTION_RESET |',
+            summary,
+        )
+
     def test_external_degraded_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/987'
         code, summary = self.run_summary(
