@@ -5,12 +5,13 @@ Scope: preserved OverKill Hill local work, compared with current origin main at 
 
 ## Publication decision
 
-The owner authorized retrying reconciliation and pushing legitimate local changes to main. Two authored records were absent from the current tracked tree. They are preserved as historical documents:
+The owner authorized retrying reconciliation and pushing legitimate local changes to main. Three authored records were absent from the current tracked tree. They are preserved as historical documents:
 
 - [August 29 static-site parity draft](../../docs/archive/static-site-parity-contract-2026-08-29.md), recovered from the untracked-file parent of stash `d1d85689d1fe8499f94b3dbdad6040f4ef77920d`.
 - [September 5 R04 release handoff](../../docs/archive/r04-shared-foundation-handoff-2026-09-05.md), recovered from independent-clone commit `5d95183533d24032b870b6f1099752f7afe194c9`.
+- [October 1 site-enhancement proposal](../../docs/archive/site-enhancement-proposal-2026-10-01.md), preserved from branch tip `865ed93f0cbb6534bcc199ebbd75dc931bef6487`. Its architecture, deletion, and history-rewrite suggestions remain unapproved.
 
-Neither document replaces current governance or production code. Their archival notices distinguish historical statements from current verification. Host-specific paths were replaced with portable repository or artifact labels. Original source bytes remain preserved locally.
+None of these documents replaces current governance or production code. Their archival notices distinguish historical statements from current verification. Host-specific paths were replaced with portable repository or artifact labels. Original source bytes remain preserved locally.
 
 ## Confirmed source dispositions
 
