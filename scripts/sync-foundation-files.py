@@ -392,8 +392,11 @@ def commit(repo: Path, paths: list[str], message: str) -> tuple[bool, str]:
     return result.returncode == 0, (result.stdout or result.stderr).strip()
 
 
-def emit(report: dict) -> None:
-    print(json.dumps(report, indent=2))
+def emit(report: dict, report_file: Path | None = None) -> None:
+    output = json.dumps(report, indent=2)
+    if report_file:
+        report_file.write_text(output + "\n", encoding="utf-8")
+    print(output)
 
 
 def main() -> int:
@@ -409,10 +412,13 @@ def main() -> int:
     parser.add_argument("--load-release-record", type=Path, help="validate a release record and emit its immutable pins for CI")
     parser.add_argument("--github-env-file", type=Path, help="append validated release pins to a GitHub Actions environment file")
     parser.add_argument("--github-output-file", type=Path, help="append validated release pins to a GitHub Actions output file")
+    parser.add_argument("--report-file", type=Path, help="write the verification JSON report to this file as well as stdout")
     parser.add_argument("--no-hooks", action="store_true", help="explicitly skip configured post-write generators")
     parser.add_argument("--file", action="append", dest="requested_files", help="foundation basename or path; repeatable")
     parser.add_argument("--json", action="store_true", help="emit machine-readable report")
     args = parser.parse_args()
+    if args.report_file and not args.verify:
+        parser.error("--report-file requires --verify")
     if args.load_release_record:
         try:
             record = load_release_record(args.load_release_record)
@@ -443,7 +449,7 @@ def main() -> int:
         parser.error(str(error))
     problems = validate_repos(repos)
     if problems:
-        emit({"error": "invalid repository configuration", "problems": problems})
+        emit({"error": "invalid repository configuration", "problems": problems}, args.report_file)
         return 3
     files = FOUNDATION_FILES
     if args.requested_files:
@@ -456,7 +462,7 @@ def main() -> int:
     if args.verify:
         if not source_name or not source_revision:
             report["error"] = "--verify requires --source-repo and --source-revision"
-            emit(report)
+            emit(report, args.report_file)
             return 4
         verification, verification_problems = verify_revisions(
             files, repos, source_name, source_revision, site_revisions
@@ -477,28 +483,28 @@ def main() -> int:
         report["verification"] = verification
         if verification_problems:
             report.update({"error": "pinned foundation verification failed", "problems": verification_problems})
-            emit(report)
+            emit(report, args.report_file)
             return 1
-        emit(report)
+        emit(report, args.report_file)
         return 0
     report["inspection"] = inspect(files, repos)
     if not writing:
         report["next_step"] = "Audit only. Supply --apply/--commit with --source-repo and an approved full --source-revision SHA to write."
-        emit(report)
+        emit(report, args.report_file)
         return 0
     if not args.source_repo or not args.source_revision:
         report["error"] = "writes require --source-repo and --source-revision"
-        emit(report)
+        emit(report, args.report_file)
         return 4
     revision, error = resolve_revision(repos[args.source_repo], args.source_revision)
     if error:
         report["error"] = error
-        emit(report)
+        emit(report, args.report_file)
         return 4
     hazards = safety_problems(repos)
     if hazards:
         report.update({"error": "refusing to write because sibling repositories are not safe", "safety_problems": hazards})
-        emit(report)
+        emit(report, args.report_file)
         return 2
     account, errors = apply(files, repos, args.source_repo, revision, not args.no_hooks)
     report.update({"source": {"repo": args.source_repo, "revision": revision}, "change_account": account})
@@ -514,9 +520,9 @@ def main() -> int:
         report["commits"] = commits
         if not all(item["ok"] for item in commits.values()):
             report["error"] = "one or more commits failed; see change_account for recoverable written paths"
-            emit(report)
+            emit(report, args.report_file)
             return 5
-    emit(report)
+    emit(report, args.report_file)
     return 0
 
 

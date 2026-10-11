@@ -75,6 +75,27 @@ def context(workflow='Site Validation', event_name='push', ref='refs/heads/main'
 
 
 class ConcurrencyTests(unittest.TestCase):
+    def test_foundation_fingerprint_report_is_retained_after_verification(self):
+        source = job(VALIDATE, 'validate')
+        verify_step = step(source, 'Verify pinned cross-site foundation fingerprints')
+        upload_step = step(source, 'Upload shared-foundation fingerprint report')
+        self.assertIn('--report-file foundation-fingerprint-report.json', verify_step)
+        self.assertIn(
+            "if: always() && steps.foundation_verification.outcome != 'skipped'",
+            upload_step,
+        )
+        self.assertIn('path: foundation-fingerprint-report.json', upload_step)
+        self.assertIn('retention-days: 30', upload_step)
+        self.assertIn('if-no-files-found: error', upload_step)
+        self.assertRegex(
+            upload_step,
+            r'(?m)^\s+name: foundation-fingerprints-\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}$',
+        )
+        self.assertLess(
+            source.index('- name: Verify pinned cross-site foundation fingerprints'),
+            source.index('- name: Upload shared-foundation fingerprint report'),
+        )
+
     def test_theme_control_fetches_pinned_foundations_before_reviewed_checkouts(self):
         source = job(VALIDATE, 'validate')
         fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')

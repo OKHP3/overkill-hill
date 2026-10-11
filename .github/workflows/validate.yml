@@ -203,12 +203,23 @@ jobs:
         run: python3 -m unittest tests/test-sync-foundation-files.py
 
       - name: Verify pinned cross-site foundation fingerprints
+        id: foundation_verification
         run: |
           python3 scripts/sync-foundation-files.py --verify \
             --release-record docs/audit/foundation-release-2026-09-09.md \
             --repo-path overkill-hill=. \
             --repo-path glee-fullytools=.ci/theme-sites/glee-fullytools \
-            --repo-path askjamie=.ci/theme-sites/askjamie
+            --repo-path askjamie=.ci/theme-sites/askjamie \
+            --report-file foundation-fingerprint-report.json
+
+      - name: Upload shared-foundation fingerprint report
+        if: always() && steps.foundation_verification.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: foundation-fingerprints-${{ github.run_id }}-${{ github.run_attempt }}
+          path: foundation-fingerprint-report.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Run published-locale release-gate regressions
         run: python3 -m unittest tests/test-i18n-release.py

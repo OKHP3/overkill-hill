@@ -86,14 +86,17 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         )
         return record_path
 
-    def verify_release_record(self, record_path: Path):
-        return self.invoke(
+    def verify_release_record(self, record_path: Path, report_path: Path | None = None):
+        args = [
             "--verify",
             "--release-record", str(record_path),
             "--repo-path", "overkill-hill=.",
             "--repo-path", f"glee-fullytools={self.repos['glee-fullytools']}",
             "--repo-path", f"askjamie={self.repos['askjamie']}",
-        )
+        ]
+        if report_path:
+            args.extend(["--report-file", str(report_path)])
+        return self.invoke(*args)
 
     def test_lock_is_untouched_and_blocks_writes(self):
         target = self.repos["askjamie"] / FILES[0]
@@ -210,20 +213,24 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         }
         record_path = self.write_release_record(self.source_revision(), pins)
 
-        baseline = self.verify_release_record(record_path)
+        baseline_file = self.root / "baseline-report.json"
+        baseline = self.verify_release_record(record_path, baseline_file)
         self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
         baseline_report = json.loads(baseline.stdout)["verification"]["current_source_review"]
         self.assertEqual(baseline_report["status"], "current")
         self.assertEqual(baseline_report["changed_assets"], [])
+        self.assertEqual(json.loads(baseline_file.read_text()), json.loads(baseline.stdout))
 
         source = self.repos["overkill-hill"]
         (source / FILES[0]).write_text("proposed foundation change\n", encoding="utf-8")
         git(source, "add", FILES[0])
         git(source, "commit", "-m", "proposed unreviewed foundation change")
 
-        stale = self.verify_release_record(record_path)
+        stale_file = self.root / "stale-report.json"
+        stale = self.verify_release_record(record_path, stale_file)
         self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
         report = json.loads(stale.stdout)
+        self.assertEqual(json.loads(stale_file.read_text()), report)
         review = report["verification"]["current_source_review"]
         self.assertEqual(review["status"], "stale-approval")
         self.assertEqual(review["changed_assets"], [FILES[0]])
@@ -259,14 +266,17 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         git(askjamie, "add", FILES[0])
         git(askjamie, "commit", "-m", "diverged foundation")
         pins = [f"{name}={git(repo, 'rev-parse', 'HEAD')}" for name, repo in self.repos.items()]
+        report_path = self.root / "mismatch-report.json"
         result = self.invoke(
             "--verify",
             "--source-repo", "overkill-hill",
             "--source-revision", git(self.repos["overkill-hill"], "rev-parse", "HEAD"),
             *sum((["--site-revision", pin] for pin in pins), []),
+            "--report-file", str(report_path),
         )
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         report = json.loads(result.stdout)
+        self.assertEqual(json.loads(report_path.read_text()), report)
         mismatch = report["verification"]["mismatches"][0]
         self.assertEqual(mismatch["site"], "AskJamie")
         self.assertEqual(mismatch["revision"], pins[2].split("=", 1)[1])

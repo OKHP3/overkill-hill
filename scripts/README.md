@@ -186,6 +186,11 @@ Its JSON report includes the site, pinned revision, asset, expected fingerprint,
 and actual fingerprint for every mismatch. `--verify` cannot be combined with
 `--apply` or `--commit`, so it cannot rewrite sibling repositories.
 
+`--report-file PATH` writes the same verification JSON to a file and stdout.
+The CI validation workflow retains that file as a run- and attempt-specific
+artifact even when verification fails; this does not change the verifier's
+read-only behavior toward the checked-out sites.
+
 ### Universe map integration
 
 `sync-universe-map.py` calls the installed `okhp3-universe-map` generator and
