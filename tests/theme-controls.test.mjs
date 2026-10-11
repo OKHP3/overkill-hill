@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { dirname, extname, join, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -23,7 +24,11 @@ const BRAND_EXPECTATIONS = brandThemeContract.brands;
 let browser;
 
 before(async () => {
-  browser = await chromium.launch({ headless: true });
+  const launchOptions = { headless: true };
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
+  browser = await chromium.launch(launchOptions);
 });
 
 after(async () => {
@@ -286,6 +291,102 @@ test("browser theme constants are generated from the reviewed contract", async (
       cwd: repositoryRoot,
     }),
   );
+});
+
+test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "brand-theme-release-"));
+  const source = join(temporary, "source");
+  const output = join(temporary, "release");
+
+  async function writeSource(relativePath, contents) {
+    const target = join(source, relativePath);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, contents);
+  }
+
+  try {
+    await writeSource(
+      "site-src/pages.json",
+      JSON.stringify({ pages: [{ path: "index.html" }] }),
+    );
+    await writeSource(
+      "sitemap.xml",
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
+    );
+    await writeSource(
+      "config/murderbird-source-archive.json",
+      JSON.stringify({
+        schema: 1,
+        excludedLibraryPngs: ["assets/img/library/archive.png"],
+      }),
+    );
+    for (const [path, contents] of Object.entries({
+      ".nojekyll": "",
+      "CNAME": "overkillhill.com\n",
+      "feed.xml": "<feed />\n",
+      "favicon.ico": "",
+      "favicon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" />\n",
+      "humans.txt": "Fixture\n",
+      "llms.txt": "Fixture\n",
+      "robots.txt": "User-agent: *\n",
+      "site.webmanifest": "{}\n",
+      "assets/data/search-index.json": "{}\n",
+    })) {
+      await writeSource(path, contents);
+    }
+    await writeSource("index.html", await readFile(join(repositoryRoot, "index.html")));
+    await mkdir(join(source, "assets", "js"), { recursive: true });
+    await copyFile(
+      join(repositoryRoot, "assets", "js", "app.js"),
+      join(source, "assets", "js", "app.js"),
+    );
+
+    await execFileAsync(
+      "python3",
+      [
+        "scripts/build-release.py",
+        "--source",
+        source,
+        "--output",
+        output,
+        "--commit",
+        "a".repeat(40),
+      ],
+      { cwd: repositoryRoot },
+    );
+
+    const packagedApp = await readFile(join(output, "assets", "js", "app.js"), "utf8");
+    const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
+    const endMarker = "// END GENERATED BRAND THEME CONFIG.";
+    const start = packagedApp.indexOf(beginMarker);
+    const end = packagedApp.indexOf(endMarker, start);
+    assert.notEqual(start, -1, "packaged app.js has the generated theme block start marker");
+    assert.notEqual(end, -1, "packaged app.js has the generated theme block end marker");
+    const block = packagedApp.slice(start, end);
+    const serialized = block.match(
+      /const BRAND_THEME_CONFIG = Object\.freeze\(([\s\S]*?)\);/,
+    )?.[1];
+    assert.ok(serialized, "packaged app.js contains a parseable generated brand config");
+    const packagedBrands = JSON.parse(serialized);
+    for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+      assert.equal(packagedBrands[brandId]?.storageKey, expected.storageKey, `${brandId} storage key`);
+      assert.equal(packagedBrands[brandId]?.light, expected.light, `${brandId} light color`);
+      assert.equal(packagedBrands[brandId]?.dark, expected.dark, `${brandId} dark color`);
+    }
+
+    const packagedPage = await readFile(join(output, "index.html"), "utf8");
+    const appReference = packagedPage.match(
+      /src=["']\/assets\/js\/app\.js\?v=([a-f0-9]{8})["']/,
+    );
+    assert.ok(appReference, "a packaged published page references fingerprinted app.js");
+    const expectedFingerprint = createHash("sha256")
+      .update(packagedApp.replace(/\r\n/g, "\n"))
+      .digest("hex")
+      .slice(0, 8);
+    assert.equal(appReference[1], expectedFingerprint, "page fingerprint matches packaged app.js bytes");
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
 
 test("all three theme controls survive disabled storage", async () => {
