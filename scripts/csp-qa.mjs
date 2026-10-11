@@ -210,17 +210,42 @@ function fixtureDiagnostics(errors) {
 
 function writeFixtureSummary(reportPath) {
   let report;
+  let reportError = null;
+  let reportStatus = "available";
+  let source;
   try {
-    report = JSON.parse(readFileSync(reportPath, "utf8"));
+    source = readFileSync(reportPath, "utf8");
   } catch (error) {
-    report = {
-      mode: "csp-fixtures",
-      fixtures: [],
-      error: `Could not read focused CSP fixture report: ${error.message}`,
-    };
+    reportStatus = error.code === "ENOENT" ? "missing" : "unreadable";
+    reportError = error.code === "ENOENT"
+      ? "Focused CSP fixture report is missing; the fixture test did not create the report file."
+      : `Could not read focused CSP fixture report: ${error.message}`;
   }
 
-  const fixtures = Array.isArray(report.fixtures) ? report.fixtures : [];
+  if (reportStatus === "available" && !source.trim()) {
+    reportStatus = "empty";
+    reportError = "Focused CSP fixture report is empty (zero bytes).";
+  } else if (reportStatus === "available") {
+    try {
+      report = JSON.parse(source);
+    } catch (error) {
+      reportStatus = "malformed";
+      reportError = `Focused CSP fixture report is malformed JSON: ${error.message}`;
+    }
+  }
+
+  if (
+    reportStatus === "available" &&
+    (!report || typeof report !== "object" || Array.isArray(report) || !Array.isArray(report.fixtures))
+  ) {
+    reportStatus = "malformed";
+    reportError = "Focused CSP fixture report is malformed: expected an object with a fixtures array.";
+  } else if (reportStatus === "available" && report.fixtures.length === 0) {
+    reportStatus = "empty";
+    reportError = "Focused CSP fixture report is empty: no fixture results were recorded.";
+  }
+
+  const fixtures = reportStatus === "available" ? report.fixtures : [];
   const lines = [
     "## CSP fixture diagnostics",
     "",
@@ -247,7 +272,7 @@ function writeFixtureSummary(reportPath) {
     }
   } else {
     lines.push(
-      `| unavailable | UNKNOWN | unknown | ${markdownCell(report.error || "No fixture results were recorded.")} |`,
+      `| unavailable | UNKNOWN | unknown | ${markdownCell(reportError || "No fixture results were recorded.")} |`,
     );
   }
   lines.push("");
@@ -257,9 +282,9 @@ function writeFixtureSummary(reportPath) {
       `Focused CSP evidence artifact: [csp-fixture-report.json](${markdownCell(artifactUrl)})`,
     );
   } else {
-    lines.push(
-      "Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.",
-    );
+    lines.push(reportStatus === "missing"
+      ? "Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain."
+      : "Focused CSP evidence artifact: unavailable; the warning-only upload returned no artifact URL. See the report diagnostic above.");
   }
   lines.push("");
 

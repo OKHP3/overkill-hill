@@ -691,12 +691,75 @@ test("keeps the focused CSP summary useful without an uploaded artifact", async 
     const result = await runFixtureSummary(reportPath, summaryPath);
     assert.equal(result.status, 0, result.output);
     const summary = await readFile(summaryPath, "utf8");
-    assert.match(summary, /\| unavailable \| UNKNOWN \| unknown \| Could not read focused CSP fixture report:/);
     assert.match(
       summary,
-      /Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report\./,
+      /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report is missing; the fixture test did not create the report file\./,
+    );
+    assert.match(
+      summary,
+      /Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain\./,
     );
     assert.doesNotMatch(summary, /Focused CSP evidence artifact: \[/);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("distinguishes empty and malformed focused CSP reports", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-invalid-"));
+  const reportPath = join(reportDirectory, "fixture-report.json");
+  const summaryPath = join(reportDirectory, "summary.md");
+
+  try {
+    await writeFile(reportPath, "");
+    let result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    let summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report is empty \(zero bytes\)\./,
+    );
+    assert.doesNotMatch(summary, /report file was missing/);
+
+    await writeFile(reportPath, "{not-json");
+    await writeFile(summaryPath, "");
+    result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report is malformed JSON:/,
+    );
+    assert.doesNotMatch(summary, /report file was missing/);
+
+    await writeFile(reportPath, `${JSON.stringify({ version: 1, mode: "csp-fixtures", results: [] })}\n`);
+    await writeFile(summaryPath, "");
+    result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report is malformed: expected an object with a fixtures array\./,
+    );
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("distinguishes a valid report with no fixture results", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-no-results-"));
+  const reportPath = join(reportDirectory, "fixture-report.json");
+  const summaryPath = join(reportDirectory, "summary.md");
+
+  try {
+    await writeFile(reportPath, `${JSON.stringify({ version: 1, mode: "csp-fixtures", fixtures: [] })}\n`);
+    const result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report is empty: no fixture results were recorded\./,
+    );
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }

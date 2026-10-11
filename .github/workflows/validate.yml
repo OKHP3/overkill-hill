@@ -394,6 +394,11 @@ jobs:
           CSP_FIXTURE_REPORT: csp-fixture-report.json
         run: npm run test:csp:regressions
 
+      - name: Explain missing focused CSP fixture report
+        if: always() && steps.csp-fixtures.outcome == 'failure' && !hashFiles('csp-fixture-report.json')
+        run: >-
+          echo "::warning title=Focused CSP report missing::The focused fixture test failed without creating csp-fixture-report.json; the warning-only upload has no report to retain."
+
       - name: Upload failed CSP fixture report
         if: always() && steps.csp-fixtures.outcome == 'failure'
         id: upload-csp-fixture-report

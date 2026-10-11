@@ -1537,11 +1537,11 @@ class SummaryTests(unittest.TestCase):
                 self.assertTrue(summary_path.is_file(), output)
                 rendered = summary_path.read_text(encoding='utf-8')
                 self.assertIn(
-                    '| unavailable | unknown | Could not read focused CSP fixture report:',
+                    '| unavailable | UNKNOWN | unknown | Focused CSP fixture report is missing;',
                     rendered,
                 )
                 self.assertIn(
-                    'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                    'Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain.',
                     rendered,
                 )
                 self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
@@ -1565,6 +1565,34 @@ class SummaryTests(unittest.TestCase):
             result.returncode,
             0,
             'the failure-preservation command must remain nonzero',
+        )
+
+    def test_missing_focused_csp_report_has_a_specific_warning_before_upload(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        warning = re.search(
+            r'(?ms)^      - name: Explain missing focused CSP fixture report\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        upload = re.search(
+            r'(?ms)^      - name: Upload failed CSP fixture report\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        self.assertIsNotNone(warning, 'missing focused-report warning step')
+        self.assertIsNotNone(upload, 'missing focused report upload step')
+        self.assertIn(
+            "if: always() && steps.csp-fixtures.outcome == 'failure' && !hashFiles('csp-fixture-report.json')",
+            warning.group(1),
+        )
+        self.assertIn(
+            'The focused fixture test failed without creating csp-fixture-report.json',
+            warning.group(1),
+        )
+        self.assertIn('if-no-files-found: warn', upload.group(1))
+        self.assertLess(
+            workflow.index('Explain missing focused CSP fixture report'),
+            workflow.index('Upload failed CSP fixture report'),
         )
 
     def test_pages_only_blocked_fixture_is_partial_and_not_enforcement_proof(self):
@@ -2355,11 +2383,11 @@ class SummaryTests(unittest.TestCase):
                 self.assertTrue(summary_path.is_file(), output)
                 rendered = summary_path.read_text(encoding='utf-8')
                 self.assertIn(
-                    '| unavailable | unknown | Could not read focused CSP fixture report:',
+                    '| unavailable | UNKNOWN | unknown | Focused CSP fixture report is missing;',
                     rendered,
                 )
                 self.assertIn(
-                    'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                    'Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain.',
                     rendered,
                 )
                 self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
