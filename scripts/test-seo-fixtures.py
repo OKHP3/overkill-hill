@@ -380,6 +380,57 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_multi_locale_manifest_rejects_shared_target_route(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            shutil.copy2(
+                FIXTURE_ROOT / "locale-duplicate-target-routes.json",
+                manifest_path,
+            )
+            shutil.copy2(ROOT / "index.html", root / "index.html")
+            sitemap_path = root / "sitemap.xml"
+            sitemap_path.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<url><loc>{locale_checker.route_url('/')}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+            index_dir = root / "assets" / "data"
+            index_dir.mkdir(parents=True)
+            for locale in ("fr", "de"):
+                (index_dir / f"search-index.{locale}.json").write_text(
+                    json.dumps({"locale": locale, "count": 0, "entries": []}),
+                    encoding="utf-8",
+                )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["locales"]["de"]["pages"][0]["target_route"] = "/de/"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertFalse(
+                locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    root=root,
+                ),
+                "independent locale target routes should remain valid",
+            )
+
+            shutil.copy2(
+                FIXTURE_ROOT / "locale-duplicate-target-routes.json",
+                manifest_path,
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                root=root,
+            )
+            self.assertIn(
+                "locale target route is claimed by multiple locales: /fr/ (de, fr)",
+                findings,
+            )
+
     def test_legacy_locale_manifest_requires_coverage_and_distinguishes_routes(self) -> None:
         source_routes = {"/", "/about/", "/projects/", "/contact/"}
         promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}

@@ -454,6 +454,26 @@ def validate(
         fail(findings, f"invalid locale manifest {manifest_path}: {exc}")
         return findings
 
+    route_owners: dict[str, set[str]] = {}
+    for spec in specs:
+        locale = spec["locale"]
+        pages = spec["pages"]
+        if not isinstance(pages, list):
+            continue
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            target_route = page.get("target_route")
+            if isinstance(target_route, str) and target_route:
+                route_owners.setdefault(target_route, set()).add(locale)
+    for route, owners in sorted(route_owners.items()):
+        if len(owners) > 1:
+            fail(
+                findings,
+                "locale target route is claimed by multiple locales: "
+                f"{route} ({', '.join(sorted(owners))})",
+            )
+
     for spec in specs:
         locale = spec["locale"]
         locale_index = index_path or root / "assets" / "data" / f"search-index.{locale}.json"
