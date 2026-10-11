@@ -347,6 +347,7 @@ jobs:
           npm run test:toc
 
       - name: Upload local QA reports
+        id: upload-local-qa-reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -356,6 +357,22 @@ jobs:
             test-results/audit-site/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Summarize local QA report artifact
+        if: always()
+        env:
+          LOCAL_QA_ARTIFACT_URL: ${{ steps.upload-local-qa-reports.outputs.artifact-url }}
+        run: |
+          {
+            echo "## Local QA evidence"
+            echo
+            if [ -n "$LOCAL_QA_ARTIFACT_URL" ]; then
+              printf '[Download local QA reports](%s)\n' "$LOCAL_QA_ARTIFACT_URL"
+            else
+              echo "No local QA artifact URL was returned; review the upload step if report files were expected."
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run accessibility QA gate
         run: |

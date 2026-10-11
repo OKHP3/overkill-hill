@@ -1362,8 +1362,67 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('retention-days: 7', local_qa.group(1))
         self.assertIn('test-results/responsive-qa/', local_qa.group(1))
         self.assertIn('test-results/audit-site/', local_qa.group(1))
+        self.assertIn('id: upload-local-qa-reports', local_qa.group(1))
         self.assertNotIn('site-release', local_qa.group(1))
         self.assertNotIn('third-party-runtime-report.json', local_qa.group(1))
+
+    def test_local_qa_summary_links_its_upload_without_failing_when_no_artifact_exists(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        upload = re.search(
+            r'(?ms)^      - name: Upload local QA reports\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        summary = re.search(
+            r'(?ms)^      - name: Summarize local QA report artifact\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(upload, 'missing local QA artifact upload')
+        self.assertIsNotNone(summary, 'missing local QA artifact summary')
+        self.assertIn('if-no-files-found: warn', upload.group(1))
+        self.assertIn('if: always()', summary.group(1))
+        self.assertIn(
+            'steps.upload-local-qa-reports.outputs.artifact-url',
+            summary.group(1),
+        )
+        run_block = re.search(
+            r'(?ms)^        run: \|\n((?:^          .*\n?)+)',
+            summary.group(1),
+        )
+        self.assertIsNotNone(run_block, 'local QA summary must use a literal shell block')
+        command = '\n'.join(
+            line[10:] for line in run_block.group(1).splitlines()
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            summary_path = Path(directory) / 'github-step-summary.md'
+            for artifact_url in (
+                '',
+                'https://github.com/example/site/actions/runs/123/artifacts/456',
+            ):
+                with self.subTest(artifact_url=bool(artifact_url)):
+                    summary_path.write_text('', encoding='utf-8')
+                    environment = os.environ.copy()
+                    environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+                    environment['LOCAL_QA_ARTIFACT_URL'] = artifact_url
+                    result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c', command],
+                        cwd=ROOT,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    rendered = summary_path.read_text(encoding='utf-8')
+                    if artifact_url:
+                        self.assertIn(
+                            f'[Download local QA reports]({artifact_url})',
+                            rendered,
+                        )
+                    else:
+                        self.assertIn('No local QA artifact URL was returned', rendered)
+                        self.assertNotIn('[Download local QA reports]', rendered)
 
     def test_failed_csp_fixtures_upload_only_the_short_lived_focused_report(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
