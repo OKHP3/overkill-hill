@@ -226,22 +226,28 @@ function writeFixtureSummary(reportPath) {
     "",
     "Focused CSP fixture regressions failed. The full browser output remains in the check log.",
     "",
-    "| Fixture | Diagnostic categories | Key browser diagnostic |",
-    "| --- | --- | --- |",
+    "| Fixture | Result | Diagnostic categories | Key browser diagnostic |",
+    "| --- | --- | --- | --- |",
   ];
   if (fixtures.length) {
     for (const fixture of fixtures) {
       const diagnostics = fixtureDiagnostics(
         Array.isArray(fixture.errors) ? fixture.errors : [],
       );
+      const result = fixture.pass === true
+        ? "PASS"
+        : fixture.pass === false
+          ? "FAIL"
+          : "UNKNOWN";
       lines.push(
-        `| ${markdownCell(fixture.path)} | ${markdownCell(diagnostics.categories)} | ` +
+        `| ${markdownCell(fixture.path)} | ${result} | ` +
+        `${markdownCell(diagnostics.categories)} | ` +
         `${markdownCell(diagnostics.evidence)} |`,
       );
     }
   } else {
     lines.push(
-      `| unavailable | unknown | ${markdownCell(report.error || "No fixture results were recorded.")} |`,
+      `| unavailable | UNKNOWN | unknown | ${markdownCell(report.error || "No fixture results were recorded.")} |`,
     );
   }
   lines.push("");

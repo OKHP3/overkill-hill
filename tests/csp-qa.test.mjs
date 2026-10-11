@@ -662,7 +662,7 @@ test("links the focused CSP summary to its uploaded artifact", async () => {
     await writeFile(reportPath, `${JSON.stringify({
       version: 1,
       mode: "csp-fixtures",
-      fixtures: [{ path: "/blocked.html", errors: ["CSP: blocked"] }],
+      fixtures: [{ path: "/blocked.html", pass: false, errors: ["CSP: blocked"] }],
     })}\n`);
 
     const result = await runFixtureSummary(reportPath, summaryPath, artifactUrl);
@@ -691,12 +691,43 @@ test("keeps the focused CSP summary useful without an uploaded artifact", async 
     const result = await runFixtureSummary(reportPath, summaryPath);
     assert.equal(result.status, 0, result.output);
     const summary = await readFile(summaryPath, "utf8");
-    assert.match(summary, /\| unavailable \| unknown \| Could not read focused CSP fixture report:/);
+    assert.match(summary, /\| unavailable \| UNKNOWN \| unknown \| Could not read focused CSP fixture report:/);
     assert.match(
       summary,
       /Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report\./,
     );
     assert.doesNotMatch(summary, /Focused CSP evidence artifact: \[/);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("shows explicit pass and fail results for a mixed focused fixture report", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-status-"));
+  const reportPath = join(reportDirectory, "fixture-report.json");
+  const summaryPath = join(reportDirectory, "summary.md");
+
+  try {
+    await writeFile(reportPath, `${JSON.stringify({
+      version: 1,
+      mode: "csp-fixtures",
+      fixtures: [
+        { path: "/passing.html", pass: true, errors: [] },
+        { path: "/failing.html", pass: false, errors: ["CSP: blocked"] },
+      ],
+    })}\n`);
+
+    const result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| \/passing\.html \| PASS \| none observed \| No browser diagnostic was captured\. \|/,
+    );
+    assert.match(
+      summary,
+      /\| \/failing\.html \| FAIL \| CSP \| CSP: blocked \|/,
+    );
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
@@ -722,6 +753,7 @@ test("keeps every browser diagnostic category visible in the focused summary", a
   ];
   const fixtures = [{
     path: "/combined.html",
+    pass: false,
     errors: [
       ...diagnostics.map(([, message]) => message),
       diagnostics[0][1],
@@ -729,6 +761,7 @@ test("keeps every browser diagnostic category visible in the focused summary", a
     ],
   }, {
     path: "/unknown.html",
+    pass: false,
     errors: ["NETWORK: new browser diagnostic | preserve this"],
   }];
 
@@ -748,7 +781,7 @@ test("keeps every browser diagnostic category visible in the focused summary", a
       .find((line) => line.startsWith("| /combined.html |"));
     assert.equal(
       combinedRow,
-      "| /combined.html | CSP, PAGEERROR, CONSOLE, LOCAL REQUEST FAILED, " +
+      "| /combined.html | FAIL | CSP, PAGEERROR, CONSOLE, LOCAL REQUEST FAILED, " +
       "LOCAL HTTP ERROR, MERMAID | " +
       "CSP: blocked \\| policy with a second line / " +
       "PAGEERROR: Error: page exploded / " +
@@ -760,7 +793,7 @@ test("keeps every browser diagnostic category visible in the focused summary", a
     );
     assert.match(
       summary,
-      /\| \/unknown\.html \| none observed \| NETWORK: new browser diagnostic \\| preserve this \|/,
+      /\| \/unknown\.html \| FAIL \| none observed \| NETWORK: new browser diagnostic \\| preserve this \|/,
     );
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
