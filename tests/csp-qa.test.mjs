@@ -30,6 +30,7 @@ const fixtureFiles = new Map([
   ["/external-network-failure-network-shared.html", "external-network-failure-network-shared.html"],
   ["/external-delayed-outage.html", "external-delayed-outage.html"],
   ["/external-timeout.html", "external-timeout.html"],
+  ["/external-late-response.html", "external-late-response.html"],
 ]);
 const optionalEngineChecks = [
   {
@@ -231,6 +232,24 @@ before(async () => {
         response.writeHead(503, { "content-type": "text/plain" });
         response.end("delayed fixture dependency intentionally unavailable");
       }, 1400);
+      return;
+    }
+    if (path === "/late-response.png") {
+      // The runner spends 1s collecting deferred requests, then has a 5s
+      // settle limit and a separate 1s late-response observation window.
+      // This reply arrives about 500ms into that final window.
+      setTimeout(() => {
+        externalFixtureObservations.push({
+          path,
+          method: request.method,
+          status: 200,
+        });
+        response.writeHead(200, { "content-type": "image/png" });
+        response.end(Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+          "base64",
+        ));
+      }, 6500);
       return;
     }
     if (path === "/pending.png") {
@@ -2029,6 +2048,57 @@ test("identifies external requests that remain pending through the settle timeou
         url: pending.url,
       }],
       cspEvidence: [],
+    }]);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("keeps timeout evidence when a healthy response arrives within the late-response window", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-late-response-health-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const observationStart = externalFixtureObservations.length;
+  try {
+    const result = await runCspQa("/external-late-response.html", [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    assert.equal(result.status, 0, result.output);
+
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    const observations = externalFixtureObservations.slice(observationStart);
+    assert.equal(report.status, "PASS");
+    assert.equal(report.summary.externalOutages, 0);
+    assert.equal(report.summary.timeouts, 1);
+    assert.deepEqual(report.timeouts, [{
+      route: "/external-late-response.html",
+      url: report.timeouts[0].url,
+    }]);
+
+    const dependency = report.dependencies.find(
+      ({ url }) => url.endsWith("/late-response.png"),
+    );
+    assert.ok(dependency, JSON.stringify(report, null, 2));
+    assert.equal(dependency.state, "available");
+    assert.deepEqual(dependency.routes, ["/external-late-response.html"]);
+    assert.equal(dependency.requestCount, 1);
+    assert.deepEqual(dependency.responses.map(({ status }) => status), [200]);
+    assert.deepEqual(dependency.failures, []);
+    assert.deepEqual(dependency.timeouts, [{
+      route: "/external-late-response.html",
+      url: dependency.url,
+    }]);
+    assert.equal(dependency.routeOutcomes.length, 1);
+    assert.equal(dependency.routeOutcomes[0].state, "available");
+    assert.deepEqual(
+      dependency.routeOutcomes[0].responses.map(({ status }) => status),
+      [200],
+    );
+    assert.deepEqual(dependency.routeOutcomes[0].timeouts, dependency.timeouts);
+    assert.deepEqual(observations, [{
+      path: "/late-response.png",
+      method: "GET",
+      status: 200,
     }]);
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });

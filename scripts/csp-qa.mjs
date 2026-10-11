@@ -97,6 +97,7 @@ const CSP_DIAGNOSTIC = /content security policy|violates the following.*policy|r
 const MERMAID_RENDER_ERROR = /^\[mermaid-init\] render error/i;
 const INTENTIONAL_EXTERNAL_FAILURE = "Failed to load resource: net::ERR_FAILED";
 const EXTERNAL_SETTLE_TIMEOUT_MS = 5000;
+const EXTERNAL_LATE_RESPONSE_WINDOW_MS = 1000;
 const EXTERNAL_QUIET_WINDOW_MS = 250;
 const DEFAULT_EXTERNAL_HEALTH_BUDGET_MS = 120000;
 
@@ -697,6 +698,13 @@ async function checkExternalRoute(browser, path, overallDeadline) {
         route: path,
         url: dependency.url,
       });
+    }
+    if (!settleResult.budgetExceeded && pendingExternalRequests.size) {
+      const lateResponseWaitMs = Math.min(
+        EXTERNAL_LATE_RESPONSE_WINDOW_MS,
+        Math.max(0, overallDeadline - Date.now()),
+      );
+      if (lateResponseWaitMs > 0) await page.waitForTimeout(lateResponseWaitMs);
     }
   }
   const cspEvidence = await page.evaluate(() => (
