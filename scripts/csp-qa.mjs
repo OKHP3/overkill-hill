@@ -473,15 +473,19 @@ function serialiseExternalDependency(dependency, cspEvidence) {
       const routeTimeouts = dependency.timeouts.filter(
         (timeout) => timeout.route === route,
       );
+      const routeResponses = dependency.responses.filter(
+        (response) => response.route === route,
+      );
       return {
         route,
         state: classifyExternalDependency({
           ...dependency,
+          responses: routeResponses,
           failures: routeFailures,
           cspEvidence: routeCspEvidence,
         }),
         cspBlocked: routeCspEvidence.length > 0,
-        responses: dependency.responses,
+        responses: routeResponses,
         failures: routeFailures,
         timeouts: routeTimeouts,
         cspEvidence: routeCspEvidence,
@@ -634,6 +638,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
     if (dependency) {
       pendingExternalRequests.delete(request);
       dependency.responses.push({
+        route: path,
         status: response.status(),
         statusText: response.statusText(),
       });

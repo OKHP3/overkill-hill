@@ -307,5 +307,80 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         self.assertIn("?? generated.txt", status)
 
 
+class ReleaseRecordDuplicateKeyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="foundation-release-keys-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.record = {
+            "schema": "okhp3-shared-foundation-release-v1",
+            "source": {"repository": "overkill-hill", "revision": "1" * 40},
+            "site_revisions": {
+                "overkill-hill": "2" * 40,
+                "glee-fullytools": "3" * 40,
+                "askjamie": "4" * 40,
+            },
+        }
+
+    def duplicate_records(self):
+        raw = json.dumps(self.record)
+        for label, key, value in (
+            ("root", "schema", self.record["schema"]),
+            ("source", "revision", "1" * 40),
+            ("site", "askjamie", "4" * 40),
+        ):
+            member = f'{json.dumps(key)}: {json.dumps(value)}'
+            # Identical root duplicates are still ambiguous; nested duplicates
+            # would otherwise silently select a different, well-formed SHA.
+            duplicate = member if label == "root" else f'"{key}": "{"f" * 40}"'
+            yield label, key, raw.replace(member, f"{member}, {duplicate}", 1)
+        yield "deep", "label", raw[:-1] + ', "metadata": {"notes": [{"label": "first", "label": "second"}]}}'
+
+    def write_record(self, raw):
+        path = self.root / "release.md"
+        path.write_text(f"```json\n{raw}\n```\n", encoding="utf-8")
+        return path
+
+    def test_loader_rejects_duplicate_keys_at_every_object_depth(self):
+        module = load_module()
+        for label, key, raw in self.duplicate_records():
+            with self.subTest(location=label):
+                path = self.write_record(raw)
+                with self.assertRaisesRegex(ValueError, f"duplicate JSON key '{key}'") as raised:
+                    module.load_release_record(path)
+                self.assertIn(str(path), str(raised.exception))
+        self.assertEqual(module.load_release_record(self.write_record(json.dumps(self.record))), self.record)
+
+    def test_duplicate_records_do_not_emit_pins_or_verification_reports(self):
+        outputs = [self.root / name for name in ("github-env", "github-output", "report.json")]
+        for label, key, raw in self.duplicate_records():
+            for mode in ("load", "verify"):
+                for existing in (False, True):
+                    with self.subTest(location=label, mode=mode, existing_outputs=existing):
+                        for output in outputs:
+                            if existing:
+                                output.write_bytes(b"preserve existing evidence\n")
+                            else:
+                                output.unlink(missing_ok=True)
+                        path = self.write_record(raw)
+                        args = ["--load-release-record", str(path)] if mode == "load" else [
+                            "--verify", "--release-record", str(path), "--report-file", str(outputs[2]),
+                            *sum((["--repo-path", f"{name}={self.root / name}"] for name in self.record["site_revisions"]), []),
+                        ]
+                        result = subprocess.run(
+                            [sys.executable, str(SCRIPT), *args,
+                             "--github-env-file", str(outputs[0]), "--github-output-file", str(outputs[1])],
+                            cwd=self.root, capture_output=True, text=True,
+                        )
+                        self.assertEqual(result.returncode, 4 if mode == "load" else 2, result.stdout + result.stderr)
+                        self.assertIn(f"duplicate JSON key '{key}'", result.stdout + result.stderr)
+                        self.assertNotIn('"status": "loaded"', result.stdout)
+                        for output in outputs:
+                            if existing:
+                                self.assertEqual(output.read_bytes(), b"preserve existing evidence\n")
+                            else:
+                                self.assertFalse(output.exists(), f"invalid record emitted {output.name}")
+
+
 if __name__ == "__main__":
     unittest.main()

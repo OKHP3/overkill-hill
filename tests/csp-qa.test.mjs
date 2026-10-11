@@ -1128,7 +1128,8 @@ test("retains successful shared dependency evidence for two healthy routes", asy
       fixtureRequests.map(({ status }) => status),
     );
     for (const response of healthy.responses) {
-      assert.deepEqual(Object.keys(response).sort(), ["status", "statusText"]);
+      assert.deepEqual(Object.keys(response).sort(), ["route", "status", "statusText"]);
+      assert.ok(routes.includes(response.route));
       assert.equal(response.status, 200);
       assert.equal(typeof response.statusText, "string");
       assert.ok(response.statusText.length > 0);
@@ -1159,7 +1160,8 @@ test("retains successful shared dependency evidence for two healthy routes", asy
         `route ${routeOutcome.route} must retain its single HTTP response`,
       );
       const [response] = routeOutcome.responses;
-      assert.deepEqual(Object.keys(response).sort(), ["status", "statusText"]);
+      assert.deepEqual(Object.keys(response).sort(), ["route", "status", "statusText"]);
+      assert.equal(response.route, routeOutcome.route);
       assert.equal(response.status, 200, routeOutcome.route);
       assert.equal(typeof response.statusText, "string", routeOutcome.route);
       assert.ok(response.statusText.length > 0, routeOutcome.route);
@@ -2231,6 +2233,7 @@ test("rejects invalid external-health budgets before browser startup or report c
 async function simulateExternalHealth({
   budget = 6500, lateHealthy = true, startup = null,
   pageCloseMs = 0, browserCloseMs = 0,
+  routeStatuses = null,
 } = {}) {
   const source = await readFile(cspQaScript, "utf8");
   const entry = source.indexOf("\nif (fixtureSummaryArg) {");
@@ -2239,6 +2242,7 @@ async function simulateExternalHealth({
   let now = 0;
   let report;
   let responded = false;
+  const logs = [];
   const handlers = {};
   const request = {
     url: () => "https://third.example/late.png", resourceType: () => "image",
@@ -2246,7 +2250,17 @@ async function simulateExternalHealth({
   const page = {
     addInitScript: async () => {},
     on: (name, handler) => { handlers[name] = handler; },
-    goto: async () => { handlers.request(request); return { status: () => 200 }; },
+    goto: async (url) => {
+      handlers.request(request);
+      if (routeStatuses) {
+        const status = routeStatuses[new URL(url).pathname];
+        handlers.response({
+          request: () => request, status: () => status,
+          statusText: () => status === 200 ? "OK" : "Service Unavailable",
+        });
+      }
+      return { status: () => 200 };
+    },
     waitForLoadState: async () => {},
     waitForTimeout: async (ms) => {
       now += ms;
@@ -2278,22 +2292,49 @@ async function simulateExternalHealth({
   };
   const isolatedProcess = {
     argv: ["node", cspQaScript, "--external-health",
-      "--base-url=https://first.example", "--paths=/only/",
+      "--base-url=https://first.example",
+      `--paths=${routeStatuses ? Object.keys(routeStatuses).join(",") : "/only/"}`,
       "--report=memory.json", `--external-budget-ms=${budget}`],
     env: {}, exitCode: 0,
   };
   await runInNewContext(`${declarations}\nrunExternalHealth();`, {
     URL, Date: { now: () => now }, process: isolatedProcess,
     chromium: browserType, firefox: {}, webkit: {},
-    console: { log() {}, error() {} },
+    console: { log: (message) => logs.push(message), error() {} },
     writeFileSync: (path, content) => {
       assert.equal(path, "memory.json"); report = JSON.parse(content);
     },
     loadFunctionalPaths: () => { throw new Error("explicit fixture paths required"); },
   });
   assert.ok(report, "runner did not emit report");
-  return { report, exitCode: isolatedProcess.exitCode, now };
+  return { report, exitCode: isolatedProcess.exitCode, now, logs };
 }
+
+test("attributes mixed HTTP responses to the actual failing route", async () => {
+  for (const routeStatuses of [
+    { "/healthy/": 200, "/outage/": 503 },
+    { "/outage/": 503, "/healthy/": 200 },
+  ]) {
+    const { report, exitCode, logs } = await simulateExternalHealth({
+      budget: 20000, routeStatuses,
+    });
+    assert.equal(exitCode, 1);
+    assert.equal(report.status, "EXTERNAL_OUTAGE");
+    assert.equal(report.externalOutages.length, 1);
+    const [dependency] = report.dependencies;
+    assert.deepEqual(dependency.responses.map(({ route, status }) => ({ route, status })),
+      Object.entries(routeStatuses).map(([route, status]) => ({ route, status })));
+    assert.deepEqual(dependency.routeOutcomes.map(({ route, state, responses }) => ({
+      route, state, statuses: responses.map(({ status }) => status),
+    })), [
+      { route: "/healthy/", state: "available", statuses: [200] },
+      { route: "/outage/", state: "unavailable", statuses: [503] },
+    ]);
+    const diagnostic = logs.find((line) => line.includes("EXTERNAL OUTAGE:"));
+    assert.match(diagnostic, /HTTP error on route\(s\): \/outage\//);
+    assert.doesNotMatch(diagnostic, /\/healthy\//);
+  }
+});
 
 test("reports browser startup timeout without platform executables", async () => {
   const { report, exitCode } = await simulateExternalHealth({ budget: 500, startup: "timeout" });

@@ -160,7 +160,16 @@ def load_release_record(path: Path) -> dict:
     matches = RELEASE_RECORD_RE.findall(text)
     if len(matches) != 1:
         raise ValueError(f"{path}: expected exactly one fenced JSON release record")
-    record = json.loads(matches[0])
+
+    def unique_object(pairs: list[tuple[str, object]]) -> dict:
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"{path}: duplicate JSON key {key!r} in foundation release record")
+            result[key] = value
+        return result
+
+    record = json.loads(matches[0], object_pairs_hook=unique_object)
     if not isinstance(record, dict) or record.get("schema") != RELEASE_RECORD_SCHEMA:
         raise ValueError(f"{path}: unsupported or missing release-record schema")
     source = record.get("source")
