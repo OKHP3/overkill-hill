@@ -41,6 +41,15 @@ CONFLICTING_SOCIAL_VALUES = {
     "twitter:image": CONFLICTING_SOCIAL_IMAGE,
     "twitter:image:alt": "Conflicting fixture social preview",
 }
+SOCIAL_CARD_VALUES = {
+    "og:image": SOCIAL_IMAGE,
+    "og:image:alt": "Fixture social preview",
+    "og:image:width": "1536",
+    "og:image:height": "1024",
+    "og:image:type": "image/png",
+    "twitter:image": SOCIAL_IMAGE,
+    "twitter:image:alt": "Fixture social preview",
+}
 
 
 def social_card_tags(*, duplicate: str | None = None) -> str:
@@ -53,25 +62,26 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
         ("twitter:image", f'<meta name="twitter:image" content="{SOCIAL_IMAGE}">'),
         ("twitter:image:alt", '<meta name="twitter:image:alt" content="Fixture social preview">'),
     ]
-    duplicate_mode = duplicate
-    duplicate_key = "og:image" if duplicate in {"conflict", "identical"} else duplicate
-    if duplicate_key is not None:
-        keys = [key for key, _ in fields]
-        if duplicate_key not in keys:
-            raise ValueError(f"unknown social-card duplicate key: {duplicate_key}")
-        index = keys.index(duplicate_key)
-        value = (
-            SOCIAL_IMAGE
-            if duplicate_mode == "identical"
-            else CONFLICTING_SOCIAL_VALUES[duplicate_key]
-        )
-        if duplicate_key.startswith("og:"):
-            prefix = f'property="{duplicate_key}"'
-        else:
-            prefix = f'name="{duplicate_key}"'
-        duplicate_tag = f'<meta {prefix} content="{value}">'
-        fields.insert(index + 1, (duplicate_key, duplicate_tag))
-    tags = [tag for _, tag in fields]
+    duplicate_keys = (
+        set(SOCIAL_CARD_DUPLICATE_KEYS)
+        if duplicate == "identical"
+        else {"og:image" if duplicate == "conflict" else duplicate}
+        if duplicate is not None
+        else set()
+    )
+    unknown_keys = duplicate_keys - set(SOCIAL_CARD_DUPLICATE_KEYS)
+    if unknown_keys:
+        raise ValueError(f"unknown social-card duplicate key: {sorted(unknown_keys)[0]}")
+    tags = []
+    for key, tag in fields:
+        tags.append(tag)
+        if key in duplicate_keys:
+            if duplicate == "identical":
+                tags.append(tag)
+            else:
+                prefix = f'property="{key}"' if key.startswith("og:") else f'name="{key}"'
+                value = CONFLICTING_SOCIAL_VALUES[key]
+                tags.append(f'<meta {prefix} content="{value}">')
     return "\n".join(tags)
 
 
@@ -160,10 +170,7 @@ class SocialCardDuplicateTests(unittest.TestCase):
     def test_identical_duplicate_is_not_conflicting(self):
         findings = MODULE.validate_duplicate_social_card_metadata(
             "fr/projects/index.html",
-            {
-                "og:image": ["https://example.test/card.png"] * 2,
-                "twitter:image:alt": ["Card description"] * 2,
-            },
+            {key: [value, value] for key, value in SOCIAL_CARD_VALUES.items()},
         )
 
         self.assertEqual([], findings)
