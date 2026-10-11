@@ -1326,6 +1326,40 @@ import(bareSpecifier);
         )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_healthy_mixed_css_javascript_and_module_passes(self) -> None:
+        asset_paths = (
+            "/assets/css/theme.css",
+            "/assets/js/app.js",
+            "/assets/js/mermaid-init.js",
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+        )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertEqual(report["summary"]["failures"], 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for path in asset_paths:
+            local_bytes = verify_live_edge.canonical_text_bytes(
+                ROOT / path.lstrip("/")
+            )
+            fingerprint = hashlib.sha256(local_bytes).hexdigest()[:8]
+            self.assertIn(f"{path}?v={fingerprint}", self.last_fixture_requests)
+            self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
+            self.assertEqual(
+                checks[f"asset {path} content type"]["status"], "PASS"
+            )
+        self.assertFalse(
+            [
+                check
+                for check in checks.values()
+                if check["check"].startswith("asset ")
+                and check["status"] == "FAIL"
+            ]
+        )
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
         image_bytes = verify_live_edge.canonical_text_bytes(
             ROOT / "assets/img/favicons/murderbird-v2-icon-browser-32.png"
