@@ -1037,12 +1037,21 @@ async function runExternalHealth() {
         .map(({ route }) => route)
         .filter(Boolean),
     )].sort();
+    const httpErrorStatuses = [...new Set(
+      (dependency.responses || [])
+        .map(({ status }) => status)
+        .filter((status) => Number.isInteger(status) && status >= 400),
+    )].sort((left, right) => left - right);
     const httpErrorContext = httpErrorRoutes.length
       ? `; HTTP error on route(s): ${httpErrorRoutes.join(", ")}`
       : "";
+    const httpStatusContext = httpErrorStatuses.length
+      ? `; HTTP ${httpErrorStatuses.length === 1 ? "status" : "statuses"}: ` +
+        httpErrorStatuses.join(", ")
+      : "";
     console.log(
       `  EXTERNAL OUTAGE: ${dependency.url} (${dependency.state})` +
-      `${diagnostic}${httpErrorContext}`,
+      `${diagnostic}${httpErrorContext}${httpStatusContext}`,
     );
   });
   timeouts.forEach(({ route, url }) => {

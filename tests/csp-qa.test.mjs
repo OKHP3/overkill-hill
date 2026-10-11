@@ -1319,6 +1319,7 @@ test("preserves the browser failure reason for an aborted external request", asy
     assert.match(result.output, /EXTERNAL OUTAGE:/);
     assert.match(result.output, /\/external-network-failure\.html: net::ERR_/);
     assert.match(result.output, /net::ERR_/);
+    assert.doesNotMatch(result.output, /HTTP status(?:es)?:/);
 
     const report = JSON.parse(await readFile(reportPath, "utf8"));
     assertExternalFailureReportContract(report);
@@ -1859,6 +1860,7 @@ test("shows every route receiving an HTTP error from a shared dependency", async
       .find((line) => line.includes("EXTERNAL OUTAGE:"));
     assert.ok(outageSummary, result.output);
     assert.match(outageSummary, /HTTP error on route\(s\):/);
+    assert.match(outageSummary, /HTTP status(?:es)?: 503/);
     for (const route of routes) {
       assert.ok(outageSummary.includes(route), `${route}\n${outageSummary}`);
     }
