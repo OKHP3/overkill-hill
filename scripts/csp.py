@@ -93,7 +93,8 @@ def all_pages() -> list[Path]:
 
     The manifest is a deliberate CSP-specific addition to the shared public
     page boundary: a generated route must receive a CSP before it is tracked
-    by git.  Every tracked and manifest candidate still passes
+    by git, so the manifest is required rather than an optional fallback.
+    Every tracked and manifest candidate still passes
     ``is_public_page_path`` so source templates, fixtures, and translation
     evidence cannot become CSP pages by accident.
     """
@@ -116,8 +117,14 @@ def all_pages() -> list[Path]:
     # and a fresh CI checkout compute the same policy inventory.
     names = set(tracked.stdout.splitlines())
     manifest = ROOT / "site-src" / "pages.json"
-    if manifest.exists():
-        manifest_name = manifest.relative_to(ROOT).as_posix()
+    manifest_name = manifest.relative_to(ROOT).as_posix()
+    if not manifest.is_file():
+        raise CspPageManifestError(
+            f"{manifest_name}: required CSP source page manifest is missing or not a regular file. "
+            "Restore site-src/pages.json or regenerate the source page inventory "
+            "before running CSP generation."
+        )
+    if manifest.is_file():
         try:
             payload = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:

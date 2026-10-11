@@ -69,6 +69,24 @@ class CspPageDiscoveryTests(unittest.TestCase):
                 pages = {p.relative_to(root).as_posix() for p in csp.all_pages()}
             self.assertEqual(pages, {"index.html", "new-story.html"})
 
+    def test_missing_manifest_fails_instead_of_falling_back_to_tracked_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "site-src").mkdir()
+            (root / "index.html").write_text("<main>Tracked</main>", encoding="utf-8")
+            (root / "new-story.html").write_text("<main>Untracked route</main>", encoding="utf-8")
+            with patch.object(csp, "ROOT", root), patch.object(
+                csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+            ):
+                with self.assertRaises(csp.CspPageManifestError) as raised:
+                    csp.all_pages()
+            self.assertEqual(
+                str(raised.exception),
+                "site-src/pages.json: required CSP source page manifest is missing or not a regular file. "
+                "Restore site-src/pages.json or regenerate the source page inventory "
+                "before running CSP generation.",
+            )
+
     def test_invalid_manifest_route_fails_with_actionable_error(self) -> None:
         self.assert_manifest_route_error(
             {}, r'pages\.json: page entry 1 must contain a non-empty string "path"'
@@ -99,7 +117,11 @@ class CspPageDiscoveryTests(unittest.TestCase):
             self.fail("could not load scripts/generate-csp.py")
         generator = importlib.util.module_from_spec(generator_spec)
         generator_spec.loader.exec_module(generator)
-        message = "site-src/pages.json: page entry 1 path 'new-story.html' is missing"
+        message = (
+            "site-src/pages.json: required CSP source page manifest is missing or not a "
+            "regular file. Restore site-src/pages.json or regenerate the source page "
+            "inventory before running CSP generation."
+        )
         with patch.object(
             generator,
             "all_pages",
@@ -144,6 +166,12 @@ class CspPageDiscoveryTests(unittest.TestCase):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("<main>Example</main>", encoding="utf-8")
+            source_manifest = root / "site-src" / "pages.json"
+            source_manifest.parent.mkdir(parents=True)
+            source_manifest.write_text(
+                json.dumps({"pages": [{"path": name} for name in sorted(names)]}),
+                encoding="utf-8",
+            )
             expected = names - {"i18n/pilot/es-mx/reviewed/index.html"}
             with patch.object(csp, "ROOT", root), patch.object(
                 csp.subprocess, "run", return_value=SimpleNamespace(stdout="\n".join(names))
