@@ -338,6 +338,47 @@ def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
     return location, None
 
 
+def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
+    """Find URL blocks, reporting broken boundaries and recovering at the next opener."""
+    blocks: list[tuple[int, str | None, str | None]] = []
+    position = 0
+    active: tuple[int, int] | None = None
+    for match in re.finditer(r"</?url\b[^>]*>", text, flags=re.IGNORECASE):
+        token = match.group(0)
+        if token.startswith("</"):
+            if active is None:
+                position += 1
+                blocks.append((
+                    position,
+                    None,
+                    "has a closing </url> without an opening <url>",
+                ))
+            else:
+                active_position, content_start = active
+                blocks.append((
+                    active_position,
+                    text[content_start:match.start()],
+                    None,
+                ))
+                active = None
+            continue
+
+        if active is not None:
+            active_position, _ = active
+            blocks.append((
+                active_position,
+                None,
+                "is missing closing </url> before the next <url>",
+            ))
+        position += 1
+        active = (position, match.end())
+
+    if active is not None:
+        active_position, _ = active
+        blocks.append((active_position, None, "is missing closing </url>"))
+    return blocks
+
+
 def _sitemap_entries_with_positions_and_findings_from_path(
     sitemap_path: Path,
 ) -> tuple[list[tuple[int, str, str | None]], list[Finding]]:
@@ -347,12 +388,16 @@ def _sitemap_entries_with_positions_and_findings_from_path(
     text = sitemap_path.read_text(encoding="utf-8")
     entries: list[tuple[int, str, str | None]] = []
     findings: list[Finding] = []
-    blocks = re.findall(
-        r"<url\b[^>]*>(.*?)</url>",
-        text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    for position, block in enumerate(blocks, start=1):
+    for position, block, boundary_error in _sitemap_url_blocks(text):
+        if boundary_error is not None:
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                f"sitemap URL entry at position {position} {boundary_error}",
+            ))
+            continue
+        if block is None:
+            continue
         loc, location_error = _sitemap_location_from_block(block)
         if location_error is not None:
             findings.append(Finding(

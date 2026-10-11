@@ -668,6 +668,16 @@ class SEOFixtureTests(unittest.TestCase):
         valid_after = f"{validator.SITE_ORIGIN}/contact/"
         invalid_blocks = (
             (
+                "stray-closing-url",
+                "</url>",
+                "has a closing </url> without an opening <url>",
+            ),
+            (
+                "unclosed-url-block",
+                "<url><loc>https://overkillhill.com/unclosed/</loc>",
+                "is missing closing </url> before the next <url>",
+            ),
+            (
                 "unclosed-location",
                 "<url><loc>https://overkillhill.com/unclosed/</url>",
                 "has malformed <loc> element structure",
@@ -738,6 +748,27 @@ class SEOFixtureTests(unittest.TestCase):
                     validator.load_sitemap_entries(sitemap_path),
                     {valid_before: None, valid_after: None},
                 )
+
+    def test_unclosed_final_sitemap_url_is_reported(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                f"<urlset><url><loc>{valid}</loc></url>"
+                "<url><loc>https://overkillhill.com/unclosed/</loc>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertIn(
+                "sitemap URL entry at position 2 is missing closing </url>",
+                findings_text(findings),
+            )
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid, None)],
+                "an unclosed final URL block must not enter the usable inventory",
+            )
 
     def test_public_inventory_excludes_test_fixtures(self) -> None:
         pages = validator.find_html_files()
