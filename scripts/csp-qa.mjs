@@ -195,16 +195,16 @@ const DIAGNOSTIC_CATEGORY = /^(CSP|PAGEERROR|CONSOLE|LOCAL REQUEST FAILED|LOCAL 
 
 function fixtureDiagnostics(errors) {
   const categories = new Set();
-  const evidence = [];
+  const evidence = new Set();
   for (const error of errors) {
     const text = String(error).replace(/^\s*→\s*/, "");
     const category = text.match(DIAGNOSTIC_CATEGORY)?.[1];
     if (category) categories.add(category);
-    evidence.push(text);
+    evidence.add(text);
   }
   return {
     categories: [...categories].join(", ") || "none observed",
-    evidence: evidence.join(" / ") || "No browser diagnostic was captured.",
+    evidence: [...evidence].join(" / ") || "No browser diagnostic was captured.",
   };
 }
 

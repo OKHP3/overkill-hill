@@ -722,7 +722,11 @@ test("keeps every browser diagnostic category visible in the focused summary", a
   ];
   const fixtures = [{
     path: "/combined.html",
-    errors: diagnostics.map(([, message]) => message),
+    errors: [
+      ...diagnostics.map(([, message]) => message),
+      diagnostics[0][1],
+      diagnostics[3][1],
+    ],
   }, {
     path: "/unknown.html",
     errors: ["NETWORK: new browser diagnostic | preserve this"],
