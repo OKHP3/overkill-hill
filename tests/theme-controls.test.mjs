@@ -293,6 +293,81 @@ test("browser theme constants are generated from the reviewed contract", async (
   );
 });
 
+function brandThemeContractDrift(site) {
+  const label = `${site.name} revision ${site.revision}`;
+  const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
+  const endMarker = "// END GENERATED BRAND THEME CONFIG.";
+  const start = site.script.indexOf(beginMarker);
+  const end = site.script.indexOf(endMarker, start);
+  if (start < 0 || end < 0) {
+    return [`${label}: generated brand theme block is missing or incomplete`];
+  }
+
+  const block = site.script.slice(start, end);
+  const serialized = block.match(
+    /const BRAND_THEME_CONFIG = Object\.freeze\(([\s\S]*?)\);/,
+  )?.[1];
+  if (!serialized) {
+    return [`${label}: generated BRAND_THEME_CONFIG is missing or malformed`];
+  }
+
+  let actualBrands;
+  try {
+    actualBrands = JSON.parse(serialized);
+  } catch (error) {
+    return [`${label}: generated BRAND_THEME_CONFIG is not valid JSON (${error.message})`];
+  }
+  if (!actualBrands || typeof actualBrands !== "object" || Array.isArray(actualBrands)) {
+    return [`${label}: generated BRAND_THEME_CONFIG is not an object`];
+  }
+
+  const drift = [];
+  for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+    const actual = actualBrands[brandId];
+    if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
+      drift.push(`${label}: ${brandId} is missing or is not an object; expected ${JSON.stringify(expected)}`);
+      continue;
+    }
+    for (const key of new Set([...Object.keys(expected), ...Object.keys(actual)])) {
+      if (actual[key] !== expected[key]) {
+        const actualValue = Object.hasOwn(actual, key) ? JSON.stringify(actual[key]) : "<missing>";
+        const expectedValue = Object.hasOwn(expected, key) ? JSON.stringify(expected[key]) : "<not in contract>";
+        drift.push(`${label}: ${brandId}.${key} is ${actualValue}; expected ${expectedValue}`);
+      }
+    }
+  }
+  for (const brandId of Object.keys(actualBrands)) {
+    if (!Object.hasOwn(BRAND_EXPECTATIONS, brandId)) {
+      drift.push(`${label}: unexpected generated brand ${brandId}=${JSON.stringify(actualBrands[brandId])}`);
+    }
+  }
+  return drift;
+}
+
+test("brand runtime audit names site, revision, and changed contract values", () => {
+  assert.deepEqual(
+    brandThemeContractDrift({
+      name: "OKH",
+      revision: "a".repeat(40),
+      script: appScript,
+    }),
+    [],
+  );
+
+  const glee = BRAND_EXPECTATIONS.glee;
+  const outdatedScript = appScript.replace(
+    `"light": "${glee.light}"`,
+    '"light": "#000000"',
+  );
+  const drift = brandThemeContractDrift({
+    name: "Glee",
+    revision: "b".repeat(40),
+    script: outdatedScript,
+  });
+  assert.equal(drift.length, 1);
+  assert.match(drift[0], /Glee revision b{40}: glee\.light is "#000000"; expected "#d35b2d"/);
+});
+
 test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "brand-theme-release-"));
   const source = join(temporary, "source");
@@ -580,6 +655,13 @@ test("configured sites keep foundation bytes and run against actual markup hooks
   for (const expectedName of ["OKH", "Glee", "AskJamie"]) {
     assert.ok(byName.has(expectedName), `missing configured site ${expectedName}`);
   }
+
+  const themeContractDrift = sites.flatMap(brandThemeContractDrift);
+  assert.deepEqual(
+    themeContractDrift,
+    [],
+    `generated brand runtime drift:\n${themeContractDrift.join("\n")}`,
+  );
 
   for (const file of ["cssBuffer", "scriptBuffer"]) {
     const baseline = sites[0][file];
