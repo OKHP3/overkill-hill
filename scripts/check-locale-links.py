@@ -21,6 +21,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree
 
+from sitemap_xml import parse_sitemap_xml
+
 ROOT = Path(
     os.environ.get(
         "OKHP3_VALIDATION_ROOT",
@@ -117,14 +119,10 @@ def load_manifest(path: Path) -> dict:
 
 def sitemap_locations(path: Path) -> list[str]:
     try:
-        root = ElementTree.fromstring(path.read_text(encoding="utf-8"))
+        document = parse_sitemap_xml(path.read_text(encoding="utf-8"))
     except (OSError, ElementTree.ParseError) as exc:
         raise ValueError(f"cannot read sitemap {path}: {exc}") from exc
-    return [
-        element.text.strip()
-        for element in root.iter()
-        if element.tag.rsplit("}", 1)[-1] == "loc" and element.text and element.text.strip()
-    ]
+    return list(document.locations)
 
 
 def sitemap_urls(path: Path) -> set[str]:

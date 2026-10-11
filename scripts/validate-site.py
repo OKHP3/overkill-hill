@@ -49,6 +49,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from csp import CspPageInventoryError, build_policies, page_class, sha256_source
 from brand_theme import load_brand_theme_contract, validate_brand_theme_contract
 from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, iter_public_html_files
+from sitemap_xml import parse_sitemap_xml
 
 
 def configure_utf8_console() -> None:
@@ -386,6 +387,27 @@ def _sitemap_entries_with_positions_and_findings_from_path(
     if not sitemap_path.exists():
         return [], []
     text = sitemap_path.read_text(encoding="utf-8")
+    try:
+        document = parse_sitemap_xml(text)
+    except ET.ParseError:
+        # Keep the recovery parser for malformed XML so existing diagnostics
+        # can identify and skip individual broken URL blocks.
+        document = None
+    if document is not None:
+        entries = []
+        findings = []
+        for entry in document.entries:
+            if entry.issue is not None:
+                findings.append(Finding(
+                    "ERROR",
+                    "sitemap.xml",
+                    f"sitemap URL entry at position {entry.position} {entry.issue}",
+                ))
+                continue
+            if entry.location is not None:
+                entries.append((entry.position, entry.location, entry.lastmod))
+        return entries, findings
+
     entries: list[tuple[int, str, str | None]] = []
     findings: list[Finding] = []
     for position, block, boundary_error in _sitemap_url_blocks(text):
