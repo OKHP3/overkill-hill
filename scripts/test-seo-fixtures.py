@@ -1730,6 +1730,16 @@ class SEOFixtureTests(unittest.TestCase):
             original_articles[0]["author"]["url"],
             "source fixture mutation changed nested author.url",
         )
+        duplicate_block = (
+            '<script type="application/ld+json">\n'
+            + json.dumps(mutated_articles[1], ensure_ascii=False, indent=2)
+            + "\n</script>"
+        )
+        self.assertEqual(
+            mutated_raw.replace("\n" + duplicate_block, "", 1),
+            original_raw,
+            "source fixture mutation changed content outside the duplicate Article node",
+        )
         self.assertIn(
             '"headline": "The First Diagram Is Usually a Liar"',
             mutated_raw,
@@ -2258,6 +2268,16 @@ class SEOFixtureTests(unittest.TestCase):
             original_parser.is_noindex,
             mutated_parser.is_noindex,
             "generated fixture mutation changed the indexing boundary",
+        )
+        self.assertEqual(
+            original_parser.meta,
+            mutated_parser.meta,
+            "generated fixture mutation changed robots or other metadata",
+        )
+        self.assertEqual(
+            original_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            mutated_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            "generated fixture mutation changed article copy",
         )
         findings = validator.validate_generated_seo(
             path,
