@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 
 
@@ -30,11 +31,21 @@ def workflow_job(source, name):
     return match.group(1)
 
 
-def open_pr_summary(number=43, branch='agent/foundation-sync-20261006'):
+def open_pr_summary(
+    number=43,
+    branch='agent/foundation-sync-20261006',
+    base='main',
+    labels=None,
+):
     return {
         'number': number,
-        'base': {'ref': 'main'},
+        'base': {'ref': base},
         'head': {'ref': branch},
+        'labels': (
+            labels
+            if labels is not None
+            else [{'name': MODULE.FOUNDATION_PR_LABEL}]
+        ),
     }
 
 
@@ -72,6 +83,149 @@ class FoundationFreshnessTests(unittest.TestCase):
             raise AssertionError(f'unexpected API request: {path}')
 
         return MODULE.collect_report(get_json)
+
+    def test_open_foundation_pr_on_second_page_is_reported(self):
+        main_sha = '1' * 40
+        detail = open_pr_detail(
+            number=143,
+            branch='feature/shared-foundation-refresh',
+        )
+        requested_pages = []
+
+        def get_json(path):
+            if path.endswith('/branches/main'):
+                return {'commit': {'sha': main_sha}}
+            if '/pulls?' in path:
+                page = int(parse_qs(urlsplit(path).query)['page'][0])
+                requested_pages.append(page)
+                if page == 1:
+                    return [
+                        open_pr_summary(
+                            number=number,
+                            branch='feature/unrelated',
+                            labels=[],
+                        )
+                        for number in range(1, MODULE.PAGE_SIZE + 1)
+                    ]
+                if page == 2:
+                    return [
+                        open_pr_summary(
+                            number=detail['number'],
+                            branch='feature/shared-foundation-refresh',
+                        )
+                    ]
+                raise AssertionError(f'unexpected page: {page}')
+            if path.endswith(f"/pulls/{detail['number']}"):
+                return detail
+            if '/compare/' in path:
+                return {
+                    'status': 'identical',
+                    'ahead_by': 0,
+                    'behind_by': 0,
+                    'merge_base_commit': {'sha': main_sha},
+                }
+            raise AssertionError(f'unexpected API request: {path}')
+
+        report = MODULE.collect_report(get_json)
+
+        self.assertEqual(requested_pages, [1, 2])
+        self.assertEqual(report['status'], 'CURRENT')
+        self.assertEqual(
+            [check['number'] for check in report['openFoundationPullRequests']],
+            [detail['number']],
+        )
+        self.assertEqual(
+            report['openFoundationPullRequests'][0]['headBranch'],
+            'feature/shared-foundation-refresh',
+        )
+
+    def test_foundation_label_not_branch_name_selects_candidates(self):
+        marked = open_pr_summary(
+            number=61,
+            branch='feature/shared-runtime-refresh',
+        )
+        old_prefix_without_marker = open_pr_summary(
+            number=62,
+            branch='agent/foundation-sync-20261006',
+            labels=[],
+        )
+        unrelated = open_pr_summary(
+            number=63,
+            branch='docs/typo-fix',
+            labels=[],
+        )
+        wrong_base = open_pr_summary(
+            number=64,
+            branch='feature/shared-runtime-experiment',
+            base='develop',
+        )
+
+        candidates = MODULE.list_open_foundation_prs(
+            lambda _path: [
+                marked,
+                old_prefix_without_marker,
+                unrelated,
+                wrong_base,
+            ]
+        )
+
+        self.assertEqual([pull['number'] for pull in candidates], [61])
+
+    def test_invalid_pr_labels_fail_the_scan_instead_of_hiding_candidates(self):
+        with self.assertRaisesRegex(
+            MODULE.GitHubAPIError,
+            'invalid labels',
+        ):
+            malformed = open_pr_summary(number=65)
+            malformed['labels'] = None
+            MODULE.list_open_foundation_prs(
+                lambda _path: [malformed]
+            )
+
+    def test_full_thousand_pr_scan_limit_is_reported_as_incomplete(self):
+        requested_pages = []
+
+        def get_json(path):
+            if path.endswith('/branches/main'):
+                return {'commit': {'sha': '1' * 40}}
+            if '/pulls?' in path:
+                page = int(parse_qs(urlsplit(path).query)['page'][0])
+                requested_pages.append(page)
+                return [
+                    open_pr_summary(
+                        number=number,
+                        branch='feature/unrelated',
+                        labels=[],
+                    )
+                    for number in range(
+                        (page - 1) * MODULE.PAGE_SIZE + 1,
+                        page * MODULE.PAGE_SIZE + 1,
+                    )
+                ]
+            raise AssertionError(f'unexpected API request: {path}')
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / 'freshness.json'
+            summary_path = Path(directory) / 'summary.md'
+            with patch.object(MODULE, 'api_get', side_effect=get_json):
+                result = MODULE.main([
+                    '--report',
+                    str(report_path),
+                    '--summary',
+                    str(summary_path),
+                ])
+
+            report = json.loads(report_path.read_text(encoding='utf-8'))
+            summary = summary_path.read_text(encoding='utf-8')
+
+        self.assertEqual(requested_pages, list(range(1, 11)))
+        self.assertEqual(result, 2)
+        self.assertEqual(report['status'], 'ERROR')
+        self.assertIn('scan was incomplete', report['error'])
+        self.assertNotEqual(report['status'], 'NO_OPEN_FOUNDATION_PR')
+        self.assertIn('status is unavailable', summary)
+        self.assertNotIn('No open foundation-sync pull request', summary)
+        self.assertIn('Do not treat this error', summary)
 
     def test_behind_open_pr_reports_current_revision_and_safe_update_action(self):
         current_sha = '1' * 40
@@ -220,6 +374,11 @@ class FoundationFreshnessTests(unittest.TestCase):
     def test_manual_diagnostic_is_not_activated_as_a_release_job(self):
         self.assertNotIn('foundation-freshness:', PAGES)
         self.assertIn('python3 tests/test-foundation-pr-freshness.py', VALIDATE)
+        audit = (ROOT / 'docs/audit/foundation-release-2026-09-09.md').read_text(
+            encoding='utf-8'
+        )
+        self.assertIn('`foundation-sync`', audit)
+        self.assertIn('branch name', audit.lower())
         deploy_job = workflow_job(PAGES, 'deploy')
         self.assertIn('needs: validate', deploy_job)
         self.assertNotRegex(PAGES, r'(?i)\b(?:git\s+push|gh\s+pr\s+merge)\b')

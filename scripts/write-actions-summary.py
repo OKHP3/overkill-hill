@@ -3,20 +3,27 @@
 import argparse
 from collections import Counter
 import html
+import ipaddress
 import json
 import os
 from pathlib import Path
-from urllib.parse import quote
+import re
+from urllib.parse import quote, urlsplit
 
 
+EDGE_REPORT_SCHEMA_VERSION = 1
 CURRENT_EDGE_REPORT_FIELDS = frozenset({
-    'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
+    'schema_version', 'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
     'hosting', 'status', 'summary', 'checks',
 })
 LEGACY_EDGE_REPORT_FIELDS = frozenset({'checks'})
+ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS = frozenset(
+    field for field in CURRENT_EDGE_REPORT_FIELDS if field != 'schema_version'
+)
 EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
 EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
 MARKDOWN_DESTINATION_SAFE = ":/?#[]@!$&'()*+,;=%"
+HOST_LABEL = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z')
 
 
 def cell(value):
@@ -32,10 +39,67 @@ def markdown_link(label, destination):
     return f'[{markdown_label(label)}](<{escaped_destination}>)'
 
 
-def artifact_link_label(report_name):
+def is_valid_artifact_url(value):
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or any(ord(character) < 0x20 or ord(character) == 0x7f for character in value)
+        or re.search(r'%(?![0-9A-Fa-f]{2})', value)
+    ):
+        return False
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme.lower() != 'https'
+        or not parsed.netloc
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or '\\' in parsed.netloc
+        or (port is not None and port > 65535)
+    ):
+        return False
+
+    if ':' in hostname:
+        try:
+            ipaddress.IPv6Address(hostname)
+        except ValueError:
+            return False
+    else:
+        try:
+            ascii_hostname = hostname.encode('idna').decode('ascii')
+        except UnicodeError:
+            return False
+        canonical_hostname = (
+            ascii_hostname[:-1] if ascii_hostname.endswith('.') else ascii_hostname
+        )
+        labels = canonical_hostname.split('.')
+        if (
+            len(canonical_hostname) > 253
+            or not labels
+            or any(not HOST_LABEL.fullmatch(label) for label in labels)
+        ):
+            return False
+    return True
+
+
+def workflow_run_context():
     run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
     run_attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '').strip()
     if run_id and run_attempt:
+        return run_id, run_attempt
+    return None
+
+
+def artifact_link_label(report_name):
+    run_context = workflow_run_context()
+    if run_context:
+        run_id, run_attempt = run_context
         return f'{report_name} (run {run_id}, attempt {run_attempt})'
     return report_name
 
@@ -57,18 +121,37 @@ def prepare_edge_report(report):
     if not isinstance(report, dict):
         raise ValueError('live-edge report must be a JSON object')
 
-    legacy = set(report) == LEGACY_EDGE_REPORT_FIELDS
-    if not legacy and not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+    legacy_format = None
+    if set(report) == LEGACY_EDGE_REPORT_FIELDS:
+        legacy_format = 'checks-only'
+    elif 'schema_version' in report:
+        version = report['schema_version']
+        if type(version) is not int or version != EDGE_REPORT_SCHEMA_VERSION:
+            raise ValueError(
+                f'unsupported live-edge report schema_version {version!r}; '
+                f'supported version: {EDGE_REPORT_SCHEMA_VERSION}.'
+            )
+        if not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+            raise ValueError(
+                'versioned live-edge report is missing required current envelope '
+                'fields; required action: regenerate it with '
+                'scripts/verify-live-edge.py.'
+            )
+    elif set(report) == ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS:
+        # Retained reports are immutable. Keep their exact pre-versioned envelope
+        # readable, but require a declared version for all other full reports.
+        legacy_format = 'pre-versioned-archive'
+    else:
         raise ValueError(
             'unsupported live-edge report shape; required action: migrate it to '
-            'the current scripts/verify-live-edge.py envelope or use the '
-            'documented checks-only legacy shape with check, status, and evidence '
-            'fields.'
+            'a versioned scripts/verify-live-edge.py envelope or use a documented '
+            'archived shape.'
         )
 
+    legacy = legacy_format is not None
     checks = report.get('checks')
     if not isinstance(checks, list) or not checks:
-        label = 'legacy checks-only live-edge report' if legacy else 'live-edge report'
+        label = 'legacy checks-only live-edge report' if legacy_format == 'checks-only' else 'live-edge report'
         raise ValueError(
             f'{label} has no checks; required action: migrate or regenerate the report.'
         )
@@ -118,13 +201,15 @@ def prepare_edge_report(report):
 
     if legacy:
         report = dict(report)
-        report['expected_commit'] = None
-        report['run_at'] = 'unknown'
-    return report, legacy
+        if legacy_format == 'checks-only':
+            report['expected_commit'] = None
+            report['run_at'] = 'unknown'
+    return report, legacy_format
 
 
 def edge_summary(report):
-    report, legacy = prepare_edge_report(report)
+    report, legacy_format = prepare_edge_report(report)
+    legacy = legacy_format is not None
     checks = report['checks']
     # The verifier currently labels policy checks rather than emitting categories.
     # Unrecognized checks stay in content, so a new failure cannot be hidden.
@@ -142,12 +227,20 @@ def edge_summary(report):
     else:
         edge_evidence = f'{len(edge)} checks; policy checks were evaluated'
     lines = []
-    if legacy:
+    if legacy_format == 'checks-only':
         lines.append(
             row(
                 'Report format',
                 'LEGACY',
                 'checks-only compatibility; no release SHA or report time was recorded',
+            )
+        )
+    elif legacy_format == 'pre-versioned-archive':
+        lines.append(
+            row(
+                'Report format',
+                'LEGACY',
+                'retained pre-versioned envelope; archived evidence remains unchanged',
             )
         )
     lines += [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),
@@ -238,9 +331,16 @@ def main():
     )
     parser.add_argument('--summary', type=Path, default=os.environ.get('GITHUB_STEP_SUMMARY'))
     args = parser.parse_args()
+    artifact_url = args.artifact_url if is_valid_artifact_url(args.artifact_url) else ''
+    run_context = workflow_run_context()
+    run_label = (
+        f'{run_context[0]} / {run_context[1]}'
+        if run_context
+        else 'local / local'
+    )
     lines = ['## Site delivery evidence', '',
              f"Workflow checkout SHA: {cell(os.environ.get('GITHUB_SHA', 'local'))}",
-             f"Run / attempt: {cell(os.environ.get('GITHUB_RUN_ID', 'local'))} / {cell(os.environ.get('GITHUB_RUN_ATTEMPT', 'local'))}",
+             f"Run / attempt: {cell(run_label)}",
              '', '| Area | State | Evidence |', '| --- | --- | --- |']
     report_available = False
     try:
@@ -253,8 +353,8 @@ def main():
     except (OSError, ValueError) as exc:
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
-    if args.kind == 'external' and args.artifact_url:
-        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
+    if args.kind == 'external' and artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence} (direct artifact link)', '']
     elif args.kind == 'external' and report_available:
         lines += [
@@ -271,9 +371,24 @@ def main():
             f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
             '',
         ]
-    elif args.artifact_url:
-        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
+    elif artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
+    elif args.kind == 'edge' and report_available:
+        lines += [
+            '',
+            f'Live-edge report download unavailable: only the local runner file '
+            f'{cell(args.report.name)} is available; it is not downloadable from '
+            'this summary. Check the upload step.',
+            '',
+        ]
+    elif args.kind == 'edge':
+        lines += [
+            '',
+            f'Live-edge report download unavailable: no usable local report file '
+            f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
+            '',
+        ]
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']
     rendered = '\n'.join(lines)

@@ -569,9 +569,30 @@ class SummaryTests(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(fixture=fixture.name):
                 try:
-                    VERIFY.validate_report_shape(self.load_fixture(fixture.name))
+                    report = self.load_fixture(fixture.name)
+                    self.assertEqual(report['schema_version'], VERIFY.LIVE_EDGE_SCHEMA_VERSION)
+                    VERIFY.validate_report_shape(report)
                 except ValueError as exc:
                     self.fail(f'{fixture.name} is not a live-edge report: {exc}')
+
+    def test_live_edge_schema_version_selects_supported_parser(self):
+        report = self.load_fixture('live-edge-pass.json')
+        VERIFY.validate_report_shape(report)
+        code, summary = self.run_summary(report)
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+
+        for unsupported_version in (2, True, '1'):
+            with self.subTest(schema_version=unsupported_version):
+                unsupported = copy.deepcopy(report)
+                unsupported['schema_version'] = unsupported_version
+                with self.assertRaisesRegex(
+                    ValueError, 'unsupported live-edge report schema_version'
+                ):
+                    VERIFY.validate_report_shape(unsupported)
+                code, summary = self.run_summary(unsupported)
+                self.assertEqual(code, 1)
+                self.assertIn('unsupported live-edge report schema_version', summary)
 
     def test_malformed_live_edge_fixture_has_a_clear_shape_error(self):
         report = self.load_fixture('live-edge-failure.json')
@@ -1150,6 +1171,10 @@ class SummaryTests(unittest.TestCase):
             frozenset(VERIFY.LIVE_EDGE_REPORT_FIELDS),
         )
         self.assertEqual(
+            SUMMARY_WRITER.EDGE_REPORT_SCHEMA_VERSION,
+            VERIFY.LIVE_EDGE_SCHEMA_VERSION,
+        )
+        self.assertEqual(
             SUMMARY_WRITER.LEGACY_EDGE_REPORT_FIELDS,
             VERIFY.LEGACY_LIVE_EDGE_REPORT_FIELDS,
         )
@@ -1236,6 +1261,33 @@ class SummaryTests(unittest.TestCase):
             f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
+
+    def test_invalid_artifact_destinations_are_not_rendered_as_markdown_links(self):
+        invalid_urls = (
+            'javascript:alert(1)',
+            '//evil.example/artifact',
+            'https:///missing-host/artifact',
+            'https://',
+            'http://github.com/example/site/actions/runs/123/artifacts/456',
+            '/relative/artifact',
+            'https://github.com:99999/example/artifact',
+            'https://user:password@github.com/example/artifact',
+            'https://example..com/artifact',
+            'https://github.com/example/%zz',
+        )
+        reports = {
+            'edge': self.load_fixture('live-edge-failure.json'),
+            'external': self.load_fixture('external-runtime-degraded.json'),
+        }
+        for kind, report in reports.items():
+            for artifact_url in invalid_urls:
+                with self.subTest(kind=kind, artifact_url=artifact_url):
+                    code, summary = self.run_summary(
+                        report, kind, artifact_url=artifact_url
+                    )
+
+                    self.assertEqual(code, 1 if kind == 'edge' else 0)
+                    self.assertNotRegex(summary, r'\[[^\]]*\]\(<[^>]*>\)')
 
     def test_live_edge_workflows_pass_uploaded_artifact_url_to_summary(self):
         for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
@@ -1974,6 +2026,27 @@ class SummaryTests(unittest.TestCase):
                     self.assertNotIn('${{ github.run_id }}', summary)
                     self.assertNotIn('${{ github.run_attempt }}', summary)
 
+    def test_partial_run_metadata_uses_local_header_and_plain_artifact_label(self):
+        cases = (
+            ('missing run ID', None, '2'),
+            ('missing attempt', '100', None),
+        )
+        artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
+        for label, run_id, run_attempt in cases:
+            with self.subTest(metadata=label):
+                _, summary = self.run_summary(
+                    self.load_fixture('external-runtime-degraded.json'),
+                    'external',
+                    artifact_url=artifact_url,
+                    run_id=run_id,
+                    run_attempt=run_attempt,
+                )
+                self.assertIn('Run / attempt: local / local', summary)
+                self.assertIn(
+                    f'Full route evidence artifact: [report.json](<{artifact_url}>)',
+                    summary,
+                )
+
     def test_manual_direct_links_and_local_fallbacks_keep_their_existing_labels(self):
         artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
         _, manual_summary = self.run_summary(
@@ -1981,6 +2054,7 @@ class SummaryTests(unittest.TestCase):
             'external',
             artifact_url=artifact_url,
         )
+        self.assertIn('Run / attempt: local / local', manual_summary)
         self.assertIn(
             f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             manual_summary,
@@ -1997,8 +2071,13 @@ class SummaryTests(unittest.TestCase):
             self.load_fixture('live-edge-failure.json'),
             'edge',
         )
-        self.assertIn('Full route evidence file: report.json.', edge_fallback)
+        self.assertIn(
+            'Live-edge report download unavailable: only the local runner file '
+            'report.json is available; it is not downloadable from this summary.',
+            edge_fallback,
+        )
         self.assertNotIn('(run 100, attempt', edge_fallback)
+        self.assertIn('| Edge policy | FAILED |', edge_fallback)
 
     def test_invalid_reports_fail_closed(self):
         for report in ({}, {'checks': []}, {'checks': [{'status': 'MAYBE'}]}, []):
@@ -2016,14 +2095,21 @@ class SummaryTests(unittest.TestCase):
     def test_absent_and_invalid_json_leave_unknown_summary(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'report.json'
-            for content in (None, '{'):
-                if content:
+            for content in (None, '{', json.dumps({'checks': []})):
+                source.unlink(missing_ok=True)
+                if content is not None:
                     source.write_text(content, encoding='utf-8')
                 output = Path(directory) / 'summary.md'
                 result = subprocess.run([sys.executable, str(SCRIPT), '--kind', 'edge',
                     '--report', str(source), '--summary', str(output)], capture_output=True)
                 self.assertEqual(result.returncode, 1)
-                self.assertIn('UNKNOWN', output.read_text(encoding='utf-8'))
+                summary = output.read_text(encoding='utf-8')
+                self.assertIn('| Evidence | UNKNOWN | No usable edge report:', summary)
+                self.assertIn(
+                    'Live-edge report download unavailable: no usable local report file '
+                    'exists (report.json).',
+                    summary,
+                )
 
     def test_empty_external_sample_does_not_pass(self):
         report = self.load_fixture('external-runtime-pass.json')

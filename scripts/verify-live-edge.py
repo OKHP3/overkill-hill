@@ -118,7 +118,9 @@ ROBOTS_RE = re.compile(
 )
 LIVE_EDGE_CHECK_STATUSES = frozenset({"PASS", "FAIL", "WARN", "BLOCKED"})
 LIVE_EDGE_REPORT_STATUSES = frozenset({"PASS", "PARTIAL", "FAILED"})
+LIVE_EDGE_SCHEMA_VERSION = 1
 LIVE_EDGE_REPORT_FIELDS = (
+    "schema_version",
     "verifier",
     "run_at",
     "base",
@@ -132,6 +134,9 @@ LIVE_EDGE_REPORT_FIELDS = (
 LIVE_EDGE_SUMMARY_FIELDS = ("checks", "failures", "blocked", "warnings")
 LIVE_EDGE_CHECK_FIELDS = ("check", "status", "evidence")
 LEGACY_LIVE_EDGE_REPORT_FIELDS = frozenset({"checks"})
+ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS = frozenset(
+    field for field in LIVE_EDGE_REPORT_FIELDS if field != "schema_version"
+)
 
 
 def canonical_text_bytes(path: Path) -> bytes:
@@ -150,7 +155,7 @@ def result(check: str, status: str, evidence: str, **extra: Any) -> dict[str, An
 
 
 def validate_report_shape(report: Any) -> None:
-    """Reject reports that cannot have been emitted by this verifier."""
+    """Validate the declared schema, plus exact historical archive envelopes."""
     if not isinstance(report, dict):
         raise ValueError("live-edge report must be a JSON object")
 
@@ -162,7 +167,23 @@ def validate_report_shape(report: Any) -> None:
             "scripts/verify-live-edge.py to produce a current report."
         )
 
-    missing = [field for field in LIVE_EDGE_REPORT_FIELDS if field not in report]
+    if "schema_version" in report:
+        version = report["schema_version"]
+        if type(version) is not int or version != LIVE_EDGE_SCHEMA_VERSION:
+            raise ValueError(
+                "unsupported live-edge report schema_version "
+                f"{version!r}; supported version: {LIVE_EDGE_SCHEMA_VERSION}"
+            )
+        required_report_fields = LIVE_EDGE_REPORT_FIELDS
+    elif set(report) != ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS:
+        raise ValueError(
+            "live-edge report.schema_version is required for new reports; only "
+            "the exact pre-versioned archive envelope is accepted without it"
+        )
+    else:
+        required_report_fields = tuple(ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS)
+
+    missing = [field for field in required_report_fields if field not in report]
     if missing:
         raise ValueError(
             "live-edge report is missing required field(s): "
@@ -1734,6 +1755,7 @@ def main() -> int:
     ]
     warnings = sum(item["status"] == "WARN" for item in report)
     payload = {
+        "schema_version": LIVE_EDGE_SCHEMA_VERSION,
         "verifier": "verify-live-edge.py",
         "run_at": now(),
         "base": args.base.rstrip("/"),

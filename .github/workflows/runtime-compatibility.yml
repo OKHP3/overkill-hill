@@ -81,6 +81,7 @@ jobs:
           python3 tests/test-template-conflict-markers.py
           python3 tests/test-performance-budget.py
           python3 tests/test-search-sections.py
+          python3 scripts/tests/test-search-index.py
       - name: Verify generators and the structural release gates
         run: |
           python3 scripts/build-site.py --check
