@@ -28,6 +28,14 @@ if BUILD_SITE_SPEC is None or BUILD_SITE_SPEC.loader is None:
 build_site = importlib.util.module_from_spec(BUILD_SITE_SPEC)
 BUILD_SITE_SPEC.loader.exec_module(build_site)
 
+VALIDATE_SITE_SPEC = importlib.util.spec_from_file_location(
+    "validate_site", ROOT / "scripts" / "validate-site.py"
+)
+if VALIDATE_SITE_SPEC is None or VALIDATE_SITE_SPEC.loader is None:
+    raise SystemExit("Unable to load scripts/validate-site.py")
+validate_site = importlib.util.module_from_spec(VALIDATE_SITE_SPEC)
+VALIDATE_SITE_SPEC.loader.exec_module(validate_site)
+
 
 def check_case(
     name: str,
@@ -77,6 +85,80 @@ def check_article_release_variations() -> None:
             raise AssertionError(
                 f"{name}: expected v0.5 without an error, got {release!r}, {error!r}"
             )
+
+
+def check_shared_article_release_contract() -> None:
+    valid_labels = (
+        '<SPAN class="article-release" data-version="current">\n'
+        "  ARTICLE \n V0.5 \n : Council-Assisted Scoring\n"
+        "</SPAN>",
+        '<article-release data-role="article-release" class="eyebrow-label">'
+        "\n\tArticle\tv0.5: Council-Assisted Scoring\n"
+        "</article-release>",
+    )
+    route = validate_site.FEATURED_WRITING_ROUTE
+    with tempfile.TemporaryDirectory(dir=ROOT / "tests" / "fixtures") as temp_dir:
+        root = Path(temp_dir)
+        hub = root / "hub.html"
+        hub.write_text(
+            '<div class="writing-card-kicker--featured">'
+            "<span>Article v0.5: Council-Assisted Scoring</span>"
+            "</div>",
+            encoding="utf-8",
+        )
+
+        for index, label in enumerate(valid_labels):
+            article = root / f"valid-{index}.html"
+            article.write_text(label, encoding="utf-8")
+            release, error = check_banner._featured_article_release(
+                str(root), article.name
+            )
+            findings = validate_site.validate_writing_release_alignment(
+                hub, article, route
+            )
+            if release != "v0.5" or error is not None or findings:
+                raise AssertionError(
+                    "both release validators must accept the same semantic label "
+                    f"variation; banner={(release, error)!r}, shared={findings!r}"
+                )
+
+        malformed_labels = (
+            ("source", ""),
+            (
+                "generated",
+                "<span>Article v0.5: First label</span>"
+                "<strong>Article v0.6: Second label</strong>",
+            ),
+        )
+        for label_kind, content in malformed_labels:
+            article = root / f"{label_kind}-article.html"
+            article.write_text(content, encoding="utf-8")
+            relative_path = article.relative_to(ROOT).as_posix()
+            release, error = check_banner._featured_article_release(
+                str(root), article.name
+            )
+            findings = validate_site.validate_writing_release_alignment(
+                hub, article, route
+            )
+            if release is not None or error is None:
+                raise AssertionError(
+                    f"banner validator must reject {label_kind} label set: "
+                    f"{(release, error)!r}"
+                )
+            if route not in error or article.name not in error:
+                raise AssertionError(
+                    f"banner diagnostic must identify route and path: {error!r}"
+                )
+            if len(findings) != 1:
+                raise AssertionError(
+                    f"shared validator must produce one finding for {label_kind}: "
+                    f"{findings!r}"
+                )
+            finding = findings[0]
+            if route not in finding.msg or relative_path not in finding.page:
+                raise AssertionError(
+                    f"shared diagnostic must identify route and path: {finding!r}"
+                )
 
 
 def check_main_case(
@@ -321,6 +403,7 @@ def main() -> int:
     featured = "/writings/first-diagram-is-a-liar/#council-scoring"
     stale_release = "v0.6"
     check_article_release_variations()
+    check_shared_article_release_contract()
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",

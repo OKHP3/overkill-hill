@@ -1326,7 +1326,7 @@ FEATURED_CARD_RELEASE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 ARTICLE_RELEASE_RE = re.compile(
-    r"<span\b[^>]*>\s*Article\s+(v\d+(?:\.\d+)+)\s*:",
+    r"<[a-z][a-z0-9:-]*\b[^>]*>\s*Article\s+(v\d+(?:\.\d+)+)\s*:",
     re.IGNORECASE,
 )
 RELEASE_LABEL_RE = re.compile(r"\bv\d+(?:\.\d+)+\b", re.IGNORECASE)
