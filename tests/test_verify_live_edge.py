@@ -977,6 +977,43 @@ import(bareSpecifier);
         self.assertIn("text/html", mime_check["evidence"])
         self.assertIn("text/javascript", mime_check["evidence"])
 
+    def test_imported_module_missing_content_type_is_named_and_separately_classified(self) -> None:
+        modules = {
+            "/assets/js/fixture-entry.mjs": b'import "./missing-type.mjs";\n',
+            "/assets/js/missing-type.mjs": b"export const value = true;\n",
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            javascript_module_content_types={
+                "/assets/js/missing-type.mjs": None
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        mime_check = checks[
+            "asset /assets/js/missing-type.mjs content type"
+        ]
+        self.assertEqual(mime_check["status"], "FAIL")
+        self.assertIn("received ''", mime_check["evidence"])
+        self.assertEqual(
+            mime_check["accepted_content_types"],
+            ["application/javascript", "text/javascript"],
+        )
+        self.assertEqual(
+            checks[
+                "asset /assets/js/fixture-entry.mjs content type"
+            ]["status"],
+            "PASS",
+        )
+        parent_check = checks["asset /assets/js/fixture-entry.mjs"]
+        self.assertEqual(parent_check["status"], "BLOCKED")
+        self.assertIn("GitHub Pages", parent_check["evidence"])
+        self.assertEqual(checks["asset /assets/js/missing-type.mjs"]["status"], "PASS")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_mixed_asset_stale_body_requires_explicit_target(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
