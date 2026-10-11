@@ -61,6 +61,11 @@ def check_case(
 def check_article_release_variations() -> None:
     valid_labels = (
         (
+            "escaped markup remains a text example",
+            "&lt;span&gt;Article v9.9: example&lt;/span&gt;"
+            "<span>Article v0.5: Council-Assisted Scoring</span>",
+        ),
+        (
             "span with attributes, whitespace, and mixed casing",
             '<SPAN class="article-release" data-version="current">\n'
             "  ARTICLE \n V0.5 \n : Council-Assisted Scoring\n"

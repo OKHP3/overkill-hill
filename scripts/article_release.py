@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 from html.parser import HTMLParser
 
 
@@ -64,7 +65,7 @@ class _VisibleMarkupParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if not self.hidden_stack:
-            self.parts.append(data)
+            self.parts.append(escape(data, quote=False))
 
 
 def visible_html_markup(raw: str) -> str:

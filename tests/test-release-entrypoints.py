@@ -19,6 +19,8 @@ HELPER_SCRIPTS = (
     "csp.py",
     "brand_theme.py",
     "public_page_boundary.py",
+    "sitemap_xml.py",
+    "article_release.py",
     "generate-theme-controls.py",
     "check-mtb-version.py",
     "check-banner.py",
@@ -341,7 +343,7 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         return environment
 
     def test_validate_site_reports_missing_git_worktree_actionably(self) -> None:
-        shutil.rmtree(self.fixture / ".git")
+        (self.fixture / ".git").rename(self.fixture / "disabled-git-metadata")
         result = subprocess.run(
             [sys.executable, str(self.fixture / "scripts" / "validate-site.py")],
             cwd=self.fixture,
