@@ -1646,6 +1646,13 @@ body.construction-dismissed .construction-overlay,
   color: var(--mermaid-primary-text-color);
 }
 
+/* Keep Mermaid's assigned label foreground on nested HTML text. Scope this
+   correction to OKH and leave explicit inline label colors intact. */
+body:not(.askjamie-main):not(.glee-main) .mermaid foreignObject .nodeLabel :is(p, span, strong, em),
+body:not(.askjamie-main):not(.glee-main) .mermaid foreignObject .edgeLabel :is(p, span, strong, em) {
+  color: inherit;
+}
+
 /* Prompts section: h3 subtitle beneath h2 */
 .section-subtitle {
   font-family: var(--font-body);
