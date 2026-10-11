@@ -360,6 +360,21 @@ def main():
     elif artifact_url:
         evidence = markdown_link(artifact_link_label(args.report.name), artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
+    elif args.kind == 'edge' and report_available:
+        lines += [
+            '',
+            f'Live-edge report download unavailable: only the local runner file '
+            f'{cell(args.report.name)} is available; it is not downloadable from '
+            'this summary. Check the upload step.',
+            '',
+        ]
+    elif args.kind == 'edge':
+        lines += [
+            '',
+            f'Live-edge report download unavailable: no usable local report file '
+            f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
+            '',
+        ]
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']
     rendered = '\n'.join(lines)
