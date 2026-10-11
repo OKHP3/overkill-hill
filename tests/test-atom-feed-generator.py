@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
 import json
 import sys
 import tempfile
@@ -79,6 +80,62 @@ def article_html(
 
 
 class AtomFeedGeneratorTests(unittest.TestCase):
+    def test_equivalent_duplicate_articles_produce_one_unchanged_entry(self) -> None:
+        baseline = atom_feed.article_entry_from_extras(article_page(), article_html())
+        primary = json.loads(BeautifulSoup(article_html(), "html.parser").script.string)
+        reordered = dict(reversed(list(primary.items())))
+        for document in (
+            article_html() + '<script type="application/ld+json">' + json.dumps(reordered, indent=2) + '</script>',
+            '<script type="application/ld+json">' + json.dumps({"@graph": [primary, reordered]}) + '</script>',
+        ):
+            with self.subTest(document=document):
+                actual = atom_feed.article_entry_from_extras(article_page(), document)
+                self.assertEqual(actual, baseline)
+                self.assertEqual(atom_feed.render_atom_feed([actual]), atom_feed.render_atom_feed([baseline]))
+
+    def test_conflicting_duplicate_article_metadata_is_rejected(self) -> None:
+        primary = json.loads(BeautifulSoup(article_html(), "html.parser").script.string)
+        for field, value in (
+            ("headline", "Different headline"), ("description", "Different summary"),
+            ("author", {"name": "Different author"}), ("datePublished", "2026-05-03"),
+            ("dateModified", "2026-05-04"), ("inLanguage", "fr"),
+            ("@id", primary["url"] + "#other"), ("publisher", {"name": "Different publisher"}),
+        ):
+            with self.subTest(field=field):
+                other = copy.deepcopy(primary)
+                other[field] = value
+                document = '<script type="application/ld+json">' + json.dumps({"@graph": [primary, other]}) + '</script>'
+                with self.assertRaises(atom_feed.FeedSourceError):
+                    atom_feed.article_entry_from_extras(article_page(), document)
+
+    def test_conflicting_duplicate_url_cannot_disappear_from_canonical_selection(self) -> None:
+        primary = json.loads(BeautifulSoup(article_html(), "html.parser").script.string)
+        for has_id in (False, True):
+            with self.subTest(has_id=has_id):
+                original = copy.deepcopy(primary)
+                if has_id:
+                    original["@id"] = original["url"] + "#article"
+                other = copy.deepcopy(original)
+                other["url"] = "https://overkillhill.com/writings/wrong/"
+                document = '<script type="application/ld+json">' + json.dumps([original, other]) + '</script>'
+                with self.assertRaisesRegex(atom_feed.FeedSourceError, "conflicting duplicate Article JSON-LD url"):
+                    atom_feed.article_entry_from_extras(article_page(), document)
+
+    def test_identical_invalid_duplicates_still_fail(self) -> None:
+        invalid = article_html(published="2026-02-30")
+        with self.assertRaises(atom_feed.FeedSourceError):
+            atom_feed.article_entry_from_extras(article_page(), invalid + invalid)
+
+    def test_feed_self_link_is_exact_and_structurally_required(self) -> None:
+        output = atom_feed.render_atom_feed([atom_feed.article_entry_from_extras(article_page(), article_html())])
+        tree = ET.fromstring(output)
+        links = [link for link in tree.findall(ATOM + "link") if link.get("rel") == "self"]
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].attrib, {"rel": "self", "href": "https://overkillhill.com/feed.xml", "type": "application/atom+xml"})
+        tree.remove(links[0])
+        with self.assertRaisesRegex(atom_feed.FeedSourceError, "self link"):
+            atom_feed._validate_atom_tree(tree)
+
     def test_structural_validator_rejects_corrupted_feed(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "atom_feed_site_validator", ROOT / "scripts" / "validate-site.py"
@@ -88,6 +145,10 @@ class AtomFeedGeneratorTests(unittest.TestCase):
         spec.loader.exec_module(validator)
         original = ET.fromstring(atom_feed.generate_atom_feed(ROOT))
         mutations = {
+            "missing self link": lambda tree: tree.remove(tree.find(ATOM + "link[@rel='self']")),
+            "wrong self link": lambda tree: tree.find(ATOM + "link[@rel='self']").set("href", "https://foreign.example/feed.xml"),
+            "wrong self MIME": lambda tree: tree.find(ATOM + "link[@rel='self']").set("type", "text/html"),
+            "duplicate self link": lambda tree: tree.append(ET.fromstring(ET.tostring(tree.find(ATOM + "link[@rel='self']")))),
             "missing title": lambda tree: tree.remove(tree.find(ATOM + "title")),
             "naive updated": lambda tree: setattr(tree.find(ATOM + "updated"), "text", "2026-10-04T12:00:00"),
             "duplicate entry": lambda tree: tree.append(ET.fromstring(ET.tostring(tree.find(ATOM + "entry")))),

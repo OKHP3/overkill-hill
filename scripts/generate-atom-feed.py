@@ -261,7 +261,25 @@ def article_entry_from_extras(page: dict[str, Any], extras_html: str) -> AtomEnt
             raise FeedSourceError(f"{route}: JSON-LD block {index} is malformed") from exc
         article_nodes.extend(_walk_article_nodes(document))
 
-    matches = [node for node in article_nodes if canonical in _identity_values(node)]
+    urls_by_identity: dict[tuple[str, str], set[str]] = {}
+    for node in article_nodes:
+        url = node.get("url")
+        if not isinstance(url, str) or not url.strip():
+            continue
+        article_id = node.get("@id")
+        identity = ("@id", article_id) if isinstance(article_id, str) and article_id.strip() else (
+            "content", json.dumps({key: value for key, value in node.items() if key != "url"},
+                                  sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        )
+        urls_by_identity.setdefault(identity, set()).add(url)
+    if any(len(urls) > 1 for urls in urls_by_identity.values()):
+        raise FeedSourceError(f"{route}: conflicting duplicate Article JSON-LD url values")
+
+    distinct_matches = {
+        json.dumps(node, sort_keys=True, ensure_ascii=False, separators=(",", ":")): node
+        for node in article_nodes if canonical in _identity_values(node)
+    }
+    matches = list(distinct_matches.values())
     if len(matches) != 1:
         raise FeedSourceError(
             f"{route}: expected one Article JSON-LD node for canonical {canonical!r}; "
@@ -354,6 +372,12 @@ def _validate_atom_tree(feed: ET.Element) -> None:
         if len(feed.findall(ATOM + name)) != 1 or not (feed.findtext(ATOM + name) or "").strip():
             raise FeedSourceError(f"generated Atom feed must have exactly one non-empty {name}")
 
+    self_links = [link for link in feed.findall(ATOM + "link") if link.get("rel") == "self"]
+    if len(self_links) != 1 or self_links[0].attrib != {
+        "rel": "self", "href": f"{SITE_ORIGIN}/feed.xml", "type": "application/atom+xml",
+    }:
+        raise FeedSourceError("generated Atom feed must have one canonical self link")
+
     entries = feed.findall(ATOM + "entry")
     if not entries:
         raise FeedSourceError("generated Atom feed contains no entries")
@@ -382,6 +406,10 @@ def render_atom_feed(entries: list[AtomEntry]) -> bytes:
     _atom_child(feed, "id", FEED_ID)
     _atom_child(feed, "title", FEED_TITLE)
     _atom_child(feed, "updated", latest.updated.atom_value)
+    ET.SubElement(
+        feed, ATOM + "link",
+        {"rel": "self", "href": f"{SITE_ORIGIN}/feed.xml", "type": "application/atom+xml"},
+    )
     ET.SubElement(
         feed,
         ATOM + "link",
