@@ -1031,7 +1031,19 @@ async function runExternalHealth() {
       })
       .filter(Boolean);
     const diagnostic = failureReasons.length ? `: ${failureReasons.join(", ")}` : "";
-    console.log(`  EXTERNAL OUTAGE: ${dependency.url} (${dependency.state})${diagnostic}`);
+    const httpErrorRoutes = [...new Set(
+      (dependency.routeOutcomes || [])
+        .filter(({ responses = [] }) => responses.some(({ status }) => status >= 400))
+        .map(({ route }) => route)
+        .filter(Boolean),
+    )].sort();
+    const httpErrorContext = httpErrorRoutes.length
+      ? `; HTTP error on route(s): ${httpErrorRoutes.join(", ")}`
+      : "";
+    console.log(
+      `  EXTERNAL OUTAGE: ${dependency.url} (${dependency.state})` +
+      `${diagnostic}${httpErrorContext}`,
+    );
   });
   timeouts.forEach(({ route, url }) => {
     console.log(`  EXTERNAL TIMEOUT: ${route} ${url}`);

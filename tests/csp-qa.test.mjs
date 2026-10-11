@@ -26,6 +26,7 @@ const fixtureFiles = new Map([
   ["/external-csp-and-outage.html", "external-csp-and-outage.html"],
   ["/external-csp-shared.html", "external-csp-shared.html"],
   ["/external-outage-shared.html", "external-outage-shared.html"],
+  ["/external-outage-shared-second.html", "external-outage-shared-second.html"],
   ["/external-csp-network-shared.html", "external-csp-network-shared.html"],
   ["/external-network-failure-network-shared.html", "external-network-failure-network-shared.html"],
   ["/external-delayed-outage.html", "external-delayed-outage.html"],
@@ -1835,6 +1836,48 @@ test("keeps a shared-route outage visible when another route blocks the same URL
     assert.deepEqual(outage.routes, shared.routes);
     assert.ok(outage.responses.some(({ status }) => status === 503));
     assert.equal(outage.state, "unavailable");
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("shows every route receiving an HTTP error from a shared dependency", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-shared-http-error-routes-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const routes = [
+    "/external-outage-shared.html",
+    "/external-outage-shared-second.html",
+  ];
+  try {
+    const result = await runCspQa(routes.join(","), [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    assert.notEqual(result.status, 0, result.output);
+    const outageSummary = result.output
+      .split("\n")
+      .find((line) => line.includes("EXTERNAL OUTAGE:"));
+    assert.ok(outageSummary, result.output);
+    assert.match(outageSummary, /HTTP error on route\(s\):/);
+    for (const route of routes) {
+      assert.ok(outageSummary.includes(route), `${route}\n${outageSummary}`);
+    }
+
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assert.equal(report.status, "EXTERNAL_OUTAGE");
+    assert.deepEqual(report.routes, routes);
+    assert.equal(report.summary.externalOutages, 1);
+    assert.equal(report.externalOutages.length, 1);
+    const outage = report.externalOutages[0];
+    assert.ok(outage.url.endsWith("/shared.png"));
+    assert.equal(outage.state, "unavailable");
+    assert.deepEqual(outage.routes, routes.slice().sort());
+    for (const route of routes) {
+      const routeOutcome = outage.routeOutcomes.find(({ route: value }) => value === route);
+      assert.ok(routeOutcome, JSON.stringify(outage.routeOutcomes, null, 2));
+      assert.equal(routeOutcome.state, "unavailable");
+      assert.ok(routeOutcome.responses.some(({ status }) => status === 503));
+    }
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
