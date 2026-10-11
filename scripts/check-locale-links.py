@@ -159,7 +159,13 @@ def check_search_index(
         return
     urls = []
     for position, entry in enumerate(entries):
-        url = entry.get("url") if isinstance(entry, dict) else None
+        if not isinstance(entry, dict):
+            fail(
+                findings,
+                f"locale search index entry {position} must be an object with a non-empty string URL",
+            )
+            continue
+        url = entry.get("url")
         if not isinstance(url, str) or not url.strip():
             fail(findings, f"locale search index entry {position} must have a non-empty string URL")
             continue

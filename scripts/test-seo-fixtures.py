@@ -403,8 +403,18 @@ class SEOFixtureTests(unittest.TestCase):
     def test_locale_search_index_rejects_malformed_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             index_path = Path(directory) / "search-index.fr.json"
-            for entry in (None, "invalid", {}, {"url": None}, {"url": 7},
-                          {"url": []}, {"url": {}}, {"url": ""}, {"url": " "}):
+            cases = (
+                (None, "must be an object with a non-empty string URL"),
+                ("invalid", "must be an object with a non-empty string URL"),
+                ({}, "must have a non-empty string URL"),
+                ({"url": None}, "must have a non-empty string URL"),
+                ({"url": 7}, "must have a non-empty string URL"),
+                ({"url": []}, "must have a non-empty string URL"),
+                ({"url": {}}, "must have a non-empty string URL"),
+                ({"url": ""}, "must have a non-empty string URL"),
+                ({"url": " "}, "must have a non-empty string URL"),
+            )
+            for entry, expected in cases:
                 with self.subTest(entry=entry):
                     index_path.write_text(json.dumps({
                         "locale": "fr", "count": 2,
@@ -415,8 +425,68 @@ class SEOFixtureTests(unittest.TestCase):
                         index_path, set(), "fr", findings,
                         draft_routes=set(), require_routes=False,
                     )
-                    self.assertIn("locale search index entry 0 must have a non-empty string URL", findings)
+                    self.assertIn(
+                        f"locale search index entry 0 {expected}",
+                        findings,
+                    )
                     self.assertIn("locale search index contains undeclared routes: /fr/retired/", findings)
+
+    def test_published_locale_rejects_search_index_entry_without_url(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = self._write_mixed_locale_fixture(
+                root,
+                source_routes | promoted_routes,
+                promoted_routes,
+            )
+            index_path.write_text(json.dumps({
+                "locale": "fr",
+                "count": 2,
+                "entries": [{}, None],
+            }), encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                "locale search index entry 0 must have a non-empty string URL",
+                findings,
+            )
+            self.assertIn(
+                "locale search index entry 1 must be an object with a non-empty string URL",
+                findings,
+            )
+
+    def test_unpublished_locale_rejects_non_object_search_index_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            index_path.write_text(json.dumps({
+                "locale": "fr",
+                "count": 1,
+                "entries": [None],
+            }), encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                "locale search index entry 0 must be an object with a non-empty string URL",
+                findings,
+            )
 
     def test_locale_search_index_rejects_non_object_payload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
