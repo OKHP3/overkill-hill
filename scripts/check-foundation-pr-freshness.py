@@ -324,7 +324,13 @@ def render_summary(report):
             ])
     else:
         historical = report.get('historicalPullRequest')
-        if historical:
+        if report.get('status') == 'ERROR':
+            lines.append(
+                'Open foundation-sync pull request status is unavailable because '
+                'this scan did not complete.'
+            )
+            lines.append('')
+        elif historical:
             lines.append(
                 f"Historical PR #{historical.get('number')}: "
                 f"**{historical.get('status')}**"
