@@ -826,6 +826,14 @@ function mergeExternalDependencies(results) {
   return [...merged.values()].sort((left, right) => left.url.localeCompare(right.url));
 }
 
+function writeExternalHealthReport(report) {
+  if (!reportArg) return;
+  const reportPath = reportArg.slice("--report=".length);
+  if (!reportPath) throw new Error("--report must contain a file path");
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Report: ${reportPath}`);
+}
+
 async function runExternalHealth() {
   const startedAt = Date.now();
   const overallDeadline = startedAt + externalHealthBudgetMs;
@@ -846,7 +854,75 @@ async function runExternalHealth() {
     `per-route settle limit: ${EXTERNAL_SETTLE_TIMEOUT_MS}ms.\n`,
   );
 
-  const browser = await externalHealthBrowserType.launch({ headless: true });
+  const browserStartupTimeoutMs = Math.max(1, overallDeadline - Date.now());
+  let browser;
+  try {
+    browser = await externalHealthBrowserType.launch({
+      headless: true,
+      timeout: browserStartupTimeoutMs,
+    });
+  } catch (error) {
+    const startupTimedOut =
+      Date.now() >= overallDeadline ||
+      error.name === "TimeoutError" ||
+      /timed?\s*out|timeout/i.test(error.message);
+    const elapsedMs = Date.now() - startedAt;
+    const browserStartupFailure = {
+      phase: "browser-startup",
+      kind: startupTimedOut ? "timeout" : "launch-error",
+      timeoutMs: browserStartupTimeoutMs,
+      message: error.message.split("\n")[0],
+    };
+    const timeBudget = {
+      limitMs: externalHealthBudgetMs,
+      elapsedMs,
+      exceeded: startupTimedOut,
+      routesCutShort: [],
+      routesSkipped: startupTimedOut ? PUBLIC_PATHS : [],
+    };
+    const report = {
+      version: 1,
+      mode: "external-health",
+      baseUrl,
+      routes: PUBLIC_PATHS,
+      dependencies: [],
+      externalOutages: [],
+      cspDiagnostics: [],
+      cspEvidence: [],
+      timeouts: [],
+      localFailures: [],
+      browserStartupFailure,
+      timeBudget,
+      summary: {
+        routes: 0,
+        dependencies: 0,
+        available: 0,
+        externalOutages: 0,
+        failureEvents: 0,
+        cspDiagnostics: 0,
+        cspEvidence: 0,
+        timeouts: 0,
+        localFailures: 0,
+        budgetExceeded: startupTimedOut,
+        routesCutShortByBudget: 0,
+        routesSkippedByBudget: timeBudget.routesSkipped.length,
+      },
+      status: startupTimedOut ? "TIME_BUDGET_EXCEEDED" : "BROWSER_START_FAILURE",
+    };
+
+    console.error(
+      `${startupTimedOut ? "BROWSER START TIMEOUT" : "BROWSER START FAILURE"}: ` +
+      `${browserStartupFailure.message}`,
+    );
+    if (startupTimedOut) {
+      console.error(
+        `EXTERNAL HEALTH TIME BUDGET: ${externalHealthBudgetMs}ms overall limit reached during browser startup.`,
+      );
+    }
+    writeExternalHealthReport(report);
+    process.exitCode = 1;
+    return;
+  }
   const results = [];
   const routesCutShortByBudget = [];
   const routesSkippedByBudget = [];
@@ -978,12 +1054,7 @@ async function runExternalHealth() {
     console.log("  Local route failures were observed during the availability check.");
   }
 
-  if (reportArg) {
-    const reportPath = reportArg.slice("--report=".length);
-    if (!reportPath) throw new Error("--report must contain a file path");
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
-    console.log(`Report: ${reportPath}`);
-  }
+  writeExternalHealthReport(report);
 
   if (
     externalOutages.length ||

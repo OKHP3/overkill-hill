@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { tmpdir } from "node:os";
-import { firefox, webkit } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 
 const testsDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = join(testsDirectory, "..");
@@ -295,7 +295,7 @@ after(async () => {
   await rm(focusedReportDirectory, { recursive: true, force: true });
 });
 
-function runCspQa(path, flags = []) {
+function runCspQa(path, flags = [], envOverrides = {}) {
   return new Promise((resolve, reject) => {
     const focused = !flags.includes("--external-health") && !flags.includes("--check-external");
     const reportPath = focused
@@ -310,7 +310,7 @@ function runCspQa(path, flags = []) {
         ...(reportPath ? [`--report=${reportPath}`] : []),
         ...flags,
       ],
-      { cwd: repositoryRoot },
+      { cwd: repositoryRoot, env: { ...process.env, ...envOverrides } },
     );
     let stdout = "";
     let stderr = "";
@@ -2131,5 +2131,68 @@ test("enforces one external-health budget across routes and reports affected rou
     assert.equal(report.summary.routesSkippedByBudget, 1);
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("reports a machine-readable failure when browser startup reaches the health budget", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-browser-start-timeout-"));
+  const fakeBrowsersDirectory = await mkdtemp(join(tmpdir(), "csp-fake-browser-"));
+  const reportPath = join(reportDirectory, "report.json");
+  try {
+    const executableParts = chromium.executablePath().split(sep);
+    const browserPackageIndex = executableParts.findIndex((part) =>
+      part.startsWith("chromium-"),
+    );
+    assert.notEqual(browserPackageIndex, -1, chromium.executablePath());
+    const browserRevision = executableParts[browserPackageIndex].slice("chromium-".length);
+    const fakeExecutables = [
+      join(fakeBrowsersDirectory, ...executableParts.slice(browserPackageIndex)),
+      join(
+        fakeBrowsersDirectory,
+        `chromium_headless_shell-${browserRevision}`,
+        "chrome-headless-shell-linux64",
+        "chrome-headless-shell",
+      ),
+    ];
+    for (const fakeExecutable of fakeExecutables) {
+      await mkdir(dirname(fakeExecutable), { recursive: true });
+      await writeFile(fakeExecutable, "#!/bin/sh\nexec sleep 2\n", { mode: 0o755 });
+      await chmod(fakeExecutable, 0o755);
+    }
+
+    const result = await runCspQa("/external-healthy-only.html", [
+      "--external-health",
+      "--external-budget-ms=500",
+      `--report=${reportPath}`,
+    ], {
+      PLAYWRIGHT_BROWSERS_PATH: fakeBrowsersDirectory,
+    });
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /BROWSER START TIMEOUT:/);
+    assert.match(result.output, /EXTERNAL HEALTH TIME BUDGET: 500ms/);
+
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assert.equal(report.status, "TIME_BUDGET_EXCEEDED");
+    assert.equal(report.browserStartupFailure.phase, "browser-startup");
+    assert.equal(report.browserStartupFailure.kind, "timeout");
+    assert.ok(
+      report.browserStartupFailure.timeoutMs > 0 &&
+        report.browserStartupFailure.timeoutMs <= 500,
+      JSON.stringify(report.browserStartupFailure),
+    );
+    assert.equal(report.timeBudget.exceeded, true);
+    assert.ok(report.timeBudget.elapsedMs <= 1000, JSON.stringify(report.timeBudget));
+    assert.equal(report.timeBudget.routesSkipped.length, 1);
+    assert.deepEqual(report.timeBudget.routesSkipped, ["/external-healthy-only.html"]);
+    assert.equal(report.summary.budgetExceeded, true);
+    assert.equal(report.summary.routes, 0);
+    assert.deepEqual(report.dependencies, []);
+    assert.deepEqual(report.externalOutages, []);
+    assert.deepEqual(report.cspDiagnostics, []);
+    assert.deepEqual(report.cspEvidence, []);
+    assert.deepEqual(report.timeouts, []);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+    await rm(fakeBrowsersDirectory, { recursive: true, force: true });
   }
 });
