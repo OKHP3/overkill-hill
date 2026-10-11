@@ -122,6 +122,23 @@ and the current report before choosing an update.
 
 ## Validation and rollback
 
+### Current Python runtime policy (October 11)
+
+Primary GitHub jobs select Python **3.15.0** after the hosted 3.15.0
+compatibility job passed on commit `dd16f0c`
+([job evidence](https://github.com/OKHP3/overkill-hill/actions/runs/38143893042/job/114483127691)).
+The primary selectors cover Site Validation, live-edge monitoring, Technology
+Version Watch, i18n Page Sync, and Translation skill tests. The exact promotion
+commit must still pass its own required checks before release.
+
+The compatibility matrix retains Python 3.11, 3.14.8, and 3.15.0 with unchanged
+QA dependency pins. Older-line coverage tracks its latest patch, while primary
+CI continues comparing against the newest stable Python release. A successful
+trial does not change Replit's managed runtime: `.replit` still declares
+`python-3.11`, and the last actual host observation is **3.11.14**. No matching
+3.15 module availability has been established. Keep that host finding visible
+until actual runtime and module evidence supports a separate change.
+
 ### September 20 runtime maintenance
 
 This dated section preserves observations from September 20. The current

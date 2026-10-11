@@ -1,4 +1,4 @@
-"""Keep the Python compatibility trial aligned with active validation suites."""
+"""Protect primary Python selectors and coverage of active validation suites."""
 from pathlib import Path
 import re
 import unittest
@@ -19,7 +19,37 @@ def missing_suites(validation, compatibility):
     return python_test_paths(validation) - python_test_paths(compatibility)
 
 
+def python_selectors(workflow):
+    return [value.strip().strip("'\"") for value in
+            re.findall(r"^\s*python-version:\s*([^\n]+)", workflow, re.MULTILINE)]
+
+
+def primary_selector_mismatches(workflows, expected):
+    return {name: selectors for name, text in workflows.items()
+            if (selectors := [pin for pin in python_selectors(text) if pin != expected])}
+
+
 class RuntimeCoverageTests(unittest.TestCase):
+    def primary_workflows(self):
+        return {path.name: path.read_text(encoding="utf-8")
+                for path in (ROOT / ".github/workflows").glob("*.y*ml")
+                if path.name != "runtime-compatibility.yml"}
+
+    def test_primary_python_selectors_use_the_promoted_runtime(self):
+        workflows = self.primary_workflows()
+        counts = {name: len(python_selectors(text)) for name, text in workflows.items()
+                  if python_selectors(text)}
+        self.assertEqual(counts, {"validate.yml": 2, "technology-watch.yml": 2,
+                                  "i18n-page-sync.yml": 1, "translation-skill-tests.yml": 1})
+        self.assertEqual(primary_selector_mismatches(workflows, "3.15.0"), {})
+
+    def test_one_stale_primary_selector_is_rejected(self):
+        workflows = self.primary_workflows()
+        workflows["validate.yml"] = workflows["validate.yml"].replace(
+            "python-version: '3.15.0'", "python-version: '3.11'", 1)
+        self.assertEqual(primary_selector_mismatches(workflows, "3.15.0"),
+                         {"validate.yml": ["3.11"]})
+
     def test_all_active_validation_suites_run_in_the_matrix(self):
         validation = (ROOT / ".github/workflows/validate.yml").read_text(encoding="utf-8")
         compatibility = (ROOT / ".github/workflows/runtime-compatibility.yml").read_text(encoding="utf-8")
