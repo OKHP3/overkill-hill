@@ -456,6 +456,7 @@ jobs:
       - name: Run search and embedded-app regressions
         run: |
           python3 tests/test-search-sections.py
+          python3 scripts/tests/test-search-index.py
           node --test tests/search-page.test.mjs tests/search-index.test.mjs tests/search-index-locale.test.mjs tests/embed-workflow.test.mjs tests/mermaid-links.test.mjs
 
       - name: Keep content visible when optional reveal scripts fail

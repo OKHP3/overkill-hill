@@ -588,9 +588,13 @@ def validate_committed_index(index: object) -> str | None:
     entries = index.get("entries")
     if not isinstance(entries, list):
         return "expected an 'entries' array"
+    seen_urls: set[str] = set()
     for position, entry in enumerate(entries, start=1):
         if not isinstance(entry, dict) or not isinstance(entry.get("url"), str):
             return f"entry {position} must be an object with a string 'url'"
+        if entry["url"] in seen_urls:
+            return f"entry {position} has a duplicate 'url': {entry['url']}"
+        seen_urls.add(entry["url"])
     return None
 
 

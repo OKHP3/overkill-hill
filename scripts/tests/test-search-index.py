@@ -131,6 +131,23 @@ class SearchIndexCheckTests(unittest.TestCase):
         self.assertEqual(report["affectedRoutes"], [])
         self.assertEqual(self.index_path.read_bytes(), original)
 
+    def test_duplicate_route_cannot_hide_a_stale_entry(self) -> None:
+        committed = copy.deepcopy(self.payload)
+        stale = copy.deepcopy(committed["entries"][0])
+        stale["title"] = "Old title"
+        committed["entries"].insert(0, stale)
+        original = json.dumps(committed, ensure_ascii=False, indent=2).encode("utf-8")
+        self.index_path.write_bytes(original)
+
+        result, _, stderr, report = self.run_check()
+
+        self.assertEqual(result, 1)
+        self.assertEqual(report["status"], "error")
+        self.assertEqual(report["inputProblem"]["kind"], "invalid_structure")
+        self.assertIn("duplicate", stderr)
+        self.assertIn("/about/", stderr)
+        self.assertEqual(self.index_path.read_bytes(), original)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
