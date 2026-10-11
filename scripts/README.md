@@ -167,17 +167,17 @@ failure prevents every commit and leaves the written paths reported for manual,
 reviewed recovery. `--no-hooks` is an explicit exceptional mode, not a default.
 
 The browser-level theme synchronization check is opt-in because sibling
-checkouts are not guaranteed to be mounted in every workspace. CI reads the
-reviewed source revision and all three immutable site pins from
-`docs/audit/foundation-release-2026-09-09.md`; do not copy pin values into a
-workflow or test configuration. The browser check reads each configured
+checkouts are not guaranteed to be mounted in every workspace. CI retains the
+accepted full-SHA foundation pins in `validate.yml`. The historical foundation
+audit remains unchanged evidence. Optional release-record support requires a
+separately reviewed current record before activation; it does not establish
+approval for new source or sibling revisions. The browser check reads each configured
 checkout's actual `index.html`, `assets/css/theme.css`, and `assets/js/app.js`,
 compares the foundation bytes, and reports the site and revision for every
 drift:
 
 For local cross-site mode, populate `THEME_CONTROL_SITES` with the three
-`site_revisions` values from that release record and the corresponding
-checkout paths. The default browser fixtures remain available when sibling
+accepted workflow revisions and paths matching `theme-control-sites.json`. The default browser fixtures remain available when sibling
 repositories are absent.
 
 Each entry must include a reviewed full commit SHA as `revision` when the

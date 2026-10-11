@@ -138,12 +138,6 @@ class ConcurrencyTests(unittest.TestCase):
         fetch_position = source.index(
             '- name: Verify pinned theme-control foundation revisions are fetchable',
         )
-        record_position = source.index('- name: Load reviewed foundation release pins')
-        self.assertLess(
-            record_position,
-            fetch_position,
-            'release pins must be loaded from the reviewed record before fetch verification',
-        )
         for checkout_name in (
             'Checkout reviewed Glee foundation revision',
             'Checkout reviewed AskJamie foundation revision',
@@ -307,12 +301,15 @@ class ConcurrencyTests(unittest.TestCase):
                     f'{name} expected THEME_CONTROL_SITES root {expected_path}',
                 )
 
-                output_name = revision_variable.lower()
-                revision = '${{ steps.foundation_release.outputs.' + output_name + ' }}'
+                revision_match = re.search(
+                    rf'(?m)^\s+{re.escape(revision_variable)}: ([0-9a-f]{{40}})$', source,
+                )
+                self.assertIsNotNone(revision_match, f'{name} requires a full immutable SHA')
+                revision = revision_match[1]
                 self.assertEqual(
                     configured_site.get('revision') if configured_site else None,
                     revision,
-                    f'{name} expected THEME_CONTROL_SITES revision from the reviewed release record',
+                    f'{name} expected THEME_CONTROL_SITES revision from the accepted workflow pin',
                 )
                 if configured_site:
                     self.assertIn(revision_variable, source)
@@ -350,7 +347,7 @@ class ConcurrencyTests(unittest.TestCase):
                         checkout_step,
                         f'{name} expected repository {expected_repository} at {expected_path}',
                     )
-                    expected_ref = '${{ steps.foundation_release.outputs.' + revision_variable.lower() + ' }}'
+                    expected_ref = '${{ env.' + revision_variable + ' }}'
                     self.assertIn(
                         f'ref: {expected_ref}',
                         checkout_step,

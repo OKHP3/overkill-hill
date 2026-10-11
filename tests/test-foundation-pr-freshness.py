@@ -217,19 +217,11 @@ class FoundationFreshnessTests(unittest.TestCase):
             self.assertIn('Do not treat this error', summary)
             self.assertIn('Glee foundation PR freshness', stdout.getvalue())
 
-    def test_pages_check_is_read_only_and_does_not_gate_deploy(self):
-        check_job = workflow_job(PAGES, 'foundation-freshness')
-        deploy_job = workflow_job(PAGES, 'deploy')
-        self.assertIn('contents: read', check_job)
-        self.assertNotRegex(check_job, r'(?m)^\s+needs:')
-        self.assertNotIn('pull-requests: write', check_job)
-        self.assertNotIn('pages: write', check_job)
-        self.assertNotIn('id-token: write', check_job)
-        self.assertIn('scripts/check-foundation-pr-freshness.py', check_job)
+    def test_manual_diagnostic_is_not_activated_as_a_release_job(self):
+        self.assertNotIn('foundation-freshness:', PAGES)
         self.assertIn('python3 tests/test-foundation-pr-freshness.py', VALIDATE)
-        self.assertIn('if: always()', check_job)
+        deploy_job = workflow_job(PAGES, 'deploy')
         self.assertIn('needs: validate', deploy_job)
-        self.assertNotIn('foundation-freshness', deploy_job)
         self.assertNotRegex(PAGES, r'(?i)\b(?:git\s+push|gh\s+pr\s+merge)\b')
 
 

@@ -716,6 +716,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
         Math.max(0, overallDeadline - Date.now()),
       );
       if (lateResponseWaitMs > 0) await page.waitForTimeout(lateResponseWaitMs);
+      budgetExceeded ||= Date.now() >= overallDeadline;
     }
   }
   const cspEvidence = await page.evaluate(() => (
@@ -745,6 +746,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
     if (dependency) dependency.routes.add(path);
   }
   await page.close();
+  budgetExceeded ||= Date.now() >= overallDeadline;
   return {
     path,
     budgetExceeded,
@@ -975,7 +977,7 @@ async function runExternalHealth() {
   const timeBudget = {
     limitMs: externalHealthBudgetMs,
     elapsedMs: Date.now() - startedAt,
-    exceeded: routesCutShortByBudget.length > 0 || routesSkippedByBudget.length > 0,
+    exceeded: Date.now() >= overallDeadline || routesCutShortByBudget.length > 0 || routesSkippedByBudget.length > 0,
     routesCutShort: routesCutShortByBudget,
     routesSkipped: routesSkippedByBudget,
   };

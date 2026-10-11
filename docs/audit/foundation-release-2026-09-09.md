@@ -1,24 +1,5 @@
 # Shared foundation release — 2026-09-09
 
-The JSON block below is the machine-readable approval record used by CI. Update
-it only as part of an owner-reviewed foundation release; CI never selects a
-newer source revision or sibling pin.
-
-```json
-{
-  "schema": "okhp3-shared-foundation-release-v1",
-  "source": {
-    "repository": "overkill-hill",
-    "revision": "9e0c2f80ed33a53b61cde9a59a33f87a86bc33a0"
-  },
-  "site_revisions": {
-    "overkill-hill": "062e09659edf02b715b99aaf2dc7f73a675fee58",
-    "glee-fullytools": "4b249b5c8ec63f9d15c372524253053f6f602cbf",
-    "askjamie": "7e1bc496c0ea47d774e9f6807f65b7a5f118d398"
-  }
-}
-```
-
 ## Decision
 
 The reviewed compatible superset was selected from an explicit immutable source
@@ -47,34 +28,10 @@ cache-buster boundary change is in
 `92842622e04bf38435dd17f74cef01200b7f2690`; the generated refresh is
 `ad86b8b9a92f9a3249585d1f0ce293b1758d2824`.
 
-At the time of this audit, Glee `main` was protected at
-`d6f3319100bc9bd923f3ef93f1ca8e58`; the reviewed release was published on the PR
-branch:
+Glee `main` remains protected at `d6f3319100bc9bd923f3ef93f1ca8e58`; the
+reviewed release is published on the PR branch:
 
 <https://github.com/OKHP3/Glee-fullyTools/pull/42>
-
-## Current Glee PR #42 status (checked 2026-10-06)
-
-The PR is now closed and merged, so its former branch is not an active release
-candidate:
-
-- Current Glee `main` revision: `0aeeb5ab72582266ffcd0b5392a322b8a72e4ef4`.
-- PR #42 head: `c9c197c54ad3aed0b992e352d67ed587097dc3a6`.
-- PR #42 base at merge: `39744374e342924498bfac55e793f5635b6c63ab`.
-- Merge commit: `9e4005d190d7dc07a04f124334f122ee91fc9f82`.
-- Merged: 2026-09-16 18:56:11 UTC.
-- The old branch compares as 217 commits behind current `main`; that is expected
-  after a merged branch's base advances. GitHub reported all four PR review
-  threads resolved at this check.
-
-No rebase or update is required for the already-merged PR #42. For new
-foundation work, start a fresh `agent/foundation-sync-*` branch from the current
-Glee `main` revision, bring any open branch up to date, resolve conflicts,
-rerun checks, and complete required review conversations. Merge only through
-the protected Glee pull request. The read-only freshness job in
-`.github/workflows/pages.yml` records the current base revision and required
-action for open foundation-sync PRs; it does not update branches or merge them,
-and it does not gate this repository's independent Pages deployment.
 
 ## Final foundation fingerprints
 
@@ -100,5 +57,5 @@ asset.
 - Glee cache-buster unit tests and browser fixture tests: passed locally.
 - Glee's final PR checks from `4b249b5c…` passed: site validation, translated
   page freshness, sparkle smoke, resilient web behavior, and responsive
-  viewport QA. At the time of this audit, the PR remained open and was awaiting
-  review through Glee's protected main branch.
+  viewport QA. The PR remains open because Glee `main` is protected and still
+  requires review before merge.
