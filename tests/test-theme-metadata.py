@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -50,6 +52,88 @@ class BrandThemeMetadataTests(unittest.TestCase):
                 {"brands": BRAND_THEME_CONTRACT}
             )
         )
+
+    def test_contract_loader_rejects_duplicate_brand_object_key(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(
+                f'{{"brands":{{"glee":{glee},"glee":{glee}}}}}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, r"duplicate brand entry 'glee'"):
+                validator.load_brand_theme_contract(path)
+
+    def test_contract_loader_names_brand_with_duplicate_property_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(
+                '{"brands":{"glee":{"name":"Glee","name":"Hidden"}}}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, r"brand 'glee' has duplicate JSON key 'name'"
+            ):
+                validator.load_brand_theme_contract(path)
+
+    def test_contract_reports_all_malformed_entries_and_fields_by_brand(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["glee"]["storageKey"] = ""
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["colorScheme"] = "solarized"
+        contract["askjamie"]["dark"] = "#bad"
+        contract["broken"] = "not an object"
+
+        with self.assertRaises(ValueError) as raised:
+            validator.validate_brand_theme_contract({"brands": contract})
+
+        message = str(raised.exception)
+        expected_errors = (
+            "brand 'glee' has invalid 'storageKey'",
+            "brand 'glee' has invalid light color 'orange'",
+            "brand 'askjamie' has invalid dark color '#bad'",
+            "brand 'askjamie' has invalid 'colorScheme' value 'solarized'",
+            "brand 'broken' must be a JSON object",
+        )
+        for expected in expected_errors:
+            with self.subTest(error=expected):
+                self.assertIn(expected, message)
+
+    def test_release_validator_fails_with_aggregated_brand_errors(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["dark"] = "#bad"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(json.dumps({"brands": contract}), encoding="utf-8")
+            command = """
+import runpy
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import brand_theme
+load = brand_theme.load_brand_theme_contract
+brand_theme.load_brand_theme_contract = lambda: load(Path(sys.argv[2]))
+runpy.run_path(sys.argv[3], run_name="__main__")
+"""
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    command,
+                    str(ROOT / "scripts"),
+                    str(path),
+                    str(ROOT / "scripts" / "validate-site.py"),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn("brand 'glee' has invalid light color 'orange'", result.stderr)
+        self.assertIn("brand 'askjamie' has invalid dark color '#bad'", result.stderr)
 
     def test_contract_reports_missing_required_field_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)

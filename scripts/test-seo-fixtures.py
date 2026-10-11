@@ -221,6 +221,31 @@ class SEOFixtureTests(unittest.TestCase):
         )
         return manifest_path, sitemap_path, index_path
 
+    def _write_legacy_locale_fixture(
+        self,
+        root: Path,
+        sitemap_routes: Iterable[str],
+        index_routes: set[str],
+    ) -> tuple[Path, Path, Path]:
+        manifest_path, sitemap_path, index_path = self._write_mixed_locale_fixture(
+            root,
+            sitemap_routes,
+            index_routes,
+        )
+        mixed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        locale_spec = mixed_manifest["locales"]["fr"]
+        manifest_path.write_text(
+            json.dumps({
+                "target_locale": "fr",
+                "status": locale_spec["status"],
+                "indexable": locale_spec["indexable"],
+                "metadata_source": locale_spec["metadata_source"],
+                "pages": locale_spec["pages"],
+            }),
+            encoding="utf-8",
+        )
+        return manifest_path, sitemap_path, index_path
+
     def _write_unpublished_locale_fixture(
         self,
         root: Path,
@@ -355,6 +380,141 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_multi_locale_manifest_rejects_shared_target_route(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            shutil.copy2(
+                FIXTURE_ROOT / "locale-duplicate-target-routes.json",
+                manifest_path,
+            )
+            shutil.copy2(ROOT / "index.html", root / "index.html")
+            sitemap_path = root / "sitemap.xml"
+            sitemap_path.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<url><loc>{locale_checker.route_url('/')}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+            index_dir = root / "assets" / "data"
+            index_dir.mkdir(parents=True)
+            for locale in ("fr", "de"):
+                (index_dir / f"search-index.{locale}.json").write_text(
+                    json.dumps({"locale": locale, "count": 0, "entries": []}),
+                    encoding="utf-8",
+                )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["locales"]["de"]["pages"][0]["target_route"] = "/de/"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertFalse(
+                locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    root=root,
+                ),
+                "independent locale target routes should remain valid",
+            )
+
+            shutil.copy2(
+                FIXTURE_ROOT / "locale-duplicate-target-routes.json",
+                manifest_path,
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                root=root,
+            )
+            self.assertIn(
+                "locale target route is claimed by multiple locales: /fr/ (de, fr)",
+                findings,
+            )
+
+    def test_legacy_locale_manifest_requires_coverage_and_distinguishes_routes(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+        draft_route = "/fr/contact/"
+        retired_route = "/fr/retired/"
+        complete_sitemap = source_routes | promoted_routes
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap,
+                promoted_routes,
+            )
+            self.assertFalse(
+                locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    index_path=index_path,
+                    root=root,
+                ),
+                "valid legacy single-locale manifest should pass complete coverage",
+            )
+
+            _, missing_sitemap, complete_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap - {"/fr/projects/"},
+                promoted_routes,
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=missing_sitemap,
+                index_path=complete_index,
+                root=root,
+            )
+            self.assertIn(
+                "indexable locale route is missing from sitemap.xml: /fr/projects/",
+                findings,
+            )
+
+            _, complete_sitemap_path, missing_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap,
+                promoted_routes - {"/fr/about/"},
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=complete_sitemap_path,
+                index_path=missing_index,
+                root=root,
+            )
+            self.assertIn(
+                "locale search index is missing routes: /fr/about/",
+                findings,
+            )
+
+            _, draft_sitemap, draft_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap | {draft_route, retired_route},
+                promoted_routes | {draft_route, retired_route},
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=draft_sitemap,
+                index_path=draft_index,
+                root=root,
+            )
+            self.assertIn(
+                f"draft locale route is in sitemap.xml: {draft_route}",
+                findings,
+            )
+            self.assertIn(
+                f"draft locale routes appear in the search index: {draft_route}",
+                findings,
+            )
+            self.assertIn(
+                f"locale sitemap contains undeclared routes: {retired_route}",
+                findings,
+            )
+            self.assertIn(
+                f"locale search index contains undeclared routes: {retired_route}",
+                findings,
+            )
+
     def test_locale_checker_reports_explicit_robots_boundary_values(self) -> None:
         source_routes = {"/", "/about/", "/projects/", "/contact/"}
         promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
@@ -403,8 +563,18 @@ class SEOFixtureTests(unittest.TestCase):
     def test_locale_search_index_rejects_malformed_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             index_path = Path(directory) / "search-index.fr.json"
-            for entry in (None, "invalid", {}, {"url": None}, {"url": 7},
-                          {"url": []}, {"url": {}}, {"url": ""}, {"url": " "}):
+            cases = (
+                (None, "must be an object with a non-empty string URL"),
+                ("invalid", "must be an object with a non-empty string URL"),
+                ({}, "must have a non-empty string URL"),
+                ({"url": None}, "must have a non-empty string URL"),
+                ({"url": 7}, "must have a non-empty string URL"),
+                ({"url": []}, "must have a non-empty string URL"),
+                ({"url": {}}, "must have a non-empty string URL"),
+                ({"url": ""}, "must have a non-empty string URL"),
+                ({"url": " "}, "must have a non-empty string URL"),
+            )
+            for entry, expected in cases:
                 with self.subTest(entry=entry):
                     index_path.write_text(json.dumps({
                         "locale": "fr", "count": 2,
@@ -415,8 +585,68 @@ class SEOFixtureTests(unittest.TestCase):
                         index_path, set(), "fr", findings,
                         draft_routes=set(), require_routes=False,
                     )
-                    self.assertIn("locale search index entry 0 must have a non-empty string URL", findings)
+                    self.assertIn(
+                        f"locale search index entry 0 {expected}",
+                        findings,
+                    )
                     self.assertIn("locale search index contains undeclared routes: /fr/retired/", findings)
+
+    def test_published_locale_rejects_search_index_entry_without_url(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = self._write_mixed_locale_fixture(
+                root,
+                source_routes | promoted_routes,
+                promoted_routes,
+            )
+            index_path.write_text(json.dumps({
+                "locale": "fr",
+                "count": 2,
+                "entries": [{}, None],
+            }), encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                "locale search index entry 0 must have a non-empty string URL",
+                findings,
+            )
+            self.assertIn(
+                "locale search index entry 1 must be an object with a non-empty string URL",
+                findings,
+            )
+
+    def test_unpublished_locale_rejects_non_object_search_index_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            index_path.write_text(json.dumps({
+                "locale": "fr",
+                "count": 1,
+                "entries": [None],
+            }), encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                "locale search index entry 0 must be an object with a non-empty string URL",
+                findings,
+            )
 
     def test_locale_search_index_rejects_non_object_payload(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -464,6 +694,59 @@ class SEOFixtureTests(unittest.TestCase):
             )
             self.assertIn(
                 f"locale search index contains undeclared routes: {unrelated_route}",
+                findings,
+            )
+
+    def test_unpublished_locale_rejects_generated_target_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            target_path = manifest["locales"]["fr"]["pages"][0]["target_path"]
+            target_file = root / target_path
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            target_file.write_text("<!doctype html><title>Not published</title>", encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                f"unpublished scaffold contains target page: {target_path}",
+                findings,
+            )
+
+    def test_unpublished_locale_rejects_sitemap_target_route(self) -> None:
+        target_route = "/fr/about/"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            sitemap = sitemap_path.read_text(encoding="utf-8")
+            sitemap_path.write_text(
+                sitemap.replace(
+                    "</urlset>",
+                    f"<url><loc>{locale_checker.route_url(target_route)}</loc></url>\n</urlset>",
+                ),
+                encoding="utf-8",
+            )
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                f"unpublished target route is in sitemap.xml: {target_route}",
                 findings,
             )
 
@@ -668,6 +951,16 @@ class SEOFixtureTests(unittest.TestCase):
         valid_after = f"{validator.SITE_ORIGIN}/contact/"
         invalid_blocks = (
             (
+                "stray-closing-url",
+                "</url>",
+                "has a closing </url> without an opening <url>",
+            ),
+            (
+                "unclosed-url-block",
+                "<url><loc>https://overkillhill.com/unclosed/</loc>",
+                "is missing closing </url> before the next <url>",
+            ),
+            (
                 "unclosed-location",
                 "<url><loc>https://overkillhill.com/unclosed/</url>",
                 "has malformed <loc> element structure",
@@ -738,6 +1031,27 @@ class SEOFixtureTests(unittest.TestCase):
                     validator.load_sitemap_entries(sitemap_path),
                     {valid_before: None, valid_after: None},
                 )
+
+    def test_unclosed_final_sitemap_url_is_reported(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                f"<urlset><url><loc>{valid}</loc></url>"
+                "<url><loc>https://overkillhill.com/unclosed/</loc>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertIn(
+                "sitemap URL entry at position 2 is missing closing </url>",
+                findings_text(findings),
+            )
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid, None)],
+                "an unclosed final URL block must not enter the usable inventory",
+            )
 
     def test_public_inventory_excludes_test_fixtures(self) -> None:
         pages = validator.find_html_files()
@@ -1047,6 +1361,7 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertFalse(generated_findings, findings_text(generated_findings))
 
     def test_rendered_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
+        robots_fixture = self.fixture_data["robots_directive_conflicts"]
         index_path = GENERATED_FIXTURE / "index.html.fixture"
         index_page = self.pages_by_route["/"]
         index_raw = index_path.read_text(encoding="utf-8")
@@ -1061,7 +1376,7 @@ class SEOFixtureTests(unittest.TestCase):
         )
         across_tags_conflict = index_raw.replace(
             "</head>",
-            '<meta name="robots" content="NOINDEX, follow"></head>',
+            f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
             1,
         )
         conflict_cases = (
@@ -1071,10 +1386,10 @@ class SEOFixtureTests(unittest.TestCase):
                 draft_page,
                 draft_raw.replace(
                     "</head>",
-                    '<meta name="robots" content="INDEX, follow"></head>',
+                    f'<meta name="robots" content="{robots_fixture["index"]}"></head>',
                     1,
                 ),
-                ("INDEX, follow",),
+                (robots_fixture["index"],),
             ),
             (
                 "within one noindex tag",
@@ -1088,7 +1403,7 @@ class SEOFixtureTests(unittest.TestCase):
                 index_path,
                 index_page,
                 across_tags_conflict,
-                ("index, follow", "NOINDEX, follow"),
+                (robots_fixture["index"], robots_fixture["noindex"]),
             ),
         )
         for case, path, page, raw, expected_values in conflict_cases:
@@ -1100,7 +1415,7 @@ class SEOFixtureTests(unittest.TestCase):
                 )
                 conflicts = [
                     finding for finding in findings
-                    if "conflicting robots index/noindex directives" in finding.msg
+                    if robots_fixture["expected"] in finding.msg
                 ]
                 self.assertEqual(len(conflicts), 1, findings_text(findings))
                 conflict = conflicts[0]
@@ -1128,7 +1443,7 @@ class SEOFixtureTests(unittest.TestCase):
                 draft_page,
                 draft_raw.replace(
                     "</head>",
-                    '<meta name="robots" content="NOINDEX, NOFOLLOW"></head>',
+                    f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
                     1,
                 ),
             ),
@@ -1151,6 +1466,58 @@ class SEOFixtureTests(unittest.TestCase):
                     page,
                 )
                 self.assertFalse(findings, findings_text(findings))
+
+    def test_locale_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
+        fixture = self.fixture_data["robots_directive_conflicts"]
+        relative_path = "de/index.html"
+        path = ROOT / relative_path
+        contract = self.locale_contract[relative_path]
+        original_raw = path.read_text(encoding="utf-8")
+
+        conflicting_raw = original_raw.replace(
+            "</head>",
+            f'<meta name="robots" content="{fixture["index"]}"></head>',
+            1,
+        )
+        conflicting_parser = parse_html(conflicting_raw)
+        findings = validator.validate_generated_seo(
+            path,
+            conflicting_parser,
+            None,
+            contract,
+        )
+        conflict = next(
+            (
+                finding
+                for finding in findings
+                if fixture["expected"] in finding.msg
+            ),
+            None,
+        )
+        self.assertIsNotNone(conflict, findings_text(findings))
+        assert conflict is not None
+        self.assertEqual(conflict.page, relative_path)
+        for value in conflicting_parser.meta["robots"]:
+            if validator.robots_indexing_tokens(value).intersection(
+                validator.ROBOTS_INDEXING_TOKENS
+            ):
+                self.assertIn(value, conflict.msg)
+
+        consistent_raw = original_raw.replace(
+            "</head>",
+            f'<meta name="robots" content="{fixture["noindex"]}"></head>',
+            1,
+        )
+        consistent_findings = validator.validate_generated_seo(
+            path,
+            parse_html(consistent_raw),
+            None,
+            contract,
+        )
+        self.assertFalse(
+            consistent_findings,
+            "consistent duplicate noindex directives are explicitly accepted",
+        )
 
     def test_draft_article_promotion_requires_article_metadata(self) -> None:
         mutation = self.fixture_data["draft_article_promotion"]
@@ -1730,6 +2097,16 @@ class SEOFixtureTests(unittest.TestCase):
             original_articles[0]["author"]["url"],
             "source fixture mutation changed nested author.url",
         )
+        duplicate_block = (
+            '<script type="application/ld+json">\n'
+            + json.dumps(mutated_articles[1], ensure_ascii=False, indent=2)
+            + "\n</script>"
+        )
+        self.assertEqual(
+            mutated_raw.replace("\n" + duplicate_block, "", 1),
+            original_raw,
+            "source fixture mutation changed content outside the duplicate Article node",
+        )
         self.assertIn(
             '"headline": "The First Diagram Is Usually a Liar"',
             mutated_raw,
@@ -2258,6 +2635,16 @@ class SEOFixtureTests(unittest.TestCase):
             original_parser.is_noindex,
             mutated_parser.is_noindex,
             "generated fixture mutation changed the indexing boundary",
+        )
+        self.assertEqual(
+            original_parser.meta,
+            mutated_parser.meta,
+            "generated fixture mutation changed robots or other metadata",
+        )
+        self.assertEqual(
+            original_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            mutated_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            "generated fixture mutation changed article copy",
         )
         findings = validator.validate_generated_seo(
             path,

@@ -46,7 +46,22 @@ from public_page_boundary import iter_public_html_files
 # These maintained locale routes use pair-specific editorial profiles rather
 # than the en-US voice baseline. All other eligibility comes from the shared
 # published-page boundary.
-VOICE_EXCLUDED_LOCALES = frozenset({"en-gb", "es-mx"})
+VOICE_LOCALE_PATTERNS: dict[str, list[tuple[str, re.Pattern[str], str]]] = {
+    "en-gb": [
+        ("US spelling: color", re.compile(r"\bcolor\b(?![-\w])", re.IGNORECASE), "use 'colour'"),
+        ("US spelling: favorite", re.compile(r"\bfavorite\b", re.IGNORECASE), "use 'favourite'"),
+        ("US spelling: center", re.compile(r"\bcenter\b", re.IGNORECASE), "use 'centre'"),
+        ("US spelling: traveling", re.compile(r"\btraveling\b", re.IGNORECASE), "use 'travelling'"),
+        ("US spelling: labeled", re.compile(r"\blabeled\b", re.IGNORECASE), "use 'labelled'"),
+        ("US spelling: gray", re.compile(r"\bgray\b", re.IGNORECASE), "use 'grey'"),
+        ("US spelling: theater", re.compile(r"\btheater\b", re.IGNORECASE), "use 'theatre'"),
+        ("US spelling: neighbor", re.compile(r"\bneighbor\b", re.IGNORECASE), "use 'neighbour'"),
+    ],
+    "es-mx": [
+        ("Spain Spanish: vosotros", re.compile(r"\b(?:vosotros|vosotras)\b", re.IGNORECASE), "use the Mexican Spanish 'ustedes' form"),
+        ("Spain Spanish: ordenador", re.compile(r"\bordenador(?:es)?\b", re.IGNORECASE), "use 'computadora'"),
+    ],
+}
 
 
 @dataclass(frozen=True)
@@ -184,7 +199,23 @@ def find_html_files(root: Path | None = None) -> list[Path]:
     return sorted(
         path
         for path in iter_public_html_files(scan_root)
-        if not (set(path.relative_to(scan_root).parts) & VOICE_EXCLUDED_LOCALES)
+        if not (
+            path.relative_to(scan_root).parts
+            and path.relative_to(scan_root).parts[0] in VOICE_LOCALE_PATTERNS
+        )
+    )
+
+
+def find_locale_html_files(locale: str, root: Path | None = None) -> list[Path]:
+    """Return public pages for one locale-specific voice profile."""
+    if locale not in VOICE_LOCALE_PATTERNS:
+        raise ValueError(f"unsupported voice locale: {locale}")
+    scan_root = Path(root) if root is not None else ROOT
+    return sorted(
+        path
+        for path in iter_public_html_files(scan_root)
+        if path.relative_to(scan_root).parts
+        and path.relative_to(scan_root).parts[0] == locale
     )
 
 
@@ -193,7 +224,12 @@ def strip_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
-def lint_file(path: Path) -> list[VoiceFinding]:
+def lint_file(
+    path: Path,
+    *,
+    phrase_patterns: list[tuple[str, re.Pattern[str], str]] = PHRASE_PATTERNS,
+    check_passive_voice: bool = True,
+) -> list[VoiceFinding]:
     """
     Return advisory voice findings for the file.
     """
@@ -230,7 +266,7 @@ def lint_file(path: Path) -> list[VoiceFinding]:
 
             else:
                 # ── phrase checks ─────────────────────────────────────────
-                for label, pattern, suggestion in PHRASE_PATTERNS:
+                for label, pattern, suggestion in phrase_patterns:
                     if pattern.search(text):
                         findings.append(VoiceFinding(
                             path=rel,
@@ -241,7 +277,7 @@ def lint_file(path: Path) -> list[VoiceFinding]:
                         ))
 
                 # ── passive-heavy check ───────────────────────────────────
-                passive_hits = PASSIVE_RE.findall(text)
+                passive_hits = PASSIVE_RE.findall(text) if check_passive_voice else []
                 if len(passive_hits) >= PASSIVE_PER_LINE_THRESHOLD:
                     findings.append(VoiceFinding(
                         path=rel,
@@ -266,6 +302,17 @@ def lint_file(path: Path) -> list[VoiceFinding]:
     return findings
 
 
+def lint_locale_file(path: Path, locale: str) -> list[VoiceFinding]:
+    """Apply only the selected locale's pair-specific editorial checks."""
+    if locale not in VOICE_LOCALE_PATTERNS:
+        raise ValueError(f"unsupported voice locale: {locale}")
+    return lint_file(
+        path,
+        phrase_patterns=VOICE_LOCALE_PATTERNS[locale],
+        check_passive_voice=False,
+    )
+
+
 def load_baseline(path: Path) -> Counter[str]:
     """Load a reviewed warning baseline, rejecting malformed policy files."""
     try:
@@ -284,13 +331,48 @@ def load_baseline(path: Path) -> Counter[str]:
     return counts
 
 
-def write_baseline(path: Path, findings: list[VoiceFinding]) -> None:
+def load_locale_baselines(path: Path) -> dict[str, Counter[str]]:
+    """Load independent locale warning counts from the reviewed baseline."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read baseline {path}: {error}") from error
+    raw_locales = data.get("locale_finding_counts")
+    if not isinstance(raw_locales, dict) or set(raw_locales) != set(VOICE_LOCALE_PATTERNS):
+        raise ValueError(
+            f"baseline {path} must contain independent counts for "
+            f"{', '.join(sorted(VOICE_LOCALE_PATTERNS))}"
+        )
+    result: dict[str, Counter[str]] = {}
+    for locale, raw_counts in raw_locales.items():
+        if not isinstance(raw_counts, dict):
+            raise ValueError(f"baseline {path} has invalid {locale} finding counts")
+        counts: Counter[str] = Counter()
+        for identity, count in raw_counts.items():
+            if not isinstance(identity, str) or not isinstance(count, int) or count < 1:
+                raise ValueError(f"baseline {path} has an invalid {locale} finding count")
+            counts[identity] = count
+        result[locale] = counts
+    return result
+
+
+def write_baseline(
+    path: Path,
+    findings: list[VoiceFinding],
+    locale_findings: dict[str, list[VoiceFinding]] | None = None,
+) -> None:
     """Write a deterministic baseline after a human has reviewed lint output."""
     counts = Counter(finding.identity for finding in findings)
     data = {
         "schema_version": 1,
         "generated_by": "python3 scripts/lint-voice.py --write-baseline",
         "finding_counts": dict(sorted(counts.items())),
+        "locale_finding_counts": {
+            locale: dict(sorted(Counter(
+                finding.identity for finding in (locale_findings or {}).get(locale, [])
+            ).items()))
+            for locale in sorted(VOICE_LOCALE_PATTERNS)
+        },
     }
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -334,6 +416,12 @@ def main() -> int:
     for path in pages:
         all_findings.extend(lint_file(path))
 
+    locale_findings: dict[str, list[VoiceFinding]] = {}
+    for locale in sorted(VOICE_LOCALE_PATTERNS):
+        locale_findings[locale] = []
+        for path in find_locale_html_files(locale):
+            locale_findings[locale].extend(lint_locale_file(path, locale))
+
     warnings = all_findings
 
     if warnings:
@@ -343,14 +431,20 @@ def main() -> int:
     else:
         print("Voice lint — ✓ no voice warnings.")
 
+    for locale, findings in locale_findings.items():
+        print(f"Voice lint [{locale}] — {len(findings)} warning(s).")
+        for finding in findings:
+            print(f"  ! {finding.message}")
+
     if args.write_baseline:
-        write_baseline(args.write_baseline, warnings)
+        write_baseline(args.write_baseline, warnings, locale_findings)
         print(f"Wrote reviewed-baseline candidate: {args.write_baseline}")
         return 0
 
     if args.baseline:
         try:
             baseline = load_baseline(args.baseline)
+            locale_baselines = load_locale_baselines(args.baseline)
         except ValueError as error:
             print(f"ERROR: {error}", file=sys.stderr)
             return 2
@@ -361,6 +455,21 @@ def main() -> int:
                 print(f"  ✖ {finding.message}")
             return 1
         print("✓ no new voice warnings beyond reviewed baseline.")
+
+        has_new_locale_warnings = False
+        for locale, findings in locale_findings.items():
+            new_findings = find_new_warnings(findings, locale_baselines[locale])
+            if new_findings:
+                has_new_locale_warnings = True
+                print(
+                    f"ERROR: {len(new_findings)} new {locale} voice warning(s) "
+                    "beyond reviewed baseline:"
+                )
+                for finding in new_findings:
+                    print(f"  ✖ {finding.message}")
+        if has_new_locale_warnings:
+            return 1
+        print("✓ no new locale voice warnings beyond reviewed baselines.")
 
     # Without a baseline, voice lint remains advisory for editorial review.
     return 0

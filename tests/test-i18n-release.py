@@ -1,5 +1,7 @@
+import contextlib
 import importlib.util
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -28,6 +30,158 @@ REGIONAL_BUILDER_SPEC.loader.exec_module(REGIONAL_BUILDER_MODULE)
 
 
 class I18nReleaseTests(unittest.TestCase):
+    def test_advisory_review_audit_reports_missing_duplicate_and_superseded_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pilot = root / "i18n" / "pilot" / "de"
+            pilot.mkdir(parents=True)
+            state = {
+                "schema_version": "1.0",
+                "pages": {
+                    "/": {"targets": {"de": {
+                        "synced_source_sha256": "a" * 64,
+                        "target_sha256": "b" * 64,
+                    }}},
+                    "/about/": {"targets": {"de": {
+                        "synced_source_sha256": "e" * 64,
+                        "target_sha256": "f" * 64,
+                    }}},
+                },
+            }
+            (root / "i18n" / "sync-state.json").write_text(json.dumps(state), encoding="utf-8")
+            current = {
+                "route": "/", "target_path": "de/index.html",
+                "source_sha256": "a" * 64, "target_sha256": "b" * 64,
+            }
+            record_base = {
+                "language_pair": "en-US -> de-DE",
+                "review_status": "ai-reviewed",
+            }
+            (pilot / "current-review-2026-10-10.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-10", "routes": [current, current],
+            }), encoding="utf-8")
+            (pilot / "old-review-2026-10-01.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-01",
+                "routes": [{
+                    **current, "source_sha256": "c" * 64, "target_sha256": "d" * 64,
+                }],
+            }), encoding="utf-8")
+            (pilot / "about-review-2026-10-02.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-02",
+                "routes": [{
+                    "route": "/about/", "target_path": "de/about/index.html",
+                    "source_sha256": "c" * 64, "target_sha256": "d" * 64,
+                }],
+            }), encoding="utf-8")
+            config = {
+                "state_file": "i18n/sync-state.json",
+                "in_scope_routes": ["/", "/about/"],
+                "advisory_content_coverage_locales": ["de"],
+                "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+            }
+            with patch.object(MODULE, "ROOT", root):
+                report = MODULE.audit_advisory_review_evidence(config)
+
+        self.assertEqual([{"locale": "de", "route": "/about/"}], report["missing"])
+        self.assertTrue(any(item.get("entry_count") == 2 for item in report["duplicates"]))
+        self.assertEqual("old-review-2026-10-01.json", Path(
+            report["superseded"][0]["record"]
+        ).name)
+        self.assertEqual("current-review-2026-10-10.json", Path(
+            report["superseded"][0]["superseded_by"][0]
+        ).name)
+        self.assertEqual(
+            "about-review-2026-10-02.json",
+            Path(report["unmatched"][0]["record"]).name,
+        )
+
+    def test_content_coverage_names_missing_sections_blocks_and_protected_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text(
+                '<main><h2 id="intro">Introduction</h2><p>Lead.</p>'
+                '<h2 id="proof">Evidence</h2><p>Details.</p><li>Source item</li>'
+                '<a href="https://example.test/protected">Protected link</a></main>',
+                encoding="utf-8",
+            )
+            target.write_text(
+                '<main><h2 id="intro">Einleitung</h2><p>Einleitung.</p></main>',
+                encoding="utf-8",
+            )
+            with patch.object(MODULE, "ROOT", root):
+                result = MODULE.compare_content_coverage(
+                    source,
+                    target,
+                    "de",
+                    "/about/",
+                )
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(("de", "/about/"), (result["locale"], result["route"]))
+        self.assertIn(
+            ("heading", "Evidence"),
+            [(item["kind"], item.get("heading")) for item in result["omissions"]],
+        )
+        self.assertIn(
+            ("content_block", "li"),
+            [(item["kind"], item.get("block")) for item in result["omissions"]],
+        )
+        self.assertIn(
+            ("protected_link", "https://example.test/protected"),
+            [(item["kind"], item.get("href")) for item in result["omissions"]],
+        )
+
+    def test_advisory_content_gaps_are_reported_without_changing_noindex_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "about" / "index.html"
+            target = root / "de" / "about" / "index.html"
+            source.parent.mkdir(parents=True)
+            target.parent.mkdir(parents=True)
+            source.write_text(
+                '<main><h2 id="intro">Introduction</h2><p>Lead.</p>'
+                '<h2 id="proof">Evidence</h2><p>Details.</p></main>',
+                encoding="utf-8",
+            )
+            target_html = (
+                '<meta name="robots" content="noindex, follow">'
+                '<main><h2 id="intro">Einleitung</h2><p>Einleitung.</p></main>'
+            )
+            target.write_text(target_html, encoding="utf-8")
+            config = {
+                "blocking_locales": [],
+                "advisory_content_coverage_locales": ["de"],
+                "state_file": "i18n/sync-state.json",
+            }
+            report = {
+                "missing": [],
+                "stale": [],
+                "needs_baseline": [],
+                "in_sync": [{
+                    "route": "/about/",
+                    "locale": "de",
+                    "source_path": "about/index.html",
+                    "target_path": "de/about/index.html",
+                }],
+                "orphan": [],
+            }
+            with patch.object(MODULE, "ROOT", root), patch.object(
+                MODULE, "run_detector", return_value=report
+            ):
+                result = MODULE.load_results(config)
+
+            self.assertEqual([], result["policy"]["blocking_items"])
+            self.assertTrue(any(
+                item["status"] == "source_coverage_gap"
+                and item["locale"] == "de"
+                and item["route"] == "/about/"
+                for item in result["policy"]["advisory_items"]
+            ))
+            self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+
     def test_detector_hash_is_stable_across_checkout_line_endings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -287,6 +441,53 @@ class ReviewedTargetIntegrityTests(unittest.TestCase):
                 }
             ],
         }
+
+    def test_advisory_adoption_reports_source_gaps_without_changing_noindex_target(self):
+        self.config["advisory_content_coverage_locales"] = ["de"]
+        source = self.root / "index.html"
+        target = self.root / "de" / "index.html"
+        source_html = (
+            '<meta name="robots" content="noindex, follow"><main>'
+            '<h2 id="intro">Introduction</h2><p>Lead.</p>'
+            '<h2 id="evidence">Evidence</h2><p>New source content.</p>'
+            '<a href="https://example.test/protected">Protected</a></main>'
+        )
+        target_html = (
+            '<meta name="robots" content="noindex, follow"><main>'
+            '<h2 id="intro">Einleitung</h2><p>Einleitung.</p></main>'
+        )
+        source.write_text(source_html, encoding="utf-8")
+        target.write_text(target_html, encoding="utf-8")
+        self.provenance.write_text(json.dumps({
+            "language_pair": "en-US -> de-DE",
+            "review_status": "ai-reviewed",
+            "native_or_human_approval": False,
+            "routes": [{
+                "route": "/",
+                "locale": "de",
+                "target_path": "de/index.html",
+                "source_sha256": DETECTOR_MODULE.sha256_file(source),
+                "target_sha256": DETECTOR_MODULE.sha256_file(target),
+                "disposition": "retained-ai-reviewed",
+            }],
+        }), encoding="utf-8")
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(
+                0,
+                MODULE.adopt(["de"], ["/"], self.provenance, self.config),
+            )
+        result = json.loads(output.getvalue())
+        self.assertTrue(any(
+            gap["locale"] == "de"
+            and gap["route"] == "/"
+            and any(item["kind"] == "heading" for item in gap["omissions"])
+            and any(item["kind"] == "protected_link" for item in gap["omissions"])
+            for gap in result["source_coverage_gaps"]
+        ))
+        self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+        self.assertIn('content="noindex, follow"', target.read_text(encoding="utf-8"))
 
     def test_target_only_change_blocks_without_changing_source_freshness(self):
         self.target.write_text("<p>changed translation</p>", encoding="utf-8")

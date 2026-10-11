@@ -56,7 +56,12 @@ class I18nWorkflowTests(unittest.TestCase):
         self.assertLess(validation.index(command), validation.index("path: site-release"))
         self.assertIn("run: python3 tests/test-i18n-workflow.py", validation)
 
-    def run_copied_site(self, stale_locales=(), mutate_french_target=False, blocking_locales=None):
+    def run_copied_site(
+        self,
+        stale_locales=(),
+        mutate_target=None,
+        blocking_locales=None,
+    ):
         # Copy only the detector's real inputs. No source, review, or ledger writes
         # reach the checkout, and the wrapper runs without mocks.
         with tempfile.TemporaryDirectory() as directory:
@@ -84,8 +89,10 @@ class I18nWorkflowTests(unittest.TestCase):
             for locale in stale_locales:
                 state["pages"]["/about/"]["targets"][locale]["synced_source_sha256"] = "0" * 64
             ledger.write_text(json.dumps(state))
-            if mutate_french_target:
-                target = root / f"{config['target_locales']['fr']['root']}/about/index.html"
+            if mutate_target is not None:
+                locale, route = mutate_target
+                page = (route.strip("/") + "/index.html").lstrip("/")
+                target = root / f"{config['target_locales'][locale]['root']}/{page}"
                 target.write_bytes(target.read_bytes() + b"\n<!-- reviewed target drift -->\n")
             ledger_before = ledger.read_bytes()
             before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
@@ -109,15 +116,48 @@ class I18nWorkflowTests(unittest.TestCase):
                             and item["status"] == "stale"
                             for item in report["policy"]["advisory_items"]))
 
-    def test_reviewed_french_target_drift_blocks_actual_workflow_command(self):
-        code, report = self.run_copied_site(
-            mutate_french_target=True,
-            blocking_locales=("fr",),
-        )
-        self.assertEqual(1, code)
-        self.assertTrue(any(item["locale"] == "fr" and item["route"] == "/about/"
-                            and item["status"] == "target_changed"
-                            for item in report["policy"]["blocking_items"]))
+    def test_reviewed_french_target_drift_blocks_actual_workflow_command_for_every_route(self):
+        config = json.loads((ROOT / "i18n/sync.config.json").read_text())
+        for route in config["in_scope_routes"]:
+            with self.subTest(route=route):
+                code, report = self.run_copied_site(
+                    mutate_target=("fr", route),
+                    blocking_locales=("fr",),
+                )
+                self.assertEqual(1, code)
+                self.assertTrue(any(
+                    item["locale"] == "fr"
+                    and item["route"] == route
+                    for item in report["target_changed"]
+                ))
+                self.assertTrue(any(
+                    item["locale"] == "fr"
+                    and item["route"] == route
+                    and item["status"] == "target_changed"
+                    for item in report["policy"]["blocking_items"]
+                ))
+
+    def test_german_and_spanish_target_drift_remains_advisory_for_every_route(self):
+        config = json.loads((ROOT / "i18n/sync.config.json").read_text())
+        for locale in ("de", "es"):
+            for route in config["in_scope_routes"]:
+                with self.subTest(locale=locale, route=route):
+                    code, report = self.run_copied_site(
+                        mutate_target=(locale, route),
+                    )
+                    self.assertEqual(0, code)
+                    self.assertEqual([], report["policy"]["blocking_items"])
+                    self.assertTrue(any(
+                        item["locale"] == locale
+                        and item["route"] == route
+                        for item in report["target_changed"]
+                    ))
+                    self.assertTrue(any(
+                        item["locale"] == locale
+                        and item["route"] == route
+                        and item["status"] == "target_changed"
+                        for item in report["policy"]["advisory_items"]
+                    ))
 
     def test_stale_drafts_remain_advisory(self):
         code, report = self.run_copied_site(("de", "es"))

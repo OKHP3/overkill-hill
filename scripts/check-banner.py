@@ -29,6 +29,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from public_page_boundary import iter_public_html_files
+from article_release import visible_html_markup
 
 # ── Single source of truth ────────────────────────────────────────────────────
 FEATURED_ARTICLE_ROUTE = "/writings/first-diagram-is-a-liar/"
@@ -129,7 +130,10 @@ def _featured_article_release(root: str, relative_path: str):
             f"{FEATURED_ARTICLE_ROUTE}: {relative_path}: {exc}"
         )
 
-    releases = [match.lower() for match in _ARTICLE_RELEASE_RE.findall(content)]
+    visible_content = visible_html_markup(content)
+    releases = [
+        match.lower() for match in _ARTICLE_RELEASE_RE.findall(visible_content)
+    ]
     if len(releases) != 1:
         return None, (
             f"current featured article release is missing or ambiguous for "

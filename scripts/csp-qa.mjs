@@ -97,6 +97,7 @@ const CSP_DIAGNOSTIC = /content security policy|violates the following.*policy|r
 const MERMAID_RENDER_ERROR = /^\[mermaid-init\] render error/i;
 const INTENTIONAL_EXTERNAL_FAILURE = "Failed to load resource: net::ERR_FAILED";
 const EXTERNAL_SETTLE_TIMEOUT_MS = 5000;
+const EXTERNAL_LATE_RESPONSE_WINDOW_MS = 1000;
 const EXTERNAL_QUIET_WINDOW_MS = 250;
 const DEFAULT_EXTERNAL_HEALTH_BUDGET_MS = 120000;
 
@@ -195,53 +196,84 @@ const DIAGNOSTIC_CATEGORY = /^(CSP|PAGEERROR|CONSOLE|LOCAL REQUEST FAILED|LOCAL 
 
 function fixtureDiagnostics(errors) {
   const categories = new Set();
-  const evidence = [];
+  const evidence = new Set();
   for (const error of errors) {
     const text = String(error).replace(/^\s*→\s*/, "");
     const category = text.match(DIAGNOSTIC_CATEGORY)?.[1];
     if (category) categories.add(category);
-    evidence.push(text);
+    evidence.add(text);
   }
   return {
     categories: [...categories].join(", ") || "none observed",
-    evidence: evidence.join(" / ") || "No browser diagnostic was captured.",
+    evidence: [...evidence].join(" / ") || "No browser diagnostic was captured.",
   };
 }
 
 function writeFixtureSummary(reportPath) {
   let report;
+  let reportError = null;
+  let reportStatus = "available";
+  let source;
   try {
-    report = JSON.parse(readFileSync(reportPath, "utf8"));
+    source = readFileSync(reportPath, "utf8");
   } catch (error) {
-    report = {
-      mode: "csp-fixtures",
-      fixtures: [],
-      error: `Could not read focused CSP fixture report: ${error.message}`,
-    };
+    reportStatus = error.code === "ENOENT" ? "missing" : "unreadable";
+    reportError = error.code === "ENOENT"
+      ? "Focused CSP fixture report is missing; the fixture test did not create the report file."
+      : `Could not read focused CSP fixture report: ${error.message}`;
   }
 
-  const fixtures = Array.isArray(report.fixtures) ? report.fixtures : [];
+  if (reportStatus === "available" && !source.trim()) {
+    reportStatus = "empty";
+    reportError = "Focused CSP fixture report is empty (zero bytes).";
+  } else if (reportStatus === "available") {
+    try {
+      report = JSON.parse(source);
+    } catch (error) {
+      reportStatus = "malformed";
+      reportError = `Focused CSP fixture report is malformed JSON: ${error.message}`;
+    }
+  }
+
+  if (
+    reportStatus === "available" &&
+    (!report || typeof report !== "object" || Array.isArray(report) || !Array.isArray(report.fixtures))
+  ) {
+    reportStatus = "malformed";
+    reportError = "Focused CSP fixture report is malformed: expected an object with a fixtures array.";
+  } else if (reportStatus === "available" && report.fixtures.length === 0) {
+    reportStatus = "empty";
+    reportError = "Focused CSP fixture report is empty: no fixture results were recorded.";
+  }
+
+  const fixtures = reportStatus === "available" ? report.fixtures : [];
   const lines = [
     "## CSP fixture diagnostics",
     "",
     "Focused CSP fixture regressions failed. The full browser output remains in the check log.",
     "",
-    "| Fixture | Diagnostic categories | Key browser diagnostic |",
-    "| --- | --- | --- |",
+    "| Fixture | Result | Diagnostic categories | Key browser diagnostic |",
+    "| --- | --- | --- | --- |",
   ];
   if (fixtures.length) {
     for (const fixture of fixtures) {
       const diagnostics = fixtureDiagnostics(
         Array.isArray(fixture.errors) ? fixture.errors : [],
       );
+      const result = fixture.pass === true
+        ? "PASS"
+        : fixture.pass === false
+          ? "FAIL"
+          : "UNKNOWN";
       lines.push(
-        `| ${markdownCell(fixture.path)} | ${markdownCell(diagnostics.categories)} | ` +
+        `| ${markdownCell(fixture.path)} | ${result} | ` +
+        `${markdownCell(diagnostics.categories)} | ` +
         `${markdownCell(diagnostics.evidence)} |`,
       );
     }
   } else {
     lines.push(
-      `| unavailable | unknown | ${markdownCell(report.error || "No fixture results were recorded.")} |`,
+      `| unavailable | UNKNOWN | unknown | ${markdownCell(reportError || "No fixture results were recorded.")} |`,
     );
   }
   lines.push("");
@@ -251,9 +283,9 @@ function writeFixtureSummary(reportPath) {
       `Focused CSP evidence artifact: [csp-fixture-report.json](${markdownCell(artifactUrl)})`,
     );
   } else {
-    lines.push(
-      "Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.",
-    );
+    lines.push(reportStatus === "missing"
+      ? "Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain."
+      : "Focused CSP evidence artifact: unavailable; the warning-only upload returned no artifact URL. See the report diagnostic above.");
   }
   lines.push("");
 
@@ -441,15 +473,19 @@ function serialiseExternalDependency(dependency, cspEvidence) {
       const routeTimeouts = dependency.timeouts.filter(
         (timeout) => timeout.route === route,
       );
+      const routeResponses = dependency.responses.filter(
+        (response) => response.route === route,
+      );
       return {
         route,
         state: classifyExternalDependency({
           ...dependency,
+          responses: routeResponses,
           failures: routeFailures,
           cspEvidence: routeCspEvidence,
         }),
         cspBlocked: routeCspEvidence.length > 0,
-        responses: dependency.responses,
+        responses: routeResponses,
         failures: routeFailures,
         timeouts: routeTimeouts,
         cspEvidence: routeCspEvidence,
@@ -474,18 +510,29 @@ function serialiseExternalDependency(dependency, cspEvidence) {
   };
 }
 
-function groupFailureRecords(failures, publicRoutes = null) {
+function groupFailureRecords(
+  failures,
+  publicRoutes = null,
+  { dependencyUrl = "unknown dependency", location = "failures", parentRoute } = {},
+) {
   const grouped = new Map();
-  for (const failure of failures) {
+  for (const [failureIndex, failure] of failures.entries()) {
     const route = failure.route || "";
-    const errorText = failure.errorText || "unknown failure";
+    const errorText = failure.errorText;
+    const parentRouteContext = parentRoute === undefined
+      ? ""
+      : `; route outcome route: ${String(parentRoute)}`;
+    const actualRouteContext = route ? `; reported route: ${route}` : "";
+    const context =
+      `dependency ${dependencyUrl} at ${location}[${failureIndex}]` +
+      `${parentRouteContext}${actualRouteContext}`;
     if (publicRoutes && !publicRoutes.has(route)) {
       throw new Error(
-        `External failure route must match a checked public route: ${route || "(missing)"}`,
+        `${context}: failure.route must match a checked public route: ${route || "(missing)"}`,
       );
     }
     if (typeof errorText !== "string" || !errorText.trim()) {
-      throw new Error("External failure must include non-empty error text");
+      throw new Error(`${context}: failure.errorText must be non-empty`);
     }
     const key = JSON.stringify([route, errorText]);
     const existing = grouped.get(key);
@@ -591,6 +638,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
     if (dependency) {
       pendingExternalRequests.delete(request);
       dependency.responses.push({
+        route: path,
         status: response.status(),
         statusText: response.statusText(),
       });
@@ -667,6 +715,14 @@ async function checkExternalRoute(browser, path, overallDeadline) {
         url: dependency.url,
       });
     }
+    if (!settleResult.budgetExceeded && pendingExternalRequests.size) {
+      const lateResponseWaitMs = Math.min(
+        EXTERNAL_LATE_RESPONSE_WINDOW_MS,
+        Math.max(0, overallDeadline - Date.now()),
+      );
+      if (lateResponseWaitMs > 0) await page.waitForTimeout(lateResponseWaitMs);
+      budgetExceeded ||= Date.now() >= overallDeadline;
+    }
   }
   const cspEvidence = await page.evaluate(() => (
     Array.isArray(window.__cspViolationEvidence)
@@ -695,6 +751,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
     if (dependency) dependency.routes.add(path);
   }
   await page.close();
+  budgetExceeded ||= Date.now() >= overallDeadline;
   return {
     path,
     budgetExceeded,
@@ -740,8 +797,11 @@ function mergeExternalDependencies(results) {
       existing.state = classifyExternalDependency(existing);
     }
   }
-  for (const dependency of merged.values()) {
-    dependency.failures = groupFailureRecords(dependency.failures, publicRoutes);
+  for (const [dependencyIndex, dependency] of [...merged.values()].entries()) {
+    dependency.failures = groupFailureRecords(dependency.failures, publicRoutes, {
+      dependencyUrl: dependency.url,
+      location: `dependencies[${dependencyIndex}].failures`,
+    });
     const routeOutcomes = new Map();
     for (const outcome of dependency.routeOutcomes) {
       const existing = routeOutcomes.get(outcome.route);
@@ -766,9 +826,15 @@ function mergeExternalDependencies(results) {
       });
     }
     dependency.routeOutcomes = [...routeOutcomes.values()]
-      .map((outcome) => ({
+      .map((outcome, routeOutcomeIndex) => ({
         ...outcome,
-        failures: groupFailureRecords(outcome.failures, publicRoutes),
+        failures: groupFailureRecords(outcome.failures, publicRoutes, {
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            ".failures",
+          parentRoute: outcome.route,
+        }),
         timeouts: [...new Map(
           outcome.timeouts.map((timeout) => [
             JSON.stringify([timeout.route, timeout.url]),
@@ -785,6 +851,14 @@ function mergeExternalDependencies(results) {
     ).values()];
   }
   return [...merged.values()].sort((left, right) => left.url.localeCompare(right.url));
+}
+
+function writeExternalHealthReport(report) {
+  if (!reportArg) return;
+  const reportPath = reportArg.slice("--report=".length);
+  if (!reportPath) throw new Error("--report must contain a file path");
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Report: ${reportPath}`);
 }
 
 async function runExternalHealth() {
@@ -807,7 +881,75 @@ async function runExternalHealth() {
     `per-route settle limit: ${EXTERNAL_SETTLE_TIMEOUT_MS}ms.\n`,
   );
 
-  const browser = await externalHealthBrowserType.launch({ headless: true });
+  const browserStartupTimeoutMs = Math.max(1, overallDeadline - Date.now());
+  let browser;
+  try {
+    browser = await externalHealthBrowserType.launch({
+      headless: true,
+      timeout: browserStartupTimeoutMs,
+    });
+  } catch (error) {
+    const startupTimedOut =
+      Date.now() >= overallDeadline ||
+      error.name === "TimeoutError" ||
+      /timed?\s*out|timeout/i.test(error.message);
+    const elapsedMs = Date.now() - startedAt;
+    const browserStartupFailure = {
+      phase: "browser-startup",
+      kind: startupTimedOut ? "timeout" : "launch-error",
+      timeoutMs: browserStartupTimeoutMs,
+      message: error.message.split("\n")[0],
+    };
+    const timeBudget = {
+      limitMs: externalHealthBudgetMs,
+      elapsedMs,
+      exceeded: startupTimedOut,
+      routesCutShort: [],
+      routesSkipped: startupTimedOut ? PUBLIC_PATHS : [],
+    };
+    const report = {
+      version: 1,
+      mode: "external-health",
+      baseUrl,
+      routes: PUBLIC_PATHS,
+      dependencies: [],
+      externalOutages: [],
+      cspDiagnostics: [],
+      cspEvidence: [],
+      timeouts: [],
+      localFailures: [],
+      browserStartupFailure,
+      timeBudget,
+      summary: {
+        routes: 0,
+        dependencies: 0,
+        available: 0,
+        externalOutages: 0,
+        failureEvents: 0,
+        cspDiagnostics: 0,
+        cspEvidence: 0,
+        timeouts: 0,
+        localFailures: 0,
+        budgetExceeded: startupTimedOut,
+        routesCutShortByBudget: 0,
+        routesSkippedByBudget: timeBudget.routesSkipped.length,
+      },
+      status: startupTimedOut ? "TIME_BUDGET_EXCEEDED" : "BROWSER_START_FAILURE",
+    };
+
+    console.error(
+      `${startupTimedOut ? "BROWSER START TIMEOUT" : "BROWSER START FAILURE"}: ` +
+      `${browserStartupFailure.message}`,
+    );
+    if (startupTimedOut) {
+      console.error(
+        `EXTERNAL HEALTH TIME BUDGET: ${externalHealthBudgetMs}ms overall limit reached during browser startup.`,
+      );
+    }
+    writeExternalHealthReport(report);
+    process.exitCode = 1;
+    return;
+  }
   const results = [];
   const routesCutShortByBudget = [];
   const routesSkippedByBudget = [];
@@ -840,7 +982,7 @@ async function runExternalHealth() {
   const timeBudget = {
     limitMs: externalHealthBudgetMs,
     elapsedMs: Date.now() - startedAt,
-    exceeded: routesCutShortByBudget.length > 0 || routesSkippedByBudget.length > 0,
+    exceeded: Date.now() >= overallDeadline || routesCutShortByBudget.length > 0 || routesSkippedByBudget.length > 0,
     routesCutShort: routesCutShortByBudget,
     routesSkipped: routesSkippedByBudget,
   };
@@ -916,7 +1058,28 @@ async function runExternalHealth() {
       })
       .filter(Boolean);
     const diagnostic = failureReasons.length ? `: ${failureReasons.join(", ")}` : "";
-    console.log(`  EXTERNAL OUTAGE: ${dependency.url} (${dependency.state})${diagnostic}`);
+    const httpErrorRoutes = [...new Set(
+      (dependency.routeOutcomes || [])
+        .filter(({ responses = [] }) => responses.some(({ status }) => status >= 400))
+        .map(({ route }) => route)
+        .filter(Boolean),
+    )].sort();
+    const httpErrorStatuses = [...new Set(
+      (dependency.responses || [])
+        .map(({ status }) => status)
+        .filter((status) => Number.isInteger(status) && status >= 400),
+    )].sort((left, right) => left - right);
+    const httpErrorContext = httpErrorRoutes.length
+      ? `; HTTP error on route(s): ${httpErrorRoutes.join(", ")}`
+      : "";
+    const httpStatusContext = httpErrorStatuses.length
+      ? `; HTTP ${httpErrorStatuses.length === 1 ? "status" : "statuses"}: ` +
+        httpErrorStatuses.join(", ")
+      : "";
+    console.log(
+      `  EXTERNAL OUTAGE: ${dependency.url} (${dependency.state})` +
+      `${diagnostic}${httpErrorContext}${httpStatusContext}`,
+    );
   });
   timeouts.forEach(({ route, url }) => {
     console.log(`  EXTERNAL TIMEOUT: ${route} ${url}`);
@@ -939,12 +1102,7 @@ async function runExternalHealth() {
     console.log("  Local route failures were observed during the availability check.");
   }
 
-  if (reportArg) {
-    const reportPath = reportArg.slice("--report=".length);
-    if (!reportPath) throw new Error("--report must contain a file path");
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
-    console.log(`Report: ${reportPath}`);
-  }
+  writeExternalHealthReport(report);
 
   if (
     externalOutages.length ||

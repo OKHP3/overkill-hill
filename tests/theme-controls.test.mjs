@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { dirname, extname, join, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
@@ -16,14 +17,29 @@ const appScript = await readFile(join(repositoryRoot, "assets", "js", "app.js"),
 const brandThemeContract = JSON.parse(
   await readFile(join(repositoryRoot, "config", "brand-theme-contract.json"), "utf8"),
 );
+const foundationSiteContract = JSON.parse(
+  await readFile(join(repositoryRoot, "config", "theme-control-sites.json"), "utf8"),
+).sites;
 const execFileAsync = promisify(execFile);
 
 const BRAND_EXPECTATIONS = brandThemeContract.brands;
+assert.ok(Array.isArray(foundationSiteContract), "shared foundation site contract must be an array");
+assert.equal(foundationSiteContract.length, 3, "shared foundation contract must contain exactly three reviewed sites");
+const FOUNDATION_SITE_NAMES = foundationSiteContract.map(({ name }) => name);
+assert.equal(
+  new Set(FOUNDATION_SITE_NAMES).size,
+  foundationSiteContract.length,
+  "shared foundation contract must not contain duplicate site names",
+);
 
 let browser;
 
 before(async () => {
-  browser = await chromium.launch({ headless: true });
+  const launchOptions = { headless: true };
+  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  }
+  browser = await chromium.launch(launchOptions);
 });
 
 after(async () => {
@@ -288,6 +304,177 @@ test("browser theme constants are generated from the reviewed contract", async (
   );
 });
 
+function brandThemeContractDrift(site) {
+  const label = `${site.name} revision ${site.revision}`;
+  const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
+  const endMarker = "// END GENERATED BRAND THEME CONFIG.";
+  const start = site.script.indexOf(beginMarker);
+  const end = site.script.indexOf(endMarker, start);
+  if (start < 0 || end < 0) {
+    return [`${label}: generated brand theme block is missing or incomplete`];
+  }
+
+  const block = site.script.slice(start, end);
+  const serialized = block.match(
+    /const BRAND_THEME_CONFIG = Object\.freeze\(([\s\S]*?)\);/,
+  )?.[1];
+  if (!serialized) {
+    return [`${label}: generated BRAND_THEME_CONFIG is missing or malformed`];
+  }
+
+  let actualBrands;
+  try {
+    actualBrands = JSON.parse(serialized);
+  } catch (error) {
+    return [`${label}: generated BRAND_THEME_CONFIG is not valid JSON (${error.message})`];
+  }
+  if (!actualBrands || typeof actualBrands !== "object" || Array.isArray(actualBrands)) {
+    return [`${label}: generated BRAND_THEME_CONFIG is not an object`];
+  }
+
+  const drift = [];
+  for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+    const actual = actualBrands[brandId];
+    if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
+      drift.push(`${label}: ${brandId} is missing or is not an object; expected ${JSON.stringify(expected)}`);
+      continue;
+    }
+    for (const key of new Set([...Object.keys(expected), ...Object.keys(actual)])) {
+      if (actual[key] !== expected[key]) {
+        const actualValue = Object.hasOwn(actual, key) ? JSON.stringify(actual[key]) : "<missing>";
+        const expectedValue = Object.hasOwn(expected, key) ? JSON.stringify(expected[key]) : "<not in contract>";
+        drift.push(`${label}: ${brandId}.${key} is ${actualValue}; expected ${expectedValue}`);
+      }
+    }
+  }
+  for (const brandId of Object.keys(actualBrands)) {
+    if (!Object.hasOwn(BRAND_EXPECTATIONS, brandId)) {
+      drift.push(`${label}: unexpected generated brand ${brandId}=${JSON.stringify(actualBrands[brandId])}`);
+    }
+  }
+  return drift;
+}
+
+test("brand runtime audit names site, revision, and changed contract values", () => {
+  assert.deepEqual(
+    brandThemeContractDrift({
+      name: "OKH",
+      revision: "a".repeat(40),
+      script: appScript,
+    }),
+    [],
+  );
+
+  const glee = BRAND_EXPECTATIONS.glee;
+  const outdatedScript = appScript.replace(
+    `"light": "${glee.light}"`,
+    '"light": "#000000"',
+  );
+  const drift = brandThemeContractDrift({
+    name: "Glee",
+    revision: "b".repeat(40),
+    script: outdatedScript,
+  });
+  assert.equal(drift.length, 1);
+  assert.match(drift[0], /Glee revision b{40}: glee\.light is "#000000"; expected "#d35b2d"/);
+});
+
+test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "brand-theme-release-"));
+  const source = join(temporary, "source");
+  const output = join(temporary, "release");
+
+  async function writeSource(relativePath, contents) {
+    const target = join(source, relativePath);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, contents);
+  }
+
+  try {
+    await writeSource(
+      "site-src/pages.json",
+      JSON.stringify({ pages: [{ path: "index.html" }] }),
+    );
+    await writeSource(
+      "sitemap.xml",
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
+    );
+    await writeSource(
+      "config/murderbird-source-archive.json",
+      JSON.stringify({
+        schema: 1,
+        excludedLibraryPngs: ["assets/img/library/archive.png"],
+      }),
+    );
+    for (const [path, contents] of Object.entries({
+      ".nojekyll": "",
+      "CNAME": "overkillhill.com\n",
+      "feed.xml": "<feed />\n",
+      "favicon.ico": "",
+      "favicon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" />\n",
+      "humans.txt": "Fixture\n",
+      "llms.txt": "Fixture\n",
+      "robots.txt": "User-agent: *\n",
+      "site.webmanifest": "{}\n",
+      "assets/data/search-index.json": "{}\n",
+    })) {
+      await writeSource(path, contents);
+    }
+    await writeSource("index.html", await readFile(join(repositoryRoot, "index.html")));
+    await mkdir(join(source, "assets", "js"), { recursive: true });
+    await copyFile(
+      join(repositoryRoot, "assets", "js", "app.js"),
+      join(source, "assets", "js", "app.js"),
+    );
+
+    await execFileAsync(
+      "python3",
+      [
+        "scripts/build-release.py",
+        "--source",
+        source,
+        "--output",
+        output,
+        "--commit",
+        "a".repeat(40),
+      ],
+      { cwd: repositoryRoot },
+    );
+
+    const packagedApp = await readFile(join(output, "assets", "js", "app.js"), "utf8");
+    const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
+    const endMarker = "// END GENERATED BRAND THEME CONFIG.";
+    const start = packagedApp.indexOf(beginMarker);
+    const end = packagedApp.indexOf(endMarker, start);
+    assert.notEqual(start, -1, "packaged app.js has the generated theme block start marker");
+    assert.notEqual(end, -1, "packaged app.js has the generated theme block end marker");
+    const block = packagedApp.slice(start, end);
+    const serialized = block.match(
+      /const BRAND_THEME_CONFIG = Object\.freeze\(([\s\S]*?)\);/,
+    )?.[1];
+    assert.ok(serialized, "packaged app.js contains a parseable generated brand config");
+    const packagedBrands = JSON.parse(serialized);
+    for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+      assert.equal(packagedBrands[brandId]?.storageKey, expected.storageKey, `${brandId} storage key`);
+      assert.equal(packagedBrands[brandId]?.light, expected.light, `${brandId} light color`);
+      assert.equal(packagedBrands[brandId]?.dark, expected.dark, `${brandId} dark color`);
+    }
+
+    const packagedPage = await readFile(join(output, "index.html"), "utf8");
+    const appReference = packagedPage.match(
+      /src=["']\/assets\/js\/app\.js\?v=([a-f0-9]{8})["']/,
+    );
+    assert.ok(appReference, "a packaged published page references fingerprinted app.js");
+    const expectedFingerprint = createHash("sha256")
+      .update(packagedApp.replace(/\r\n/g, "\n"))
+      .digest("hex")
+      .slice(0, 8);
+    assert.equal(appReference[1], expectedFingerprint, "page fingerprint matches packaged app.js bytes");
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("all three theme controls survive disabled storage", async () => {
   const fixtures = [
     { name: "OKH", bodyClass: "", selector: ".theme-toggle" },
@@ -348,11 +535,11 @@ for (const scenario of GENERATED_HEAD_SCENARIOS) {
   });
 }
 
-const DEFAULT_SITE_ROOTS = [
-  { name: "OKH", expectedRoot: ".", root: join(repositoryRoot, "..", "overkill-hill"), bodyClass: "", selector: ".theme-toggle" },
-  { name: "Glee", expectedRoot: ".ci/theme-sites/glee-fullytools", root: join(repositoryRoot, "..", "glee-fullytools"), bodyClass: "glee-main", selector: ".glee-color-toggle" },
-  { name: "AskJamie", expectedRoot: ".ci/theme-sites/askjamie", root: join(repositoryRoot, "..", "askjamie"), bodyClass: "askjamie-main", selector: ".glee-color-toggle" },
-];
+const DEFAULT_SITE_ROOTS = foundationSiteContract.map((site) => ({
+  ...site,
+  expectedRoot: site.checkoutPath,
+  root: resolve(repositoryRoot, site.localPath),
+}));
 
 function configuredSiteInputs() {
   if (process.env.THEME_CONTROL_SITES) {
@@ -364,7 +551,7 @@ function configuredSiteInputs() {
         const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
         throw new Error(
           `duplicate THEME_CONTROL_SITES site ${site.name}; ` +
-          `expected checkout path ${expected?.expectedRoot || site.root || "<unknown>"}`,
+          `expected checkout path ${expected?.checkoutPath || site.root || "<unknown>"}`,
         );
       }
       names.add(site.name);
@@ -377,9 +564,15 @@ function configuredSiteInputs() {
     assert.deepEqual(
       [...names].sort(),
       DEFAULT_SITE_ROOTS.map(({ name }) => name).sort(),
-      "THEME_CONTROL_SITES must contain exactly OKH, Glee, and AskJamie",
+      `THEME_CONTROL_SITES must contain exactly ${FOUNDATION_SITE_NAMES.join(", ")}`,
     );
     for (const site of configured) {
+      const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
+      assert.equal(
+        site.root,
+        expected?.checkoutPath,
+        `${site.name || "configured site"} expected checkout path ${expected?.checkoutPath || "<unknown>"}`,
+      );
       assert.match(
         site.revision || "",
         /^[0-9a-f]{40}$/,
@@ -399,6 +592,50 @@ function configuredSiteInputs() {
   }
   return available;
 }
+
+test("configured foundation paths match the shared site contract", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract.map((site) => ({
+    name: site.name,
+    root: site.checkoutPath,
+    revision: "a".repeat(40),
+  }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify(configured);
+    assert.equal(configuredSiteInputs().length, 3);
+
+    const drifted = configured.map((site) => (
+      site.name === "Glee" ? { ...site, root: ".ci/theme-sites/wrong-glee-path" } : site
+    ));
+    process.env.THEME_CONTROL_SITES = JSON.stringify(drifted);
+    assert.throws(
+      () => configuredSiteInputs(),
+      /Glee expected checkout path \.ci\/theme-sites\/glee-fullytools/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
+
+test("duplicate configured sites retain the expected checkout-path diagnostic", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract.map((site) => ({
+    name: site.name,
+    root: site.checkoutPath,
+    revision: "a".repeat(40),
+  }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify([...configured, { ...configured[1] }]);
+    assert.throws(
+      () => configuredSiteInputs(),
+      /duplicate THEME_CONTROL_SITES site Glee; expected checkout path \.ci\/theme-sites\/glee-fullytools/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
 
 function directoryExists(path) {
   return existsSync(join(path, "index.html")) &&
@@ -476,9 +713,13 @@ test("configured sites keep foundation bytes and run against actual markup hooks
   );
   const sites = await Promise.all(inputs.map(loadConfiguredSite));
   const byName = new Map(sites.map((site) => [site.name, site]));
-  for (const expectedName of ["OKH", "Glee", "AskJamie"]) {
+  for (const expectedName of FOUNDATION_SITE_NAMES) {
     assert.ok(byName.has(expectedName), `missing configured site ${expectedName}`);
   }
+
+  // Accepted historical pins predate the generated runtime marker. Their
+  // byte equality and browser behavior remain checked below; the current
+  // generated runtime contract is checked independently above.
 
   for (const file of ["cssBuffer", "scriptBuffer"]) {
     const baseline = sites[0][file];

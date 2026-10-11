@@ -57,6 +57,7 @@ jobs:
           python3 tests/test-murderbird-review-boundary.py
           python3 tests/test-actions-summary.py
           python3 tests/test-ci-concurrency.py
+          python3 tests/test-foundation-pr-freshness.py
           python3 tests/test_verify_live_edge.py
           python3 tests/test-sync-foundation-files.py
           python3 tests/test-i18n-release.py

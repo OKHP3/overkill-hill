@@ -19,6 +19,7 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `murderbird-integration-qa.mjs` | active | Six-homepage and five-scene local browser checks; translation fallback receipt |
 | `accessibility-qa.mjs` | active | Accessibility QA (`npm run test:*`) |
 | `audit-site.py` | active | Site audit |
+| `build-release.py` | active | Build and verify allowlisted GitHub Pages release bundles |
 | `build-search-index.py` | active | Rebuild the generated search index |
 | `build-site.py` | active | Regenerate HTML from `site-src/` sources |
 | `generate-atom-feed.py` | active | Generate and freshness-check deterministic Atom XML from published English Article sources; packaged and SHA-bound in the GitHub Pages release |
@@ -41,6 +42,7 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `build-etch-webp.py` | active | Lossless ETCH-AI-SKETCH WebP derivative with exact RGBA validation; retains original PNG |
 | `check-etch-parity.mjs` | active | Phone/desktop light/dark image geometry and pixel comparison against PNG fallback; loopback preview required |
 | `post-merge.sh` | active | Post-merge rebuild and validation hook |
+| `project-status.py` | active | Validate project-status records against authored project-page inventories |
 | `responsive-qa.mjs` | active | Responsive QA entry point |
 | `screen-reader-tree-audit.mjs` | active | Screen-reader accessibility tree audit (`npm run test:*`) |
 | `sync-foundation-files.py` | active | Read-only audit/verification and explicit-revision sync of theme.css/app.js/mermaid-init.js across the three sibling repos |
@@ -48,6 +50,29 @@ follows the same convention as `askjamie/scripts/README.md`.
 | `validate-site.py` | active | Structural site validation |
 | `verify-live-edge.py` | active | Live-edge deployment verification |
 | `write-actions-summary.py` | active | Compact Actions summaries from existing live-edge and external-runtime JSON; first-party failures remain distinct |
+
+### Active HTML scanner registry
+
+`public_page_boundary.HTML_SCANNER_REGISTRY` is the executable inventory of
+active scripts that discover HTML pages or source-page inputs. The contract
+test detects new top-level scanner patterns, requires each scanner to appear in
+the registry, and checks that the README mirrors the registry. Scripts under
+`scripts/archive/` are historical and intentionally excluded.
+
+| Script | Policy | Scope |
+| --- | --- | --- |
+| `audit-site.py` | shared | Published HTML pages |
+| `build-release.py` | shared | Published-page allowlist and release inputs |
+| `build-search-index.py` | shared | Published HTML pages |
+| `build-site.py` | shared | Tracked pages filtered by the shared boundary |
+| `cache-bust.py` | shared + maintained-source-inputs | Public pages plus declared maintained source fragments; exact exception is tested |
+| `check-banner.py` | shared + source-banner-partial | Public pages plus its single authoring partial; exact exception is tested |
+| `check-links.py` | shared | Published HTML pages |
+| `csp.py` | shared | Tracked pages filtered by the shared boundary |
+| `lint-voice.py` | shared | Published HTML pages |
+| `project-status.py` | exception: source-project-detail-inventory | Authored project-detail source pages; covered by `tests/test-project-status.py` |
+| `strip-google-fonts-links.py` | shared + declared-source-inputs | Public pages plus maintained source fragments; exact exception is tested |
+| `validate-site.py` | shared | Published HTML pages |
 
 ### Live-edge archive coverage
 
@@ -57,6 +82,15 @@ the registry contract, report shape, and renderer compatibility; that fixture-on
 compatibility does not establish actual retained archive coverage. Whenever a
 registered source is present, the test resolves both paths inside their permitted
 directories and requires the source bytes to match the tracked fixture exactly.
+
+The summary writer supports one documented legacy live-edge shape for archived
+reports: the top-level object contains only `checks`, and each check provides
+`check`, `status` (`PASS`, `FAIL`, `WARN`, or `BLOCKED`), and `evidence`. It labels
+these summaries `LEGACY` and reports release SHA and time as unavailable rather
+than inventing current metadata. Other legacy envelopes and status aliases are
+rejected with migration guidance. `verify-live-edge.py` validates only its current
+full report envelope; use the summary writer to read the supported old shape, or
+rerun the verifier when current evidence is needed.
 
 For an operator audit that requires every registered source to be present, set
 the repository Actions variable `OKHP3_STRICT_LIVE_EDGE_ARCHIVE_AUDIT` to `1`.
@@ -133,18 +167,18 @@ failure prevents every commit and leaves the written paths reported for manual,
 reviewed recovery. `--no-hooks` is an explicit exceptional mode, not a default.
 
 The browser-level theme synchronization check is opt-in because sibling
-checkouts are not guaranteed to be mounted in every workspace. It reads each
-configured checkout's actual `index.html`, `assets/css/theme.css`, and
-`assets/js/app.js`, compares the foundation bytes, and reports the site and
-revision for every drift:
+checkouts are not guaranteed to be mounted in every workspace. CI retains the
+accepted full-SHA foundation pins in `validate.yml`. The historical foundation
+audit remains unchanged evidence. Optional release-record support requires a
+separately reviewed current record before activation; it does not establish
+approval for new source or sibling revisions. The browser check reads each configured
+checkout's actual `index.html`, `assets/css/theme.css`, and `assets/js/app.js`,
+compares the foundation bytes, and reports the site and revision for every
+drift:
 
-```bash
-THEME_CONTROL_SITES='[
-  {"name":"OKH","root":"../overkill-hill","revision":"0ee6bc875a183ca2e065448d01fe97da62fc1ff7"},
-  {"name":"Glee","root":"../glee-fullytools","revision":"f5689fe4852b72e5d584db9d8f87cac9121b87c4"},
-  {"name":"AskJamie","root":"../askjamie","revision":"e800d4aebf0dc2543c5ced295ec78d10ba192473"}
-]' npm run test:theme-controls
-```
+For local cross-site mode, populate `THEME_CONTROL_SITES` with the three
+accepted workflow revisions and paths matching `theme-control-sites.json`. The default browser fixtures remain available when sibling
+repositories are absent.
 
 Each entry must include a reviewed full commit SHA as `revision` when the
 cross-site mode is enabled. The test reads all three files from that immutable
@@ -176,6 +210,11 @@ pin, compares it with the approved source revision, and exits nonzero on drift.
 Its JSON report includes the site, pinned revision, asset, expected fingerprint,
 and actual fingerprint for every mismatch. `--verify` cannot be combined with
 `--apply` or `--commit`, so it cannot rewrite sibling repositories.
+
+`--report-file PATH` writes the same verification JSON to a file and stdout.
+The CI validation workflow retains that file as a run- and attempt-specific
+artifact even when verification fails; this does not change the verifier's
+read-only behavior toward the checked-out sites.
 
 ### Universe map integration
 

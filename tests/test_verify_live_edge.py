@@ -57,7 +57,10 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         manifest_content_type: str | None = "application/json",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
+        asset_fingerprints: dict[str, str] | None = None,
         include_asset_fingerprint: bool = True,
+        asset_query_before_fingerprint: str | None = None,
+        asset_query_after_fingerprint: str | None = None,
         asset_kind: str = "css",
         asset_kinds: tuple[str, ...] | None = None,
         stale_asset_kind: str | None = None,
@@ -196,6 +199,19 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             raise ValueError("CSS fixture dependencies require the css-fixture asset")
         if stale_asset_kind is not None and stale_asset_kind not in all_kinds:
             raise ValueError(f"stale asset kind is not rendered: {stale_asset_kind}")
+        asset_fingerprints = asset_fingerprints or {}
+        if any(kind not in all_kinds for kind in asset_fingerprints):
+            raise ValueError("fingerprint override is for an unselected asset kind")
+        if asset_fingerprint is not None and asset_fingerprints:
+            raise ValueError(
+                "use either the shared asset_fingerprint or per-kind "
+                "asset_fingerprints, not both"
+            )
+        if asset_fingerprint is not None and len(all_kinds) > 1:
+            raise ValueError(
+                "asset_fingerprint cannot be shared across multiple rendered "
+                "assets; use asset_fingerprints by kind"
+            )
         if stale_asset_kind is not None and asset_body is None:
             raise ValueError("stale_asset_kind requires asset_body")
         if asset_body is not None and len(all_kinds) > 1 and stale_asset_kind is None:
@@ -221,8 +237,16 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             )
             if asset_bytes is None:
                 asset_bytes = verify_live_edge.canonical_text_bytes(ROOT / asset_path.lstrip("/"))
-            asset_hash = asset_fingerprint or hashlib.sha256(asset_bytes).hexdigest()[:8]
-            asset_query = f"?v={asset_hash}" if include_asset_fingerprint else ""
+            fingerprint_override = asset_fingerprints.get(kind, asset_fingerprint)
+            asset_hash = fingerprint_override or hashlib.sha256(asset_bytes).hexdigest()[:8]
+            query_parts = []
+            if asset_query_before_fingerprint:
+                query_parts.append(asset_query_before_fingerprint)
+            if include_asset_fingerprint:
+                query_parts.append(f"v={asset_hash}")
+            if asset_query_after_fingerprint:
+                query_parts.append(asset_query_after_fingerprint)
+            asset_query = f"?{'&'.join(query_parts)}" if query_parts else ""
             return {
                 "kind": kind,
                 "details": asset_details,
@@ -340,16 +364,6 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "headers": module_headers,
                 "body": module_source,
             }
-        for response_url, response_body in javascript_response_overrides.items():
-            module_path = verify_live_edge.urllib.parse.urlsplit(response_url).path
-            if module_path not in responses:
-                raise ValueError(
-                    f"JavaScript response override has no source module: {response_url}"
-                )
-            overridden = dict(responses[module_path])
-            overridden["body"] = response_body
-            responses[response_url] = overridden
-
         # The fixture serves the real canonical theme CSS for fingerprint tests.
         # Include its self-hosted font dependencies in the synthetic response set.
         # Explicit fixture responses still control negative MIME/status cases.
@@ -375,6 +389,16 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                         "body": module_file.read_bytes(),
                     },
                 )
+
+        for response_url, response_body in javascript_response_overrides.items():
+            module_path = verify_live_edge.urllib.parse.urlsplit(response_url).path
+            if module_path not in responses:
+                raise ValueError(
+                    f"JavaScript response override has no source module: {response_url}"
+                )
+            overridden = dict(responses[module_path])
+            overridden["body"] = response_body
+            responses[response_url] = overridden
 
         request_counts: dict[str, int] = {}
         guarded_redirect_paths: set[str] = set()
@@ -911,6 +935,28 @@ import(bareSpecifier);
         self.assertEqual(stale_check["status"], "FAIL")
         self.assertIn("!= live", stale_check["evidence"])
 
+    def test_real_mermaid_vendor_dependency_bad_bytes_fail_while_pages_cache_is_blocked(self) -> None:
+        vendor_path = "/assets/vendor/mermaid/mermaid.esm.min.mjs"
+        vendor_bytes = verify_live_edge.canonical_text_bytes(
+            ROOT / vendor_path.lstrip("/")
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+            javascript_response_overrides={
+                vendor_path: vendor_bytes + b"\n/* stale vendor response */\n"
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        vendor_check = checks[f"asset {vendor_path}"]
+        self.assertEqual(vendor_check["status"], "FAIL")
+        self.assertIn("differs from local", vendor_check["evidence"])
+        self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+        self.assertEqual(self.last_fixture_requests[vendor_path], 1)
+
     def test_imported_module_with_wrong_mime_fails_explicitly(self) -> None:
         modules = {
             "/assets/js/fixture-entry.mjs": b'import "./wrong-type.mjs";\n',
@@ -950,6 +996,37 @@ import(bareSpecifier);
                 css_asset_kinds=("image", "font"),
                 asset_body=b"stale dependency asset",
             )
+
+    def test_shared_asset_fingerprint_override_is_rejected_for_mixed_assets(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "asset_fingerprint cannot be shared across multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                asset_fingerprint="00000000",
+            )
+
+    def test_mixed_asset_fingerprint_override_targets_only_selected_kind(self) -> None:
+        local_css = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        local_css_fingerprint = hashlib.sha256(local_css).hexdigest()[:8]
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js"),
+            asset_fingerprints={"js": "00000000"},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "FAIL")
+        self.assertIn("!= local", checks["asset /assets/js/app.js"]["evidence"])
+        self.assertIn(
+            f"/assets/css/theme.css?v={local_css_fingerprint}",
+            self.last_fixture_requests,
+        )
+        self.assertIn("/assets/js/app.js?v=00000000", self.last_fixture_requests)
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_stale_asset_selection_must_match_a_rendered_asset(self) -> None:
         with self.assertRaisesRegex(
@@ -1073,9 +1150,47 @@ import(bareSpecifier);
         self.assertIn("!= local", asset_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_unrelated_query_options_before_and_after_asset_fingerprint(self) -> None:
+        for query_position, fixture_options in (
+            ("before", {"asset_query_before_fingerprint": "mode=dark"}),
+            ("after", {"asset_query_after_fingerprint": "theme=compact"}),
+        ):
+            with self.subTest(query_position=query_position):
+                return_code, report = self.run_live_edge_fixture(**fixture_options)
+                self.assertEqual(return_code, 0)
+                self.assertEqual(report["summary"]["failures"], 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/css/theme.css"]
+                self.assertEqual(asset_check["status"], "BLOCKED")
+                self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_query_option_does_not_hide_local_or_live_fingerprint_mismatch(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_fingerprint="00000000",
+            asset_query_after_fingerprint="mode=dark",
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "FAIL")
+        self.assertIn("!= local", checks["asset /assets/css/theme.css"]["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+        local_css = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        return_code, report = self.run_live_edge_fixture(
+            asset_body=local_css + b"\n/* changed live fixture */\n",
+            asset_query_before_fingerprint="mode=dark",
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "FAIL")
+        self.assertIn("!= live", checks["asset /assets/css/theme.css"]["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_missing_asset_fingerprint_fails_despite_pages_limitations(self) -> None:
         return_code, report = self.run_live_edge_fixture(
-            include_asset_fingerprint=False
+            include_asset_fingerprint=False,
+            asset_query_after_fingerprint="mode=dark",
         )
 
         self.assertEqual(return_code, 1)
@@ -1211,6 +1326,40 @@ import(bareSpecifier);
         )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_healthy_mixed_css_javascript_and_module_passes(self) -> None:
+        asset_paths = (
+            "/assets/css/theme.css",
+            "/assets/js/app.js",
+            "/assets/js/mermaid-init.js",
+        )
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js", "module"),
+        )
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertEqual(report["summary"]["failures"], 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for path in asset_paths:
+            local_bytes = verify_live_edge.canonical_text_bytes(
+                ROOT / path.lstrip("/")
+            )
+            fingerprint = hashlib.sha256(local_bytes).hexdigest()[:8]
+            self.assertIn(f"{path}?v={fingerprint}", self.last_fixture_requests)
+            self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
+            self.assertEqual(
+                checks[f"asset {path} content type"]["status"], "PASS"
+            )
+        self.assertFalse(
+            [
+                check
+                for check in checks.values()
+                if check["check"].startswith("asset ")
+                and check["status"] == "FAIL"
+            ]
+        )
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
         image_bytes = verify_live_edge.canonical_text_bytes(
             ROOT / "assets/img/favicons/murderbird-v2-icon-browser-32.png"
@@ -1290,10 +1439,10 @@ import(bareSpecifier);
             "js": "/assets/js/app.js",
             "module": "/assets/js/mermaid-init.js",
         }
-        expected_types = {
-            "css": "text/css",
-            "js": "text/javascript",
-            "module": "text/javascript",
+        accepted_types = {
+            "css": ("text/css",),
+            "js": ("application/javascript", "text/javascript"),
+            "module": ("application/javascript", "text/javascript"),
         }
 
         for kind, path in asset_paths.items():
@@ -1310,7 +1459,13 @@ import(bareSpecifier);
                     content_type_check = checks[f"asset {path} content type"]
                     self.assertEqual(content_type_check["status"], "FAIL")
                     self.assertIn("received ''", content_type_check["evidence"])
-                    self.assertIn(expected_types[kind], content_type_check["evidence"])
+                    for accepted_type in accepted_types[kind]:
+                        self.assertIn(accepted_type, content_type_check["evidence"])
+                    self.assertEqual(
+                        content_type_check["accepted_content_types"],
+                        sorted(accepted_types[kind]),
+                    )
+                    self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
 
                     for unaffected_kind, unaffected_path in asset_paths.items():
                         if unaffected_kind == kind:

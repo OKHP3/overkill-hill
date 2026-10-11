@@ -1,0 +1,33 @@
+{
+  "sites": [
+    {
+      "name": "OKH",
+      "checkoutPath": ".",
+      "localPath": "../overkill-hill",
+      "revisionVariable": "THEME_CONTROL_OKH_REVISION",
+      "checkoutStep": "Checkout repository",
+      "bodyClass": "",
+      "selector": ".theme-toggle"
+    },
+    {
+      "name": "Glee",
+      "checkoutPath": ".ci/theme-sites/glee-fullytools",
+      "localPath": "../glee-fullytools",
+      "revisionVariable": "THEME_CONTROL_GLEE_REVISION",
+      "checkoutStep": "Checkout reviewed Glee foundation revision",
+      "repository": "OKHP3/Glee-fullyTools",
+      "bodyClass": "glee-main",
+      "selector": ".glee-color-toggle"
+    },
+    {
+      "name": "AskJamie",
+      "checkoutPath": ".ci/theme-sites/askjamie",
+      "localPath": "../askjamie",
+      "revisionVariable": "THEME_CONTROL_ASKJAMIE_REVISION",
+      "checkoutStep": "Checkout reviewed AskJamie foundation revision",
+      "repository": "OKHP3/AskJamie",
+      "bodyClass": "askjamie-main",
+      "selector": ".glee-color-toggle"
+    }
+  ]
+}

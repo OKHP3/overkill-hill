@@ -23,14 +23,14 @@ jobs:
     timeout-minutes: 20
     name: Validate site HTML, links, and structure
     if: github.event_name != 'schedule'
-    env:
-      THEME_CONTROL_OKH_REVISION: 0ee6bc875a183ca2e065448d01fe97da62fc1ff7
-      THEME_CONTROL_GLEE_REVISION: f5689fe4852b72e5d584db9d8f87cac9121b87c4
-      THEME_CONTROL_ASKJAMIE_REVISION: e800d4aebf0dc2543c5ced295ec78d10ba192473
     outputs:
       release_artifact_name: validated-site-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
     # Cancel obsolete PR validation only. Caller names separate reusable runs;
     # push/dispatch run IDs keep retries from canceling another release.
+    env:
+      THEME_CONTROL_OKH_REVISION: 0ee6bc875a183ca2e065448d01fe97da62fc1ff7
+      THEME_CONTROL_GLEE_REVISION: f5689fe4852b72e5d584db9d8f87cac9121b87c4
+      THEME_CONTROL_ASKJAMIE_REVISION: e800d4aebf0dc2543c5ced295ec78d10ba192473
     concurrency:
       group: site-validation-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: true
@@ -57,6 +57,8 @@ jobs:
           cat theme-control-revisions.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify pinned theme-control foundation revisions are fetchable
+        id: foundation_fetch
+        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -75,6 +77,9 @@ jobs:
             if ! git -C "$probe_dir" fetch --no-tags --depth=1 --filter=tree:0 "$repository" "$revision"; then
               printf 'ERROR: %s (%s=%s) foundation revision could not be fetched from %s.\n' \
                 "$site" "$revision_variable" "$revision" "$repository" >&2
+              printf 'Fetch check: %s (%s=%s): FAILED; could not fetch from %s\n' \
+                "$site" "$revision_variable" "$revision" "$repository" \
+                | tee -a theme-control-revisions.txt
               return 1
             fi
 
@@ -83,25 +88,37 @@ jobs:
             if [[ "$fetched_revision" != "$revision" ]]; then
               printf 'ERROR: %s (%s=%s) fetched unexpected revision %s from %s.\n' \
                 "$site" "$revision_variable" "$revision" "$fetched_revision" "$repository" >&2
+              printf 'Fetch check: %s (%s=%s): FAILED; fetched unexpected revision %s from %s\n' \
+                "$site" "$revision_variable" "$revision" "$fetched_revision" "$repository" \
+                | tee -a theme-control-revisions.txt
               return 1
             fi
+            printf 'Fetch check: %s (%s=%s): PASS; fetched %s\n' \
+              "$site" "$revision_variable" "$revision" "$fetched_revision" \
+              | tee -a theme-control-revisions.txt
           }
 
+          fetch_status=0
           verify_revision \
             "OKH" \
             "THEME_CONTROL_OKH_REVISION" \
             "$(git remote get-url origin)" \
-            "$THEME_CONTROL_OKH_REVISION"
+            "$THEME_CONTROL_OKH_REVISION" || fetch_status=1
           verify_revision \
             "Glee" \
             "THEME_CONTROL_GLEE_REVISION" \
             "https://github.com/OKHP3/Glee-fullyTools.git" \
-            "$THEME_CONTROL_GLEE_REVISION"
+            "$THEME_CONTROL_GLEE_REVISION" || fetch_status=1
           verify_revision \
             "AskJamie" \
             "THEME_CONTROL_ASKJAMIE_REVISION" \
             "https://github.com/OKHP3/AskJamie.git" \
-            "$THEME_CONTROL_ASKJAMIE_REVISION"
+            "$THEME_CONTROL_ASKJAMIE_REVISION" || fetch_status=1
+          exit "$fetch_status"
+
+      - name: Preserve pinned foundation fetch failure
+        if: always() && steps.foundation_fetch.outcome == 'failure'
+        run: exit 1
 
       - name: Fetch reviewed OKH foundation revision
         run: git fetch --no-tags --depth=1 origin "$THEME_CONTROL_OKH_REVISION"
@@ -189,6 +206,7 @@ jobs:
         run: |
           python3 tests/test-actions-summary.py
           python3 tests/test-ci-concurrency.py
+          python3 tests/test-foundation-pr-freshness.py
 
       - name: Run live-edge asset, image/font MIME, and data-feed regression tests
         run: python3 -m unittest tests/test_verify_live_edge.py
@@ -197,6 +215,7 @@ jobs:
         run: python3 -m unittest tests/test-sync-foundation-files.py
 
       - name: Verify pinned cross-site foundation fingerprints
+        id: foundation_verification
         run: |
           python3 scripts/sync-foundation-files.py --verify \
             --source-repo overkill-hill \
@@ -206,7 +225,17 @@ jobs:
             --repo-path askjamie=.ci/theme-sites/askjamie \
             --site-revision "overkill-hill=$THEME_CONTROL_OKH_REVISION" \
             --site-revision "glee-fullytools=$THEME_CONTROL_GLEE_REVISION" \
-            --site-revision "askjamie=$THEME_CONTROL_ASKJAMIE_REVISION"
+            --site-revision "askjamie=$THEME_CONTROL_ASKJAMIE_REVISION" \
+            --report-file foundation-fingerprint-report.json
+
+      - name: Upload shared-foundation fingerprint report
+        if: always() && steps.foundation_verification.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: foundation-fingerprints-${{ github.run_id }}-${{ github.run_attempt }}
+          path: foundation-fingerprint-report.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Run published-locale release-gate regressions
         run: python3 -m unittest tests/test-i18n-release.py
@@ -317,6 +346,7 @@ jobs:
           npm run test:toc
 
       - name: Upload local QA reports
+        id: upload-local-qa-reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -326,6 +356,22 @@ jobs:
             test-results/audit-site/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Summarize local QA report artifact
+        if: always()
+        env:
+          LOCAL_QA_ARTIFACT_URL: ${{ steps.upload-local-qa-reports.outputs.artifact-url }}
+        run: |
+          {
+            echo "## Local QA evidence"
+            echo
+            if [ -n "$LOCAL_QA_ARTIFACT_URL" ]; then
+              printf '[Download local QA reports](%s)\n' "$LOCAL_QA_ARTIFACT_URL"
+            else
+              echo "No local QA artifact URL was returned; review the upload step if report files were expected."
+            fi
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run accessibility QA gate
         run: |
@@ -363,6 +409,11 @@ jobs:
         env:
           CSP_FIXTURE_REPORT: csp-fixture-report.json
         run: npm run test:csp:regressions
+
+      - name: Explain missing focused CSP fixture report
+        if: always() && steps.csp-fixtures.outcome == 'failure' && !hashFiles('csp-fixture-report.json')
+        run: >-
+          echo "::warning title=Focused CSP report missing::The focused fixture test failed without creating csp-fixture-report.json; the warning-only upload has no report to retain."
 
       - name: Upload failed CSP fixture report
         if: always() && steps.csp-fixtures.outcome == 'failure'

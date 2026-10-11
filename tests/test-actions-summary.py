@@ -1,4 +1,5 @@
 """Regression coverage for operator summaries, including mixed failures."""
+import ast
 import copy
 import importlib.util
 import json
@@ -365,8 +366,37 @@ if VERIFY_SPEC is None or VERIFY_SPEC.loader is None:
 VERIFY = importlib.util.module_from_spec(VERIFY_SPEC)
 VERIFY_SPEC.loader.exec_module(VERIFY)
 
+SUMMARY_SPEC = importlib.util.spec_from_file_location('write_actions_summary', SCRIPT)
+if SUMMARY_SPEC is None or SUMMARY_SPEC.loader is None:
+    raise RuntimeError('could not load scripts/write-actions-summary.py')
+SUMMARY_WRITER = importlib.util.module_from_spec(SUMMARY_SPEC)
+SUMMARY_SPEC.loader.exec_module(SUMMARY_WRITER)
+
 
 class SummaryTests(unittest.TestCase):
+    def test_class_method_names_are_unique(self):
+        tree = ast.parse(Path(__file__).read_text(encoding='utf-8'), filename=__file__)
+        duplicates = []
+        for class_node in ast.walk(tree):
+            if not isinstance(class_node, ast.ClassDef):
+                continue
+            first_lines = {}
+            for method in class_node.body:
+                if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if method.name in first_lines:
+                    duplicates.append(
+                        f'{class_node.name}.{method.name}: lines '
+                        f'{first_lines[method.name]} and {method.lineno}'
+                    )
+                else:
+                    first_lines[method.name] = method.lineno
+        self.assertEqual(
+            duplicates, [],
+            'Duplicate class methods hide test or helper definitions:\n'
+            + '\n'.join(duplicates),
+        )
+
     def create_symlink_or_skip_when_windows_privilege_is_missing(
         self,
         link,
@@ -447,6 +477,40 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('+  "status": "PASS"', checked.stdout)
         self.assertEqual(unchanged_content, actual_content)
 
+    def test_generated_fixture_check_detects_malformed_fixture_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_directory = Path(directory)
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--write',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+
+            fixture = output_directory / 'external-runtime-degraded.json'
+            fixture.write_text('{"summary": {}}\n', encoding='utf-8')
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(FIXTURE_GENERATOR),
+                    '--check',
+                    '--output-directory',
+                    str(output_directory),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
+        self.assertIn('generated fixture is stale', checked.stdout + checked.stderr)
+        self.assertIn('external-runtime-degraded.json', checked.stdout + checked.stderr)
+
     def test_generated_fixture_check_keeps_missing_and_unexpected_files_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
             output_directory = Path(directory)
@@ -519,17 +583,36 @@ class SummaryTests(unittest.TestCase):
         ):
             VERIFY.validate_report_shape(malformed)
 
-    def run_summary(self, report, kind='edge', artifact_url=None):
+    def run_summary(
+        self,
+        report,
+        kind='edge',
+        artifact_url=None,
+        report_name='report.json',
+        run_id=None,
+        run_attempt=None,
+    ):
         with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / 'report.json'
+            source = Path(directory) / report_name
             output = Path(directory) / 'summary.md'
             source.write_text(json.dumps(report), encoding='utf-8')
             command = [sys.executable, str(SCRIPT), '--kind', kind,
                        '--report', str(source), '--summary', str(output)]
             if artifact_url:
                 command.extend(['--artifact-url', artifact_url])
+            command_env = os.environ.copy()
+            for key in (
+                'ACTIONS_ARTIFACT_URL',
+                'GITHUB_RUN_ID',
+                'GITHUB_RUN_ATTEMPT',
+            ):
+                command_env.pop(key, None)
+            if run_id is not None:
+                command_env['GITHUB_RUN_ID'] = str(run_id)
+            if run_attempt is not None:
+                command_env['GITHUB_RUN_ATTEMPT'] = str(run_attempt)
             result = subprocess.run(command,
-                                    capture_output=True, text=True)
+                                    capture_output=True, text=True, env=command_env)
             return result.returncode, output.read_text(encoding='utf-8') if output.exists() else ''
 
     def assert_archived_report_contract(self, path, report, entry):
@@ -1043,9 +1126,7 @@ class SummaryTests(unittest.TestCase):
             REPORT_ACTIONS['legacy'],
         )
         report = self.load_fixture(LEGACY_LIVE_EDGE_FIXTURE['fixture'])
-
-        with self.assertRaises(ValueError):
-            VERIFY.validate_report_shape(report)
+        self.assertEqual(set(report), VERIFY.LEGACY_LIVE_EDGE_REPORT_FIELDS)
 
         code, summary = self.run_summary(report)
         self.assertEqual(code, 0)
@@ -1053,6 +1134,60 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('| Edge policy | PARTIAL |', summary)
         self.assertIn('not specified (monitoring)', summary)
         self.assertIn('Report time: unknown', summary)
+        self.assertIn(
+            '| Report format | LEGACY | checks-only compatibility; no release SHA or report time was recorded |',
+            summary,
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            r'legacy live-edge report uses the checks-only shape.*write-actions-summary\.py',
+        ):
+            VERIFY.validate_report_shape(report)
+
+    def test_summary_format_contract_matches_verifier_and_legacy_shape(self):
+        self.assertEqual(
+            SUMMARY_WRITER.CURRENT_EDGE_REPORT_FIELDS,
+            frozenset(VERIFY.LIVE_EDGE_REPORT_FIELDS),
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.LEGACY_EDGE_REPORT_FIELDS,
+            VERIFY.LEGACY_LIVE_EDGE_REPORT_FIELDS,
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.EDGE_CHECK_FIELDS,
+            frozenset(VERIFY.LIVE_EDGE_CHECK_FIELDS),
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.EDGE_CHECK_STATUSES,
+            VERIFY.LIVE_EDGE_CHECK_STATUSES,
+        )
+
+    def test_unsupported_legacy_report_shapes_fail_with_migration_guidance(self):
+        unsupported_reports = (
+            (
+                'alternate envelope',
+                {'results': [{'name': 'route /', 'result': 'OK'}]},
+                'unsupported live-edge report shape',
+            ),
+            (
+                'legacy status alias',
+                {'checks': [{'check': 'route /', 'status': 'OK', 'evidence': 'HTTP 200'}]},
+                'unsupported legacy live-edge status convention',
+            ),
+            (
+                'missing legacy evidence',
+                {'checks': [{'check': 'route /', 'status': 'PASS'}]},
+                'unsupported legacy check shape',
+            ),
+        )
+        for label, report, diagnostic in unsupported_reports:
+            with self.subTest(shape=label):
+                code, summary = self.run_summary(report)
+                self.assertEqual(code, 1)
+                self.assertIn('| Evidence | UNKNOWN |', summary)
+                self.assertIn(diagnostic, summary)
+                self.assertIn('required action:', summary)
+                self.assertIn('migrate', summary.lower())
 
     def test_historical_partial_is_not_an_outage_or_full_policy_pass(self):
         path, entry = next(iter(ARCHIVED_LIVE_EDGE_REPORTS.items()))
@@ -1098,7 +1233,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -1119,6 +1254,82 @@ class SummaryTests(unittest.TestCase):
             'steps.upload-third-party-runtime-report.outputs.artifact-url',
             source,
         )
+
+    def test_external_upload_or_report_failure_still_reaches_summary(self):
+        source = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        job_match = re.search(
+            r'(?ms)^  monitor-third-party-runtime:\n(.*?)(?=^  monitor-live-edge:|\Z)',
+            source,
+        )
+        self.assertIsNotNone(job_match, 'missing external monitor workflow job')
+        job = job_match.group(1)
+        monitor = re.search(
+            r'(?ms)^      - name: Check deployed third-party runtime dependencies\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        upload = re.search(
+            r'(?ms)^      - name: Upload third-party runtime inventory\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        summary = re.search(
+            r'(?ms)^      - name: Summarize external availability and first-party failures\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            job,
+        )
+        self.assertIsNotNone(monitor, 'missing external monitor command')
+        self.assertIsNotNone(upload, 'missing external report upload step')
+        self.assertIsNotNone(summary, 'missing external summary step')
+        self.assertIn('continue-on-error: true', monitor.group(1))
+        self.assertIn('if: always()', upload.group(1))
+        self.assertIn('if-no-files-found: error', upload.group(1))
+        self.assertIn('if: always()', summary.group(1))
+        self.assertIn('--report=third-party-runtime-report.json', monitor.group(1))
+        self.assertIn('--report third-party-runtime-report.json', summary.group(1))
+        self.assertIn(
+            'steps.upload-third-party-runtime-report.outputs.artifact-url',
+            summary.group(1),
+        )
+
+    def test_validation_monitor_summaries_use_their_own_upload_outputs(self):
+        source = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        monitors = (
+            (
+                'monitor-third-party-runtime',
+                'Summarize external availability and first-party failures',
+                'upload-third-party-runtime-report',
+            ),
+            (
+                'monitor-live-edge',
+                'Summarize content delivery and edge policy',
+                'upload-live-edge-report',
+            ),
+        )
+        for job_name, summary_name, upload_id in monitors:
+            with self.subTest(job=job_name):
+                job_match = re.search(
+                    rf'(?ms)^  {re.escape(job_name)}:\n(.*?)(?=^  [\w-]+:|\Z)',
+                    source,
+                )
+                self.assertIsNotNone(job_match, f'missing workflow job {job_name}')
+                job_source = job_match.group(1)
+                summary_match = re.search(
+                    rf'(?ms)^      - name: {re.escape(summary_name)}\n'
+                    r'(.*?)(?=^      - name: |\Z)',
+                    job_source,
+                )
+                self.assertIsNotNone(summary_match, f'missing summary step in {job_name}')
+                self.assertIn(f'id: {upload_id}', job_source)
+                artifact_outputs = re.findall(
+                    r'steps\.([a-z0-9-]+)\.outputs\.artifact-url',
+                    summary_match.group(1),
+                )
+                self.assertEqual(
+                    artifact_outputs,
+                    [upload_id],
+                    f'{job_name} summary must use its own upload step output',
+                )
 
     def test_validation_evidence_uploads_declare_retention_and_file_policy(self):
         for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
@@ -1154,8 +1365,67 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('retention-days: 7', local_qa.group(1))
         self.assertIn('test-results/responsive-qa/', local_qa.group(1))
         self.assertIn('test-results/audit-site/', local_qa.group(1))
+        self.assertIn('id: upload-local-qa-reports', local_qa.group(1))
         self.assertNotIn('site-release', local_qa.group(1))
         self.assertNotIn('third-party-runtime-report.json', local_qa.group(1))
+
+    def test_local_qa_summary_links_its_upload_without_failing_when_no_artifact_exists(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        upload = re.search(
+            r'(?ms)^      - name: Upload local QA reports\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        summary = re.search(
+            r'(?ms)^      - name: Summarize local QA report artifact\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(upload, 'missing local QA artifact upload')
+        self.assertIsNotNone(summary, 'missing local QA artifact summary')
+        self.assertIn('if-no-files-found: warn', upload.group(1))
+        self.assertIn('if: always()', summary.group(1))
+        self.assertIn(
+            'steps.upload-local-qa-reports.outputs.artifact-url',
+            summary.group(1),
+        )
+        run_block = re.search(
+            r'(?ms)^        run: \|\n((?:^          .*\n?)+)',
+            summary.group(1),
+        )
+        self.assertIsNotNone(run_block, 'local QA summary must use a literal shell block')
+        command = '\n'.join(
+            line[10:] for line in run_block.group(1).splitlines()
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            summary_path = Path(directory) / 'github-step-summary.md'
+            for artifact_url in (
+                '',
+                'https://github.com/example/site/actions/runs/123/artifacts/456',
+            ):
+                with self.subTest(artifact_url=bool(artifact_url)):
+                    summary_path.write_text('', encoding='utf-8')
+                    environment = os.environ.copy()
+                    environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+                    environment['LOCAL_QA_ARTIFACT_URL'] = artifact_url
+                    result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c', command],
+                        cwd=ROOT,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    rendered = summary_path.read_text(encoding='utf-8')
+                    if artifact_url:
+                        self.assertIn(
+                            f'[Download local QA reports]({artifact_url})',
+                            rendered,
+                        )
+                    else:
+                        self.assertIn('No local QA artifact URL was returned', rendered)
+                        self.assertNotIn('[Download local QA reports]', rendered)
 
     def test_failed_csp_fixtures_upload_only_the_short_lived_focused_report(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
@@ -1329,11 +1599,11 @@ class SummaryTests(unittest.TestCase):
                 self.assertTrue(summary_path.is_file(), output)
                 rendered = summary_path.read_text(encoding='utf-8')
                 self.assertIn(
-                    '| unavailable | unknown | Could not read focused CSP fixture report:',
+                    '| unavailable | UNKNOWN | unknown | Focused CSP fixture report is missing;',
                     rendered,
                 )
                 self.assertIn(
-                    'Focused CSP evidence artifact: unavailable; check the upload step for a warning or missing report.',
+                    'Focused CSP evidence artifact: unavailable; the report file was missing, so the warning-only upload had nothing to retain.',
                     rendered,
                 )
                 self.assertFalse(report_path.exists(), 'the summary must not fabricate evidence')
@@ -1359,6 +1629,136 @@ class SummaryTests(unittest.TestCase):
             'the failure-preservation command must remain nonzero',
         )
 
+    def test_missing_focused_csp_report_has_a_specific_warning_before_upload(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        warning = re.search(
+            r'(?ms)^      - name: Explain missing focused CSP fixture report\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        upload = re.search(
+            r'(?ms)^      - name: Upload failed CSP fixture report\n'
+            r'(.*?)(?=^      - name: )',
+            workflow,
+        )
+        self.assertIsNotNone(warning, 'missing focused-report warning step')
+        self.assertIsNotNone(upload, 'missing focused report upload step')
+        self.assertIn(
+            "if: always() && steps.csp-fixtures.outcome == 'failure' && !hashFiles('csp-fixture-report.json')",
+            warning.group(1),
+        )
+        self.assertIn(
+            'The focused fixture test failed without creating csp-fixture-report.json',
+            warning.group(1),
+        )
+        self.assertIn('if-no-files-found: warn', upload.group(1))
+        self.assertLess(
+            workflow.index('Explain missing focused CSP fixture report'),
+            workflow.index('Upload failed CSP fixture report'),
+        )
+
+    def test_failed_csp_check_without_report_stays_failed_after_optional_evidence_steps(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        fixture = step('Run CSP fixture regressions')
+        upload = step('Upload failed CSP fixture report')
+        summary = step('Summarize failed CSP fixture regressions')
+        preserve = step('Preserve CSP fixture regression failure')
+        self.assertIn('continue-on-error: true', fixture)
+        self.assertIn('if-no-files-found: warn', upload)
+        failure_condition = "if: always() && steps.csp-fixtures.outcome == 'failure'"
+        for optional_step in (upload, summary, preserve):
+            self.assertIn(failure_condition, optional_step)
+        self.assertNotIn('continue-on-error: true', preserve)
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / 'csp-fixture-report.json'
+            summary_path = Path(directory) / 'github-step-summary.md'
+
+            # Model a failed fixture command that did not write its optional report.
+            originating_check = subprocess.run(
+                ['bash', '-c', 'exit 23'],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(originating_check.returncode, 0)
+            self.assertFalse(report_path.exists())
+            fixture_outcome = 'failure' if originating_check.returncode else 'success'
+            self.assertEqual(fixture_outcome, 'failure')
+
+            # The upload action itself is hosted; model its documented warn policy
+            # for an absent path without claiming this test executes GitHub Actions.
+            if report_path.exists():
+                upload_result = 0
+            elif 'if-no-files-found: warn' in upload:
+                upload_result = 0
+            else:
+                upload_result = 1
+            self.assertEqual(upload_result, 0, 'missing optional evidence must not fail upload')
+
+            dependency = subprocess.run(
+                [shutil.which('node') or 'node', '--input-type=module', '--eval', "import.meta.resolve('playwright')"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            dependency_output = dependency.stdout + dependency.stderr
+            if dependency.returncode != 0 and 'ERR_MODULE_NOT_FOUND' in dependency_output:
+                self.skipTest('optional Playwright QA package is absent; focused summary was not run')
+
+            run_match = re.search(
+                r'(?ms)^        run: >-\n((?:^          [^\n]*\n?)+)',
+                summary,
+            )
+            self.assertIsNotNone(run_match, 'CSP summary run block is not the supported folded form')
+            summary_tokens = shlex.split(
+                ' '.join(line.strip() for line in run_match.group(1).splitlines()),
+                posix=True,
+            )
+            self.assertEqual(summary_tokens[:2], ['node', 'scripts/csp-qa.mjs'])
+            summary_result = subprocess.run(
+                [
+                    shutil.which(summary_tokens[0]) or summary_tokens[0],
+                    str(ROOT / summary_tokens[1]),
+                    f'--fixture-summary={report_path}',
+                    '--artifact-url=',
+                ],
+                cwd=directory,
+                env={**os.environ, 'GITHUB_STEP_SUMMARY': str(summary_path)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(summary_result.returncode, 0, summary_result.stdout + summary_result.stderr)
+            self.assertIn('Focused CSP fixture report is missing', summary_path.read_text(encoding='utf-8'))
+            self.assertFalse(report_path.exists(), 'summary generation must not create the missing report')
+
+            preserve_run = re.search(r'(?m)^        run: ([^\r\n]+)$', preserve)
+            self.assertIsNotNone(preserve_run, 'failure-preservation command is missing')
+            final_guard = subprocess.run(
+                preserve_run.group(1).strip(),
+                shell=True,
+                cwd=directory,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(final_guard.returncode, 0)
+            workflow_result = final_guard.returncode
+            self.assertNotEqual(
+                workflow_result,
+                0,
+                'the originating CSP failure must remain a failed workflow after optional evidence steps',
+            )
+
     def test_pages_only_blocked_fixture_is_partial_and_not_enforcement_proof(self):
         code, summary = self.run_summary(self.load_fixture('live-edge-pages-blocked.json'))
 
@@ -1376,7 +1776,7 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
 
@@ -1412,6 +1812,19 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('| External availability | DEGRADED |', summary)
 
+    def test_archived_external_report_without_failure_routes_remains_readable(self):
+        code, summary = self.run_summary(
+            self.load_fixture('archived-external-runtime-no-route.json'), 'external'
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED | 1 outages;', summary)
+        self.assertIn(
+            '| unknown route | https://images.example/archived.webp '
+            '| net::ERR_CONNECTION_RESET |',
+            summary,
+        )
+
     def test_external_degraded_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/987'
         code, summary = self.run_summary(
@@ -1422,9 +1835,39 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn('| External availability | DEGRADED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
+
+    def test_external_artifact_link_escapes_label_and_special_url_characters(self):
+        artifact_url = (
+            'https://github.com/example/site/actions/runs/123/artifacts/987'
+            '?download=1&name=report [review](draft)&next=](https://evil.example)\\path'
+            '&close=>'
+        )
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+            artifact_url=artifact_url,
+            report_name='report [route].json',
+        )
+
+        self.assertEqual(code, 0)
+        link_lines = [
+            line for line in summary.splitlines()
+            if line.startswith('Full route evidence artifact:')
+        ]
+        self.assertEqual(len(link_lines), 1)
+        self.assertEqual(
+            link_lines[0],
+            'Full route evidence artifact: '
+            '[report \\[route\\].json](<https://github.com/example/site/actions/runs/123/'
+            'artifacts/987?download=1&name=report%20[review](draft)&next=]'
+            '(https://evil.example)%5Cpath&close=%3E>) (direct artifact link)',
+        )
+        self.assertEqual(link_lines[0].count('](<https://'), 1)
+        self.assertIn('&name=', link_lines[0])
+        self.assertIn('%5Cpath&close=%3E>)', link_lines[0])
 
     def test_external_local_failure_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/988'
@@ -1436,9 +1879,126 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('| Content delivery | FAILED |', summary)
         self.assertIn(
-            f'Full route evidence artifact: [report.json]({artifact_url})',
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
             summary,
         )
+
+    def test_external_upload_unavailable_keeps_report_results_visible(self):
+        for fixture, expected_code, expected_result in (
+            (
+                'external-runtime-degraded.json',
+                0,
+                '| External availability | DEGRADED |',
+            ),
+            (
+                'external-runtime-local-failure.json',
+                1,
+                '| Content delivery | FAILED |',
+            ),
+        ):
+            with self.subTest(fixture=fixture):
+                code, summary = self.run_summary(
+                    self.load_fixture(fixture),
+                    'external',
+                )
+                self.assertEqual(code, expected_code)
+                self.assertIn(expected_result, summary)
+                self.assertIn(
+                    'External report download unavailable: only the local runner file',
+                    summary,
+                )
+                self.assertIn('not downloadable from this summary', summary)
+
+    def test_external_missing_report_file_is_explicit_and_unknown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / 'third-party-runtime-report.json'
+            output = Path(directory) / 'summary.md'
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    '--kind',
+                    'external',
+                    '--report',
+                    str(report),
+                    '--summary',
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                env={
+                    **{
+                        key: value
+                        for key, value in os.environ.items()
+                        if key != 'ACTIONS_ARTIFACT_URL'
+                    }
+                },
+            )
+            summary = output.read_text(encoding='utf-8')
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('| Evidence | UNKNOWN | No usable external report:', summary)
+        self.assertIn(
+            'External report download unavailable: no usable local report file exists',
+            summary,
+        )
+        self.assertIn('Check the monitor and upload steps.', summary)
+
+    def test_direct_monitor_artifact_links_show_first_attempt_and_retry(self):
+        cases = (
+            (
+                'external',
+                self.load_fixture('external-runtime-degraded.json'),
+                'https://github.com/example/site/actions/runs/100/artifacts/987',
+            ),
+            (
+                'edge',
+                self.load_fixture('live-edge-failure.json'),
+                'https://github.com/example/site/actions/runs/100/artifacts/456',
+            ),
+        )
+        for kind, report, artifact_url in cases:
+            for attempt in ('1', '2'):
+                with self.subTest(kind=kind, attempt=attempt):
+                    _, summary = self.run_summary(
+                        report,
+                        kind,
+                        artifact_url=artifact_url,
+                        run_id='100',
+                        run_attempt=attempt,
+                    )
+                    self.assertIn(
+                        f'[report.json (run 100, attempt {attempt})](<{artifact_url}>)',
+                        summary,
+                    )
+                    self.assertNotIn('${{ github.run_id }}', summary)
+                    self.assertNotIn('${{ github.run_attempt }}', summary)
+
+    def test_manual_direct_links_and_local_fallbacks_keep_their_existing_labels(self):
+        artifact_url = 'https://github.com/example/site/actions/runs/100/artifacts/987'
+        _, manual_summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+            artifact_url=artifact_url,
+        )
+        self.assertIn(
+            f'Full route evidence artifact: [report.json](<{artifact_url}>)',
+            manual_summary,
+        )
+        self.assertNotIn('(run 100, attempt', manual_summary)
+
+        _, external_fallback = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'),
+            'external',
+        )
+        self.assertIn('only the local runner file report.json is available', external_fallback)
+
+        _, edge_fallback = self.run_summary(
+            self.load_fixture('live-edge-failure.json'),
+            'edge',
+        )
+        self.assertIn('Full route evidence file: report.json.', edge_fallback)
+        self.assertNotIn('(run 100, attempt', edge_fallback)
 
     def test_invalid_reports_fail_closed(self):
         for report in ({}, {'checks': []}, {'checks': [{'status': 'MAYBE'}]}, []):
@@ -1471,6 +2031,65 @@ class SummaryTests(unittest.TestCase):
         code, summary = self.run_summary(report, 'external')
         self.assertEqual(code, 1)
         self.assertIn('UNKNOWN', summary)
+
+    def test_reparse_point_is_rejected_before_archive_or_fixture_reads(self):
+        report_path = 'assets/audit/redirect/delivery/live-edge.json'
+        entry = {
+            'classification': 'current',
+            'fixture': 'archived-live-edge-2026-09-07.json',
+            'required_action': 'validate_report_shape',
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / report_path
+            source.parent.mkdir(parents=True)
+            source_bytes = b'{"synthetic":"reparse directory"}\n'
+            source.write_bytes(source_bytes)
+            fixture_directory = root / 'tests/fixtures/actions-summary'
+            fixture_directory.mkdir(parents=True)
+            (fixture_directory / entry['fixture']).write_bytes(source_bytes)
+
+            reparse_directory = root / 'assets/audit/redirect'
+            original_lstat = Path.lstat
+            original_read_bytes = Path.read_bytes
+            read_attempts = []
+
+            def mark_as_reparse_point(path):
+                metadata = original_lstat(path)
+                if path == reparse_directory:
+                    return SimpleNamespace(
+                        st_mode=metadata.st_mode,
+                        st_file_attributes=0x400,
+                    )
+                return metadata
+
+            def track_file_read(path):
+                read_attempts.append(path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, 'lstat', mark_as_reparse_point):
+                with patch.object(Path, 'read_bytes', track_file_read):
+                    issues = archive_registry_issues(
+                        root,
+                        {report_path: entry},
+                        fixture_root=root,
+                        require_registered_files=True,
+                    )
+
+        self.assertTrue(
+            any(
+                'assets/audit/redirect' in issue
+                and 'Windows reparse point' in issue
+                for issue in issues
+            ),
+            '\n'.join(issues),
+        )
+        self.assertEqual(
+            read_attempts,
+            [],
+            'archive or fixture content was read before recursive discovery rejected the reparse point',
+        )
+
 
 
 if __name__ == '__main__':

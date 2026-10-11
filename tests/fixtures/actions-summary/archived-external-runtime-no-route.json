@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "mode": "external-health",
+  "baseUrl": "https://fixture.example",
+  "routes": [
+    "/"
+  ],
+  "dependencies": [
+    {
+      "url": "https://images.example/archived.webp",
+      "state": "unavailable",
+      "failures": [
+        {
+          "errorText": "net::ERR_CONNECTION_RESET",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "externalOutages": [
+    {
+      "url": "https://images.example/archived.webp",
+      "state": "unavailable",
+      "failures": [
+        {
+          "errorText": "net::ERR_CONNECTION_RESET",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "routes": 1,
+    "dependencies": 1,
+    "available": 0,
+    "externalOutages": 1,
+    "localFailures": 0,
+    "cspDiagnostics": 0
+  },
+  "status": "EXTERNAL_OUTAGE"
+}

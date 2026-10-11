@@ -21,6 +21,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree
 
+from sitemap_xml import parse_sitemap_xml
+
 ROOT = Path(
     os.environ.get(
         "OKHP3_VALIDATION_ROOT",
@@ -108,23 +110,19 @@ def fail(findings: list[str], message: str) -> None:
 def load_manifest(path: Path) -> dict:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read manifest {path}: {exc}") from exc
     if not isinstance(manifest, dict):
-        raise ValueError("manifest root must be a JSON object")
+        raise ValueError(f"manifest {path} root must be a JSON object")
     return manifest
 
 
 def sitemap_locations(path: Path) -> list[str]:
     try:
-        root = ElementTree.fromstring(path.read_text(encoding="utf-8"))
+        document = parse_sitemap_xml(path.read_text(encoding="utf-8"))
     except (OSError, ElementTree.ParseError) as exc:
         raise ValueError(f"cannot read sitemap {path}: {exc}") from exc
-    return [
-        element.text.strip()
-        for element in root.iter()
-        if element.tag.rsplit("}", 1)[-1] == "loc" and element.text and element.text.strip()
-    ]
+    return list(document.locations)
 
 
 def sitemap_urls(path: Path) -> set[str]:
@@ -159,7 +157,13 @@ def check_search_index(
         return
     urls = []
     for position, entry in enumerate(entries):
-        url = entry.get("url") if isinstance(entry, dict) else None
+        if not isinstance(entry, dict):
+            fail(
+                findings,
+                f"locale search index entry {position} must be an object with a non-empty string URL",
+            )
+            continue
+        url = entry.get("url")
         if not isinstance(url, str) or not url.strip():
             fail(findings, f"locale search index entry {position} must have a non-empty string URL")
             continue
@@ -431,8 +435,11 @@ def validate(
     index_path: Path | None = None,
     root: Path = ROOT,
 ) -> list[str]:
-    manifest = load_manifest(manifest_path)
     findings: list[str] = []
+    try:
+        manifest = load_manifest(manifest_path)
+    except ValueError as exc:
+        return [str(exc)]
     try:
         locations = sitemap_locations(sitemap_path)
         urls = set(locations)
@@ -444,8 +451,28 @@ def validate(
     try:
         specs = locale_specs(manifest)
     except ValueError as exc:
-        fail(findings, str(exc))
+        fail(findings, f"invalid locale manifest {manifest_path}: {exc}")
         return findings
+
+    route_owners: dict[str, set[str]] = {}
+    for spec in specs:
+        locale = spec["locale"]
+        pages = spec["pages"]
+        if not isinstance(pages, list):
+            continue
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            target_route = page.get("target_route")
+            if isinstance(target_route, str) and target_route:
+                route_owners.setdefault(target_route, set()).add(locale)
+    for route, owners in sorted(route_owners.items()):
+        if len(owners) > 1:
+            fail(
+                findings,
+                "locale target route is claimed by multiple locales: "
+                f"{route} ({', '.join(sorted(owners))})",
+            )
 
     for spec in specs:
         locale = spec["locale"]

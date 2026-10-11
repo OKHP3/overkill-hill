@@ -1,0 +1,39 @@
+{
+  "status": "pilot-ready",
+  "target_locales": [
+    "fr",
+    "de"
+  ],
+  "locales": {
+    "fr": {
+      "status": "unpublished-scaffold",
+      "indexable": false,
+      "metadata_source": "localized-page",
+      "pages": [
+        {
+          "source_route": "/",
+          "target_route": "/fr/",
+          "source_path": "index.html",
+          "target_path": "fr/index.html",
+          "status": "unpublished-scaffold",
+          "indexable": false
+        }
+      ]
+    },
+    "de": {
+      "status": "unpublished-scaffold",
+      "indexable": false,
+      "metadata_source": "localized-page",
+      "pages": [
+        {
+          "source_route": "/",
+          "target_route": "/fr/",
+          "source_path": "index.html",
+          "target_path": "de/index.html",
+          "status": "unpublished-scaffold",
+          "indexable": false
+        }
+      ]
+    }
+  }
+}

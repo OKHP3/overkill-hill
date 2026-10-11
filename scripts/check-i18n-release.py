@@ -4,16 +4,300 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
+from html.parser import HTMLParser
 import json
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 DETECTOR_PATH = ROOT / ".agents" / "skills" / "okhp3-i18n-page-sync" / "scripts" / "i18n-page-sync.py"
+
+
+class ContentCoverageParser(HTMLParser):
+    """Collect visible main-content structure without comparing translated prose."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.main_depth = 0
+        self.headings: list[dict[str, str]] = []
+        self.heading_counts: dict[str, int] = {}
+        self.content_blocks: dict[str, int] = {}
+        self.protected_links: set[str] = set()
+        self.current_heading: dict[str, str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag == "main":
+            self.main_depth += 1
+        if not self.main_depth:
+            return
+        if tag in {f"h{level}" for level in range(1, 7)}:
+            self.heading_counts[tag] = self.heading_counts.get(tag, 0) + 1
+            self.current_heading = {
+                "level": tag,
+                "id": attributes.get("id") or "",
+                "ordinal": str(self.heading_counts[tag]),
+                "text": "",
+            }
+        elif tag in {"p", "li", "blockquote", "figure", "table"}:
+            self.content_blocks[tag] = self.content_blocks.get(tag, 0) + 1
+        elif tag == "a":
+            href = (attributes.get("href") or "").strip()
+            if urlsplit(href).scheme.lower() in {"http", "https", "mailto", "tel"}:
+                self.protected_links.add(href)
+
+    def handle_data(self, data: str) -> None:
+        if self.main_depth and self.current_heading is not None:
+            self.current_heading["text"] += data
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {f"h{level}" for level in range(1, 7)} and self.current_heading:
+            self.current_heading["text"] = " ".join(self.current_heading["text"].split())
+            self.headings.append(self.current_heading)
+            self.current_heading = None
+        if tag == "main" and self.main_depth:
+            self.main_depth -= 1
+
+
+def compare_content_coverage(
+    source_path: Path,
+    target_path: Path,
+    locale: str,
+    route: str,
+) -> dict[str, Any] | None:
+    """Report structural content absent from a locale page, without gating it."""
+    source = ContentCoverageParser()
+    target = ContentCoverageParser()
+    source.feed(source_path.read_text(encoding="utf-8"))
+    target.feed(target_path.read_text(encoding="utf-8"))
+
+    omissions: list[dict[str, Any]] = []
+    target_heading_ids = {heading["id"] for heading in target.headings if heading["id"]}
+    for heading in source.headings:
+        if heading["id"] and heading["id"] not in target_heading_ids:
+            omissions.append({
+                "kind": "heading",
+                "heading": heading["text"],
+                "heading_id": heading["id"],
+                "detail": f"source {heading['level']} is absent from the locale page",
+            })
+    for level, source_count in source.heading_counts.items():
+        target_count = target.heading_counts.get(level, 0)
+        if source_count > target_count:
+            omissions.append({
+                "kind": "heading_coverage",
+                "level": level,
+                "source_count": source_count,
+                "target_count": target_count,
+                "omitted_count": source_count - target_count,
+            })
+    for block, source_count in source.content_blocks.items():
+        target_count = target.content_blocks.get(block, 0)
+        if source_count > target_count:
+            omissions.append({
+                "kind": "content_block",
+                "block": block,
+                "source_count": source_count,
+                "target_count": target_count,
+                "omitted_count": source_count - target_count,
+            })
+    for href in sorted(source.protected_links - target.protected_links):
+        omissions.append({"kind": "protected_link", "href": href})
+    if not omissions:
+        return None
+    return {
+        "locale": locale,
+        "route": route,
+        "source_path": source_path.relative_to(ROOT).as_posix(),
+        "target_path": target_path.relative_to(ROOT).as_posix(),
+        "omissions": omissions,
+    }
+
+
+def collect_source_coverage(
+    items: list[dict[str, Any]],
+    config: Dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Compare existing source/target pairs for configured advisory locales."""
+    locales = set(config.get("advisory_content_coverage_locales", []))
+    gaps = []
+    for item in items:
+        if item.get("locale") not in locales:
+            continue
+        source_relative = item.get("source_path")
+        target_relative = item.get("target_path")
+        if not isinstance(source_relative, str) or not isinstance(target_relative, str):
+            continue
+        source_path = ROOT / source_relative
+        target_path = ROOT / target_relative
+        if not source_path.is_file() or not target_path.is_file():
+            continue
+        gap = compare_content_coverage(
+            source_path,
+            target_path,
+            item["locale"],
+            item["route"],
+        )
+        if gap is not None:
+            gaps.append(gap)
+    return gaps
+
+
+def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
+    """Cross-check dated advisory review route hashes against the shared ledger."""
+    locales = config.get("advisory_content_coverage_locales", [])
+    routes = config.get("in_scope_routes", [])
+    ledger = load_state(config)
+    route_evidence: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    report: dict[str, Any] = {
+        "records_checked": 0,
+        "current_pairs": [],
+        "missing": [],
+        "duplicates": [],
+        "superseded": [],
+        "unmatched": [],
+        "invalid_records": [],
+    }
+    target_locales = config.get("target_locales", {})
+
+    for locale in locales:
+        locale_config = target_locales.get(locale)
+        if not isinstance(locale_config, dict):
+            report["invalid_records"].append({
+                "locale": locale, "reason": "advisory locale has no target configuration",
+            })
+            continue
+        expected_root = locale_config["root"].strip("/")
+        expected_pair = f"en-US -> {locale_config['locale']}"
+        for path in sorted((ROOT / "i18n" / "pilot" / locale).glob("*-????-??-??.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                report["invalid_records"].append({
+                    "locale": locale, "record": path.relative_to(ROOT).as_posix(),
+                    "reason": f"invalid JSON: {exc}",
+                })
+                continue
+            if not isinstance(record, dict) or not isinstance(record.get("routes"), list):
+                report["invalid_records"].append({
+                    "locale": locale, "record": path.relative_to(ROOT).as_posix(),
+                    "reason": "dated record must contain a routes list",
+                })
+                continue
+            report["records_checked"] += 1
+            record_name = path.relative_to(ROOT).as_posix()
+            reviewed_on = record.get("reviewed_on", "")
+            entries: dict[str, list[dict[str, Any]]] = {}
+            review_status = record.get("review_status")
+            if (
+                record.get("language_pair") != expected_pair
+                or not isinstance(review_status, str)
+                or review_status not in {"ai-reviewed", "approved"}
+            ):
+                report["invalid_records"].append({
+                    "locale": locale, "record": record_name,
+                    "reason": "review status or language pair is not valid for this advisory locale",
+                })
+            if not isinstance(reviewed_on, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_on):
+                report["invalid_records"].append({
+                    "locale": locale, "record": record_name,
+                    "reason": "reviewed_on must be an ISO calendar date",
+                })
+                reviewed_on = ""
+            else:
+                try:
+                    date.fromisoformat(reviewed_on)
+                except ValueError:
+                    report["invalid_records"].append({
+                        "locale": locale, "record": record_name,
+                        "reason": "reviewed_on must be a real ISO calendar date",
+                    })
+                    reviewed_on = ""
+            for entry in record["routes"]:
+                if not isinstance(entry, dict) or not isinstance(entry.get("route"), str):
+                    report["invalid_records"].append({
+                        "locale": locale, "record": record_name,
+                        "reason": "route entries must include a string route",
+                    })
+                    continue
+                route = entry["route"]
+                entries.setdefault(route, []).append(entry)
+                expected_target = (
+                    f"{expected_root}/{route.strip('/')}/index.html"
+                    if route.strip("/") else f"{expected_root}/index.html"
+                )
+                if route not in routes or entry.get("target_path") != expected_target:
+                    report["invalid_records"].append({
+                        "locale": locale, "route": route, "record": record_name,
+                        "reason": "route is out of scope or target_path does not match the configured locale",
+                    })
+                for field in ("source_sha256", "target_sha256"):
+                    if not isinstance(entry.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", entry[field]):
+                        report["invalid_records"].append({
+                            "locale": locale, "route": route, "record": record_name,
+                            "reason": f"{field} is missing or malformed",
+                        })
+            for route, route_entries in entries.items():
+                if len(route_entries) != 1:
+                    report["duplicates"].append({
+                        "locale": locale, "route": route, "record": record_name,
+                        "entry_count": len(route_entries),
+                    })
+                for entry in route_entries:
+                    ledger_target = ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
+                    is_current = (
+                        entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
+                        and entry.get("target_sha256") == ledger_target.get("target_sha256")
+                    )
+                    evidence = {
+                        "locale": locale,
+                        "route": route,
+                        "record": record_name,
+                        "reviewed_on": reviewed_on,
+                        "source_sha256": entry.get("source_sha256"),
+                        "target_sha256": entry.get("target_sha256"),
+                        "ledger_match": is_current,
+                    }
+                    route_evidence.setdefault((locale, route), []).append(evidence)
+
+    for locale in locales:
+        for route in routes:
+            entries = route_evidence.get((locale, route), [])
+            current = [item for item in entries if item["ledger_match"]]
+            if not current:
+                report["missing"].append({"locale": locale, "route": route})
+            else:
+                report["current_pairs"].append({
+                    "locale": locale, "route": route,
+                    "records": [item["record"] for item in current],
+                })
+                if len(current) > 1:
+                    report["duplicates"].append({
+                        "locale": locale, "route": route,
+                        "records": [item["record"] for item in current],
+                    })
+            for item in entries:
+                if item["ledger_match"]:
+                    continue
+                replacements = [
+                    candidate for candidate in current
+                    if candidate["reviewed_on"] > item["reviewed_on"]
+                ]
+                if replacements:
+                    report["superseded"].append({
+                        **item,
+                        "superseded_by": [candidate["record"] for candidate in replacements],
+                    })
+                else:
+                    report["unmatched"].append(item)
+    return report
 
 
 def load_site_config() -> Dict[str, Any]:
@@ -33,6 +317,14 @@ def load_site_config() -> Dict[str, Any]:
     unknown = sorted(set(blocking) - set(targets))
     if unknown:
         raise ValueError(f"blocking_locales contains unconfigured locales: {unknown}")
+    coverage_locales = config.get("advisory_content_coverage_locales", [])
+    if not isinstance(coverage_locales, list) or not all(
+        isinstance(item, str) for item in coverage_locales
+    ):
+        raise ValueError("advisory_content_coverage_locales must be a list of locale keys")
+    unknown_coverage = sorted(set(coverage_locales) - set(targets))
+    if unknown_coverage or set(coverage_locales).intersection(blocking):
+        raise ValueError("content coverage locales must be configured and advisory")
     return config
 
 
@@ -88,6 +380,16 @@ def load_results(config: Dict[str, Any]) -> Dict[str, Any]:
                         "current_target_sha256": current_hash,
                     }
                 )
+    coverage_items = [
+        item
+        for status in ("stale", "in_sync", "needs_baseline")
+        for item in results.get(status, [])
+    ]
+    results["source_coverage_gaps"] = collect_source_coverage(
+        coverage_items,
+        config,
+    )
+    results["advisory_review_evidence"] = audit_advisory_review_evidence(config)
     blocking = set(config["blocking_locales"])
     blocking_items: List[Dict[str, Any]] = []
     advisory_items: List[Dict[str, Any]] = []
@@ -96,6 +398,10 @@ def load_results(config: Dict[str, Any]) -> Dict[str, Any]:
             (blocking_items if item["locale"] in blocking else advisory_items).append(
                 {"status": status, **item}
             )
+    advisory_items.extend(
+        {"status": "source_coverage_gap", **item}
+        for item in results["source_coverage_gaps"]
+    )
     return {
         **results,
         "policy": {
@@ -187,6 +493,7 @@ def adopt(locales: List[str], routes: List[str], provenance: Path, config: Dict[
                     raise ValueError(f"reviewed provenance hashes do not match current files: {route}")
         finally:
             temp_config.unlink(missing_ok=True)
+    source_coverage_gaps = collect_source_coverage(outcome["adopted"], config)
     ledger = load_state(config)
     adopted_items = []
     by_route = {item["route"]: item for item in outcome["adopted"]}
@@ -211,7 +518,10 @@ def adopt(locales: List[str], routes: List[str], provenance: Path, config: Dict[
         pending.replace(state_path)
     finally:
         pending.unlink(missing_ok=True)
-    print(json.dumps({"adopted": adopted_items}, ensure_ascii=False))
+    print(json.dumps({
+        "adopted": adopted_items,
+        "source_coverage_gaps": source_coverage_gaps,
+    }, ensure_ascii=False))
     return 0
 
 
@@ -238,6 +548,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                 for item in results[status]:
                     label = "BLOCKING" if item["locale"] in config["blocking_locales"] else "ADVISORY"
                     print(f"{label:9} {status:14} {item['route']:20} -> {item['locale']}")
+            for item in results["source_coverage_gaps"]:
+                detail = "; ".join(
+                    gap.get("heading")
+                    or gap.get("href")
+                    or f"{gap.get('kind')}: {gap.get('block') or gap.get('level') or ''} "
+                    f"({gap.get('source_count')} source / {gap.get('target_count')} target)"
+                    for gap in item["omissions"][:3]
+                )
+                print(
+                    f"ADVISORY  source_coverage_gap {item['route']:20} -> "
+                    f"{item['locale']}: {detail}"
+                )
+            audit = results["advisory_review_evidence"]
+            print(
+                "Advisory review evidence: "
+                f"{len(audit['current_pairs'])} current route pairs, "
+                f"{len(audit['missing'])} missing, "
+                f"{len(audit['duplicates'])} duplicate, "
+                f"{len(audit['superseded'])} superseded, "
+                f"{len(audit['unmatched'])} unmatched, "
+                f"{len(audit['invalid_records'])} invalid"
+            )
         if args.mode == "check" and results["policy"]["blocking_items"]:
             return 1
         return 0

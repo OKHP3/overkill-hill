@@ -649,9 +649,10 @@ def featured_release_parity_errors(rendered_pages: dict[str, str]) -> list[str]:
             "rendered from the page manifest"
         )
     else:
+        visible_content = checker["visible_html_markup"](generated_content)
         releases = [
             release.lower()
-            for release in checker["_ARTICLE_RELEASE_RE"].findall(generated_content)
+            for release in checker["_ARTICLE_RELEASE_RE"].findall(visible_content)
         ]
         if len(releases) != 1:
             generated_release = None

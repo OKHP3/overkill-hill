@@ -6,7 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +27,14 @@ if BUILD_SITE_SPEC is None or BUILD_SITE_SPEC.loader is None:
     raise SystemExit("Unable to load scripts/build-site.py")
 build_site = importlib.util.module_from_spec(BUILD_SITE_SPEC)
 BUILD_SITE_SPEC.loader.exec_module(build_site)
+
+VALIDATE_SITE_SPEC = importlib.util.spec_from_file_location(
+    "validate_site", ROOT / "scripts" / "validate-site.py"
+)
+if VALIDATE_SITE_SPEC is None or VALIDATE_SITE_SPEC.loader is None:
+    raise SystemExit("Unable to load scripts/validate-site.py")
+validate_site = importlib.util.module_from_spec(VALIDATE_SITE_SPEC)
+VALIDATE_SITE_SPEC.loader.exec_module(validate_site)
 
 
 def check_case(
@@ -53,6 +61,11 @@ def check_case(
 def check_article_release_variations() -> None:
     valid_labels = (
         (
+            "escaped markup remains a text example",
+            "&lt;span&gt;Article v9.9: example&lt;/span&gt;"
+            "<span>Article v0.5: Council-Assisted Scoring</span>",
+        ),
+        (
             "span with attributes, whitespace, and mixed casing",
             '<SPAN class="article-release" data-version="current">\n'
             "  ARTICLE \n V0.5 \n : Council-Assisted Scoring\n"
@@ -77,6 +90,141 @@ def check_article_release_variations() -> None:
             raise AssertionError(
                 f"{name}: expected v0.5 without an error, got {release!r}, {error!r}"
             )
+
+
+def check_hidden_article_release_decoys() -> None:
+    route = check_banner.FEATURED_ARTICLE_ROUTE
+    visible = "<span>Article v0.5: Council-Assisted Scoring</span>"
+    hidden_decoy = (
+        "<script>Article v0.7: decoy</script>"
+        "<style>.label::after { content: 'Article v0.8: decoy'; }</style>"
+        "<template><strong>Article v0.9: decoy</strong></template>"
+        "<!-- <b>Article v1.0: decoy</b> -->"
+        '<div hidden>Article v1.1: decoy</div>'
+    )
+    hub_markup = (
+        '<div class="writing-card-kicker--featured">'
+        f"{visible}</div>"
+    )
+    with tempfile.TemporaryDirectory(dir=ROOT / "tests" / "fixtures") as temp_dir:
+        root = Path(temp_dir)
+        hub = root / "hub.html"
+        hub.write_text(hub_markup, encoding="utf-8")
+
+        decoy_article = root / "article-with-hidden-decoy.html"
+        decoy_article.write_text(hidden_decoy + visible, encoding="utf-8")
+        release, error = check_banner._featured_article_release(
+            str(root), decoy_article.name
+        )
+        findings = validate_site.validate_writing_release_alignment(
+            hub, decoy_article, route
+        )
+        if release != "v0.5" or error is not None or findings:
+            raise AssertionError(
+                "hidden decoys must not change a visible release: "
+                f"banner={(release, error)!r}, shared={findings!r}"
+            )
+
+        hidden_only = root / "article-hidden-only.html"
+        hidden_only.write_text(
+            "<template><span>Article v0.5: hidden only</span></template>",
+            encoding="utf-8",
+        )
+        relative_path = hidden_only.relative_to(ROOT).as_posix()
+        release, error = check_banner._featured_article_release(
+            str(root), hidden_only.name
+        )
+        findings = validate_site.validate_writing_release_alignment(
+            hub, hidden_only, route
+        )
+        if release is not None or error is None:
+            raise AssertionError(
+                f"hidden-only label must fail banner check: {(release, error)!r}"
+            )
+        if route not in error or hidden_only.name not in error:
+            raise AssertionError(f"banner error lacks route/path: {error!r}")
+        if (
+            len(findings) != 1
+            or route not in findings[0].msg
+            or relative_path not in findings[0].page
+        ):
+            raise AssertionError(
+                f"hidden-only label must fail shared check with route/path: {findings!r}"
+            )
+
+
+def check_shared_article_release_contract() -> None:
+    valid_labels = (
+        '<SPAN class="article-release" data-version="current">\n'
+        "  ARTICLE \n V0.5 \n : Council-Assisted Scoring\n"
+        "</SPAN>",
+        '<article-release data-role="article-release" class="eyebrow-label">'
+        "\n\tArticle\tv0.5: Council-Assisted Scoring\n"
+        "</article-release>",
+    )
+    route = validate_site.FEATURED_WRITING_ROUTE
+    with tempfile.TemporaryDirectory(dir=ROOT / "tests" / "fixtures") as temp_dir:
+        root = Path(temp_dir)
+        hub = root / "hub.html"
+        hub.write_text(
+            '<div class="writing-card-kicker--featured">'
+            "<span>Article v0.5: Council-Assisted Scoring</span>"
+            "</div>",
+            encoding="utf-8",
+        )
+
+        for index, label in enumerate(valid_labels):
+            article = root / f"valid-{index}.html"
+            article.write_text(label, encoding="utf-8")
+            release, error = check_banner._featured_article_release(
+                str(root), article.name
+            )
+            findings = validate_site.validate_writing_release_alignment(
+                hub, article, route
+            )
+            if release != "v0.5" or error is not None or findings:
+                raise AssertionError(
+                    "both release validators must accept the same semantic label "
+                    f"variation; banner={(release, error)!r}, shared={findings!r}"
+                )
+
+        malformed_labels = (
+            ("source", ""),
+            (
+                "generated",
+                "<span>Article v0.5: First label</span>"
+                "<strong>Article v0.6: Second label</strong>",
+            ),
+        )
+        for label_kind, content in malformed_labels:
+            article = root / f"{label_kind}-article.html"
+            article.write_text(content, encoding="utf-8")
+            relative_path = article.relative_to(ROOT).as_posix()
+            release, error = check_banner._featured_article_release(
+                str(root), article.name
+            )
+            findings = validate_site.validate_writing_release_alignment(
+                hub, article, route
+            )
+            if release is not None or error is None:
+                raise AssertionError(
+                    f"banner validator must reject {label_kind} label set: "
+                    f"{(release, error)!r}"
+                )
+            if route not in error or article.name not in error:
+                raise AssertionError(
+                    f"banner diagnostic must identify route and path: {error!r}"
+                )
+            if len(findings) != 1:
+                raise AssertionError(
+                    f"shared validator must produce one finding for {label_kind}: "
+                    f"{findings!r}"
+                )
+            finding = findings[0]
+            if route not in finding.msg or relative_path not in finding.page:
+                raise AssertionError(
+                    f"shared diagnostic must identify route and path: {finding!r}"
+                )
 
 
 def check_main_case(
@@ -317,10 +465,123 @@ def check_generated_build_blocks_release_disagreement() -> None:
                 )
 
 
+def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
+    source_relative = check_banner.FEATURED_ARTICLE_SOURCE
+    generated_relative = check_banner.FEATURED_ARTICLE_GENERATED
+    route = check_banner.FEATURED_ARTICLE_ROUTE
+    source_content = "<span>Article v0.6: Source release</span>"
+    previous_output = "<span>Article v0.5: Previously generated release</span>"
+    sitemap_content = "<urlset><url><loc>preserved</loc></url></urlset>"
+    scenarios = (
+        (
+            "missing manifest route",
+            [{"path": "about/index.html"}],
+            {"about/index.html": "<main>Other page</main>"},
+            generated_relative,
+        ),
+        (
+            "missing rendered label",
+            [{"path": generated_relative}],
+            {generated_relative: "<main>No release label</main>"},
+            generated_relative,
+        ),
+        (
+            "ambiguous rendered labels",
+            [{"path": generated_relative}],
+            {
+                generated_relative: (
+                    "<span>Article v0.6: First release</span>"
+                    "<strong>Article v0.7: Second release</strong>"
+                )
+            },
+            generated_relative,
+        ),
+    )
+    checker_data = {
+        "FEATURED_ARTICLE_SOURCE": source_relative,
+        "FEATURED_ARTICLE_GENERATED": generated_relative,
+        "FEATURED_ARTICLE_ROUTE": route,
+        "_ARTICLE_RELEASE_RE": check_banner._ARTICLE_RELEASE_RE,
+        "_featured_article_release": check_banner._featured_article_release,
+        "visible_html_markup": check_banner.visible_html_markup,
+    }
+
+    for check in (False, True):
+        for name, pages, rendered_by_path, expected_path in scenarios:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                source_path = root / source_relative
+                source_path.parent.mkdir(parents=True, exist_ok=True)
+                source_path.write_text(source_content, encoding="utf-8")
+                generated_path = root / generated_relative
+                generated_path.parent.mkdir(parents=True, exist_ok=True)
+                generated_path.write_text(previous_output, encoding="utf-8")
+                sitemap = root / "sitemap.xml"
+                sitemap.write_text(sitemap_content, encoding="utf-8")
+                manifest = root / "site-src" / "pages.json"
+                manifest.parent.mkdir(parents=True, exist_ok=True)
+                manifest.write_text(json.dumps({"pages": pages}), encoding="utf-8")
+
+                output = StringIO()
+                errors = StringIO()
+                namespace = build_site.build.__globals__
+                with (
+                    patch.dict(
+                        namespace,
+                        {
+                            "ROOT": root,
+                            "MANIFEST": manifest,
+                            "SITEMAP": sitemap,
+                            "policies": lambda: ({}, lambda _path: "document"),
+                            "render_page": lambda page, *_args: rendered_by_path[
+                                page["path"]
+                            ],
+                        },
+                    ),
+                    patch.object(
+                        namespace["runpy"], "run_path", return_value=checker_data
+                    ),
+                    patch.object(
+                        namespace["subprocess"],
+                        "run",
+                        return_value=SimpleNamespace(returncode=0),
+                    ),
+                    redirect_stdout(output),
+                    redirect_stderr(errors),
+                ):
+                    result = build_site.build(check=check)
+
+                mode = "--check" if check else "generation"
+                diagnostic = errors.getvalue()
+                if result != 1:
+                    raise AssertionError(
+                        f"build-site {mode} accepted {name}: {output.getvalue()}"
+                    )
+                if route not in diagnostic or expected_path not in diagnostic:
+                    raise AssertionError(
+                        f"build-site {mode} {name} lacks route/path diagnostic: "
+                        f"{diagnostic}"
+                    )
+                if source_path.read_text(encoding="utf-8") != source_content:
+                    raise AssertionError(
+                        f"build-site {mode} {name} changed source evidence"
+                    )
+                if generated_path.read_text(encoding="utf-8") != previous_output:
+                    raise AssertionError(
+                        f"build-site {mode} {name} overwrote generated evidence"
+                    )
+                if sitemap.read_text(encoding="utf-8") != sitemap_content:
+                    raise AssertionError(
+                        f"build-site {mode} {name} changed sitemap evidence"
+                    )
+
+
 def main() -> int:
     featured = "/writings/first-diagram-is-a-liar/#council-scoring"
     stale_release = "v0.6"
     check_article_release_variations()
+    check_shared_article_release_contract()
+    check_hidden_article_release_decoys()
     release_failure = (
         f"banner release mismatch for {check_banner.FEATURED_ARTICLE_ROUTE}",
         f"expected {stale_release}",
@@ -472,6 +733,7 @@ def main() -> int:
     check_update_and_dry_run_preserve_repair_behavior()
     check_update_is_atomic()
     check_generated_build_blocks_release_disagreement()
+    check_build_blocks_missing_or_ambiguous_featured_release()
     print("check-banner localized regression checks passed")
     return 0
 

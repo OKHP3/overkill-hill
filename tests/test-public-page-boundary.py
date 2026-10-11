@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +20,7 @@ from urllib.error import HTTPError
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+import public_page_boundary
 
 
 def load_script(name: str):
@@ -71,6 +74,81 @@ class ExternalArchiveRetryTests(unittest.TestCase):
 
 
 class PublicPageBoundaryTests(unittest.TestCase):
+    def test_active_html_scanners_are_registered_and_boundary_checked(self) -> None:
+        discovery = re.compile(
+            r"iter_public_html_files|is_public_page_path|"
+            r"\.(?:rglob|glob)\s*\(\s*[\"'][^\"']*\.html|"
+            r"os\.(?:walk|scandir)\s*\(|"
+            r"git\s+ls-files[^\n]*\.html|"
+            r"\b(?:find|iter)_html_files\s*\(",
+            re.IGNORECASE,
+        )
+        registry = public_page_boundary.HTML_SCANNER_REGISTRY
+        self.assertTrue(registry)
+
+        candidates = set()
+        # The active script directory is scanned one level only; archived
+        # historical tools are intentionally outside this inventory.
+        for path in SCRIPTS.iterdir():
+            if (
+                not path.is_file()
+                or path.name.startswith("test-")
+                or path.name == "public_page_boundary.py"
+                or path.suffix not in {".py", ".js", ".mjs"}
+            ):
+                continue
+            source = path.read_text(encoding="utf-8", errors="replace")
+            if discovery.search(source):
+                candidates.add(path.name)
+        self.assertEqual(
+            candidates,
+            set(registry),
+            "new or removed HTML discovery scripts must update the scanner registry",
+        )
+
+        active_scripts = {
+            name
+            for name in re.findall(
+                r"^\| `([^`]+)` \| active \|",
+                (SCRIPTS / "README.md").read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        }
+        self.assertTrue(
+            set(registry) <= active_scripts,
+            f"registry entries must be documented as active: {set(registry) - active_scripts}",
+        )
+        for scanner, policy in registry.items():
+            source = (SCRIPTS / scanner).read_text(encoding="utf-8")
+            if policy.startswith("shared"):
+                self.assertRegex(
+                    source,
+                    r"iter_public_html_files|is_public_page_path",
+                    f"{scanner} claims the shared policy but does not use it",
+                )
+            elif policy == "exception: source-project-detail-inventory":
+                self.assertIn("site-src/pages", source)
+                self.assertIn("index.main.html", source)
+                exception_test = ROOT / "tests" / "test-project-status.py"
+                self.assertTrue(exception_test.is_file())
+                test_source = exception_test.read_text(encoding="utf-8")
+                self.assertIn("scripts/project-status.py", test_source)
+                self.assertIn("test_missing_detail", test_source)
+            else:
+                self.fail(f"{scanner} has an unnamed or unsupported policy: {policy}")
+
+        readme = (SCRIPTS / "README.md").read_text(encoding="utf-8")
+        registry_rows = re.findall(
+            r"^\| `([^`]+)` \| ([^|]+) \|",
+            readme.split("### Active HTML scanner registry", 1)[-1].split("\n### ", 1)[0],
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            dict(registry_rows),
+            registry,
+            "README scanner inventory must match the executable registry",
+        )
+
     def test_html_inventories_share_boundary_and_keep_narrow_exceptions(self) -> None:
         csp = load_script("csp")
         validator = load_script("validate-site")
@@ -223,6 +301,85 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 public_pages,
                 "release routes remain allowlisted while using shared page eligibility",
             )
+
+    def test_voice_locale_profiles_are_separate_from_en_us_baseline(self) -> None:
+        voice = load_script("lint-voice")
+        with tempfile.TemporaryDirectory(prefix="voice-locale-boundary-") as directory:
+            root = Path(directory).resolve()
+            fixtures = {
+                "index.html": "<main><p>Please utilize the current method.</p></main>",
+                "en-gb/about/index.html": (
+                    "<main><p>Our favorite color is gray; a neighbor is traveling.</p></main>"
+                ),
+                "es-mx/about/index.html": (
+                    "<main><p>Vosotros usáis el ordenador.</p></main>"
+                ),
+                "fr/about/index.html": "<main><p>Our favorite color is gray.</p></main>",
+                "i18n/pilot/es-mx/reviewed/index.html": (
+                    "<main><p>Vosotros usáis el ordenador.</p></main>"
+                ),
+            }
+            for relative, content in fixtures.items():
+                page = root / relative
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text(content, encoding="utf-8")
+
+            with patch.object(voice, "ROOT", root):
+                en_us_paths = {path.relative_to(root).as_posix() for path in voice.find_html_files(root)}
+                en_gb_paths = {
+                    path.relative_to(root).as_posix()
+                    for path in voice.find_locale_html_files("en-gb", root)
+                }
+                es_mx_paths = {
+                    path.relative_to(root).as_posix()
+                    for path in voice.find_locale_html_files("es-mx", root)
+                }
+                self.assertEqual(en_us_paths, {"index.html", "fr/about/index.html"})
+                self.assertEqual(en_gb_paths, {"en-gb/about/index.html"})
+                self.assertEqual(es_mx_paths, {"es-mx/about/index.html"})
+
+                en_us_findings = voice.lint_file(root / "index.html")
+                en_gb_findings = voice.lint_locale_file(
+                    root / "en-gb/about/index.html", "en-gb"
+                )
+                es_mx_findings = voice.lint_locale_file(
+                    root / "es-mx/about/index.html", "es-mx"
+                )
+                self.assertEqual({finding.label for finding in en_us_findings}, {"utilize"})
+                self.assertEqual(
+                    {finding.label for finding in en_gb_findings},
+                    {"US spelling: favorite", "US spelling: color", "US spelling: gray", "US spelling: neighbor", "US spelling: traveling"},
+                )
+                self.assertEqual(
+                    {finding.label for finding in es_mx_findings},
+                    {"Spain Spanish: vosotros", "Spain Spanish: ordenador"},
+                )
+
+                with tempfile.TemporaryDirectory(prefix="voice-locale-baseline-") as baseline_dir:
+                    baseline_path = Path(baseline_dir) / "baseline.json"
+                    voice.write_baseline(
+                        baseline_path,
+                        en_us_findings,
+                        {"en-gb": en_gb_findings, "es-mx": es_mx_findings},
+                    )
+                    self.assertEqual(
+                        voice.load_baseline(baseline_path),
+                        Counter(finding.identity for finding in en_us_findings),
+                    )
+                    self.assertEqual(
+                        voice.load_locale_baselines(baseline_path),
+                        {
+                            "en-gb": Counter(f.identity for f in en_gb_findings),
+                            "es-mx": Counter(f.identity for f in es_mx_findings),
+                        },
+                    )
+
+        baseline_path = SCRIPTS / "voice-lint-baseline.json"
+        self.assertEqual(
+            set(voice.load_locale_baselines(baseline_path)),
+            {"en-gb", "es-mx"},
+            "the reviewed baseline must keep both locale profiles independent",
+        )
 
     def test_release_manifest_cannot_promote_excluded_evidence(self) -> None:
         release_builder = load_script("build-release")

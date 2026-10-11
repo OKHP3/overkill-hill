@@ -6,10 +6,38 @@ import html
 import json
 import os
 from pathlib import Path
+from urllib.parse import quote
+
+
+CURRENT_EDGE_REPORT_FIELDS = frozenset({
+    'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
+    'hosting', 'status', 'summary', 'checks',
+})
+LEGACY_EDGE_REPORT_FIELDS = frozenset({'checks'})
+EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
+EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
+MARKDOWN_DESTINATION_SAFE = ":/?#[]@!$&'()*+,;=%"
 
 
 def cell(value):
     return html.escape(str(value)).replace('|', '&#124;').replace('\n', ' ').replace('\r', ' ')
+
+
+def markdown_label(value):
+    return cell(value).replace('\\', '\\\\').replace('[', r'\[').replace(']', r'\]')
+
+
+def markdown_link(label, destination):
+    escaped_destination = quote(str(destination), safe=MARKDOWN_DESTINATION_SAFE)
+    return f'[{markdown_label(label)}](<{escaped_destination}>)'
+
+
+def artifact_link_label(report_name):
+    run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
+    run_attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '').strip()
+    if run_id and run_attempt:
+        return f'{report_name} (run {run_id}, attempt {run_attempt})'
+    return report_name
 
 
 def row(label, status, evidence):
@@ -25,14 +53,79 @@ def state(checks):
     return 'PASS' if statuses else 'NOT RUN'
 
 
-def edge_summary(report):
+def prepare_edge_report(report):
+    if not isinstance(report, dict):
+        raise ValueError('live-edge report must be a JSON object')
+
+    legacy = set(report) == LEGACY_EDGE_REPORT_FIELDS
+    if not legacy and not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+        raise ValueError(
+            'unsupported live-edge report shape; required action: migrate it to '
+            'the current scripts/verify-live-edge.py envelope or use the '
+            'documented checks-only legacy shape with check, status, and evidence '
+            'fields.'
+        )
+
     checks = report.get('checks')
     if not isinstance(checks, list) or not checks:
-        raise ValueError('live-edge report has no checks')
-    for item in checks:
-        if (not isinstance(item, dict) or item.get('status') not in {'PASS', 'FAIL', 'WARN', 'BLOCKED'}
-                or not isinstance(item.get('check'), str) or not isinstance(item.get('evidence'), str)):
-            raise ValueError('live-edge report has a malformed check')
+        label = 'legacy checks-only live-edge report' if legacy else 'live-edge report'
+        raise ValueError(
+            f'{label} has no checks; required action: migrate or regenerate the report.'
+        )
+
+    for index, item in enumerate(checks):
+        if not isinstance(item, dict):
+            if legacy:
+                raise ValueError(
+                    f'unsupported legacy check shape at checks[{index}]; required action: '
+                    'migrate it to the current report shape or provide check, status, '
+                    'and evidence.'
+                )
+            raise ValueError(f'live-edge report has a malformed check at index {index}')
+        missing = EDGE_CHECK_FIELDS - item.keys()
+        if missing:
+            label = (
+                'unsupported legacy check shape'
+                if legacy
+                else 'live-edge report has a malformed check'
+            )
+            raise ValueError(
+                f'{label} at checks[{index}]; missing required field(s): '
+                + ', '.join(sorted(missing))
+                + '; required action: migrate it to the current report shape or '
+                'provide check, status, and evidence.'
+            )
+        if (
+            not isinstance(item['check'], str)
+            or not item['check']
+            or not isinstance(item['evidence'], str)
+            or not isinstance(item['status'], str)
+            or item['status'] not in EDGE_CHECK_STATUSES
+        ):
+            if legacy and isinstance(item['status'], str) and item['status'] not in EDGE_CHECK_STATUSES:
+                raise ValueError(
+                    f'unsupported legacy live-edge status convention at checks[{index}]: '
+                    f'{item["status"]!r}; required action: map it to PASS, FAIL, WARN, '
+                    'or BLOCKED, or migrate the report to the current verifier format.'
+                )
+            if legacy:
+                raise ValueError(
+                    f'unsupported legacy check shape at checks[{index}]; required action: '
+                    'provide a non-empty check name and string evidence, or migrate it '
+                    'to the current report shape.'
+                )
+            raise ValueError(f'live-edge report has a malformed check at index {index}')
+
+    if legacy:
+        report = dict(report)
+        report['expected_commit'] = None
+        report['run_at'] = 'unknown'
+    return report, legacy
+
+
+def edge_summary(report):
+    report, legacy = prepare_edge_report(report)
+    checks = report['checks']
     # The verifier currently labels policy checks rather than emitting categories.
     # Unrecognized checks stay in content, so a new failure cannot be hidden.
     def policy(item):
@@ -48,7 +141,16 @@ def edge_summary(report):
         edge_evidence = f'{len(edge)} checks; BLOCKED hosting limitations do not prove enforcement'
     else:
         edge_evidence = f'{len(edge)} checks; policy checks were evaluated'
-    lines = [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),
+    lines = []
+    if legacy:
+        lines.append(
+            row(
+                'Report format',
+                'LEGACY',
+                'checks-only compatibility; no release SHA or report time was recorded',
+            )
+        )
+    lines += [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),
              row('Edge policy', edge_state, edge_evidence),
              row('External availability', 'NOT RUN', 'Use the separate third-party runtime report')]
     binding = next((item for item in checks if item['check'] == 'release manifest'), None)
@@ -79,7 +181,27 @@ def external_summary(report):
         raise ValueError('third-party report has missing or invalid counts')
     if summary['routes'] == 0:
         raise ValueError('third-party report sampled no routes')
-    return [
+    outages = report.get('externalOutages', [])
+    if not isinstance(outages, list):
+        raise ValueError('third-party report has invalid external outage evidence')
+    failure_rows = []
+    for outage in outages:
+        if not isinstance(outage, dict):
+            raise ValueError('third-party report has malformed external outage evidence')
+        failures = outage.get('failures', [])
+        if not isinstance(failures, list):
+            raise ValueError('third-party report has malformed external failure evidence')
+        for failure in failures:
+            if not isinstance(failure, dict):
+                raise ValueError('third-party report has malformed external failure evidence')
+            # Archived v1 reports may predate route attribution. Keep the failure
+            # visible as "unknown route" rather than hiding its outage evidence.
+            route = failure.get('route') or 'unknown route'
+            url = outage.get('url') or 'unknown dependency'
+            error = failure.get('errorText') or 'unknown failure'
+            failure_rows.append((route, url, error))
+
+    lines = [
         row('Content delivery', 'FAILED' if summary['localFailures'] else 'PASS',
             f"{summary['localFailures']} local route failures across {summary['routes']} sampled routes"),
         row('Edge policy', 'NOT RUN', 'Use the separate live-edge report'),
@@ -89,7 +211,20 @@ def external_summary(report):
             f"{summary['cspDiagnostics']} diagnostics; inspect the JSON evidence"),
         '', 'External outages and CSP diagnostics are non-blocking health signals. Confirmed local route failures fail this monitor.',
         'This browser monitor does not verify the deployed release SHA.',
-    ], bool(summary['localFailures'])
+    ]
+    if failure_rows:
+        lines += [
+            '',
+            'External failure evidence (archived failures without route attribution are shown as unknown route):',
+            '',
+            '| Route | Dependency | Failure |',
+            '| --- | --- | --- |',
+        ]
+        lines += [
+            f'| {cell(route)} | {cell(url)} | {cell(error)} |'
+            for route, url, error in failure_rows
+        ]
+    return lines, bool(summary['localFailures'])
 
 
 def main():
@@ -107,17 +242,37 @@ def main():
              f"Workflow checkout SHA: {cell(os.environ.get('GITHUB_SHA', 'local'))}",
              f"Run / attempt: {cell(os.environ.get('GITHUB_RUN_ID', 'local'))} / {cell(os.environ.get('GITHUB_RUN_ATTEMPT', 'local'))}",
              '', '| Area | State | Evidence |', '| --- | --- | --- |']
+    report_available = False
     try:
         report = json.loads(args.report.read_text(encoding='utf-8'))
         if not isinstance(report, dict):
             raise ValueError('report must be a JSON object')
         details, failed = (edge_summary if args.kind == 'edge' else external_summary)(report)
         lines.extend(details)
+        report_available = True
     except (OSError, ValueError) as exc:
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
-    if args.artifact_url:
-        evidence = f'[{cell(args.report.name)}]({cell(args.artifact_url)})'
+    if args.kind == 'external' and args.artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
+        lines += ['', f'Full route evidence artifact: {evidence} (direct artifact link)', '']
+    elif args.kind == 'external' and report_available:
+        lines += [
+            '',
+            f'External report download unavailable: only the local runner file '
+            f'{cell(args.report.name)} is available; it is not downloadable from '
+            'this summary. Check the upload step.',
+            '',
+        ]
+    elif args.kind == 'external':
+        lines += [
+            '',
+            f'External report download unavailable: no usable local report file '
+            f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
+            '',
+        ]
+    elif args.artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']

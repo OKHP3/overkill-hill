@@ -5,7 +5,7 @@
 - [Playwright system libraries](playwright-system-libraries.md) — check Replit's Chromium binary when Playwright's cache is missing; `libgbm`/`cups` still matter for shared-library failures.
 - [Screen-reader tree audit](screen-reader-tree-audit.md) — no real AT in this sandbox; use CDP `Accessibility.getFullAXTree` instead, and watch for Chromium's layout-table heuristic stripping `<table>` semantics.
 - [Layout-table CI gate](layout-table-ci-gate.md) — accessibility-qa.mjs now statically flags any `<table>` missing `<th>`/`<caption>`/`role`, catching the heuristic before it ships.
-- [GitHub workflow push auth](github-workflow-push-auth.md) — use the workflow-scoped PAT via Basic x-access-token transport; the attached OAuth connection may only have repo scope.
+- [GitHub workflow push auth](github-workflow-push-auth.md) — workflow edits need the right scope; successful blob writes do not prove Git tree/ref creation will work.
 - [Repository janitor SSH prompt](repo-janitor-ssh-prompts.md) — audit all transient Replit remotes noninteractively so stale SSH remotes cannot block branch inventory.
 - [SEO source/render boundary](seo-source-render-boundary.md) — validate manifest intent and rendered HTML separately when the build normalizes legacy metadata or excludes pilot locales.
 - [SEO fixture baselines](seo-fixture-baselines.md) — shared source/render mutations must differ from both baselines or one regression path can become a false pass.

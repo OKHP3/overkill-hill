@@ -28,6 +28,10 @@ class CspPageManifestError(ValueError):
     """Raised when a CSP source-manifest page declaration cannot be used."""
 
 
+class CspPageInventoryError(RuntimeError):
+    """Raised when tracked HTML pages cannot be discovered from Git."""
+
+
 META_RE = re.compile(
     rf'<meta\s+http-equiv=["\']{re.escape(CSP_HEADER)}["\']\s+content=(["\'])(.*?)\1\s*/?>',
     re.IGNORECASE,
@@ -89,23 +93,38 @@ def all_pages() -> list[Path]:
 
     The manifest is a deliberate CSP-specific addition to the shared public
     page boundary: a generated route must receive a CSP before it is tracked
-    by git.  Every tracked and manifest candidate still passes
+    by git, so the manifest is required rather than an optional fallback.
+    Every tracked and manifest candidate still passes
     ``is_public_page_path`` so source templates, fixtures, and translation
     evidence cannot become CSP pages by accident.
     """
-    tracked = subprocess.run(
-        ["git", "ls-files", "*.html"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "*.html"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = (getattr(exc, "stderr", None) or str(exc)).strip()
+        raise CspPageInventoryError(
+            "CSP page inventory requires a Git worktree to discover tracked HTML pages. "
+            "Run the release validator from the repository checkout with its .git metadata; "
+            f"Git reported: {detail}"
+        ) from exc
     # Newly built routes must participate before git add, so local validation
     # and a fresh CI checkout compute the same policy inventory.
     names = set(tracked.stdout.splitlines())
     manifest = ROOT / "site-src" / "pages.json"
-    if manifest.exists():
-        manifest_name = manifest.relative_to(ROOT).as_posix()
+    manifest_name = manifest.relative_to(ROOT).as_posix()
+    if not manifest.is_file():
+        raise CspPageManifestError(
+            f"{manifest_name}: required CSP source page manifest is missing or not a regular file. "
+            "Restore site-src/pages.json or regenerate the source page inventory "
+            "before running CSP generation."
+        )
+    if manifest.is_file():
         try:
             payload = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -119,25 +138,32 @@ def all_pages() -> list[Path]:
             )
 
         root = ROOT.resolve()
+        errors: list[str] = []
         for index, page in enumerate(pages, start=1):
             if not isinstance(page, dict):
-                raise CspPageManifestError(
-                    f'{manifest_name}: page entry {index} must be an object with a "path"'
+                errors.append(
+                    f'{manifest_name}: page entry {index} path <unavailable> must be '
+                    'an object with a "path"'
                 )
+                continue
             raw_path = page.get("path")
             if not isinstance(raw_path, str) or not raw_path:
-                raise CspPageManifestError(
-                    f'{manifest_name}: page entry {index} must contain a non-empty string "path"'
+                display_path = repr(raw_path) if raw_path is not None else "<missing>"
+                errors.append(
+                    f'{manifest_name}: page entry {index} path {display_path} must contain '
+                    'a non-empty string "path"'
                 )
+                continue
             if (
                 raw_path.startswith("/")
                 or re.match(r"^[A-Za-z]:", raw_path)
                 or ".." in raw_path.split("/")
             ):
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} is outside or "
                     "could escape the repository root; use a contained relative path"
                 )
+                continue
             if (
                 raw_path != raw_path.strip()
                 or "\\" in raw_path
@@ -146,36 +172,42 @@ def all_pages() -> list[Path]:
                 or not raw_path.endswith(".html")
                 or any(part in {"", "."} for part in raw_path.split("/"))
             ):
-                raise CspPageManifestError(
+                errors.append(
                     f'{manifest_name}: page entry {index} path {raw_path!r} must be a '
                     "normalized repository-relative .html path without query or fragment"
                 )
+                continue
 
             candidate = root / raw_path
             try:
                 resolved = candidate.resolve()
             except (OSError, RuntimeError, ValueError) as exc:
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} "
                     f"cannot be resolved: {exc}"
-                ) from exc
+                )
+                continue
             try:
                 resolved.relative_to(root)
-            except ValueError as exc:
-                raise CspPageManifestError(
+            except ValueError:
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} "
                     "resolves outside the repository root; use a contained relative path"
-                ) from exc
+                )
+                continue
             if not candidate.is_file():
-                raise CspPageManifestError(
+                errors.append(
                     f"{manifest_name}: page entry {index} path {raw_path!r} does not exist "
                     "as a regular HTML file; generate the page or correct/remove the stale "
                     "manifest entry"
                 )
+                continue
             # Validate declared evidence paths too, then deliberately leave
             # them out of the CSP inventory through the shared boundary.
             if is_public_page_path(candidate, root):
                 names.add(candidate.relative_to(root).as_posix())
+        if errors:
+            raise CspPageManifestError("\n".join(errors))
     return sorted(
         ROOT / name
         for name in names

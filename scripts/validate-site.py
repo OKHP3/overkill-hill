@@ -46,9 +46,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from csp import build_policies, page_class, sha256_source
+from csp import CspPageInventoryError, build_policies, page_class, sha256_source
 from brand_theme import load_brand_theme_contract, validate_brand_theme_contract
 from public_page_boundary import PUBLIC_PAGE_EXCLUDED_DIRS, iter_public_html_files
+from sitemap_xml import parse_sitemap_xml
+from article_release import visible_html_markup
 
 
 def configure_utf8_console() -> None:
@@ -82,10 +84,14 @@ THEME_STYLESHEET = ROOT / THEME_STYLESHEET_PATH.lstrip("/")
 APP_SCRIPT_PATH = "/assets/js/app.js"
 MERMAID_INIT_SCRIPT_PATH = "/assets/js/mermaid-init.js"
 SHARED_SCRIPT_PATHS = (APP_SCRIPT_PATH, MERMAID_INIT_SCRIPT_PATH)
-BRAND_THEME_CONTRACT = {
-    brand["bodyClass"]: brand
-    for brand in load_brand_theme_contract().values()
-}
+try:
+    BRAND_THEME_CONTRACT = {
+        brand["bodyClass"]: brand
+        for brand in load_brand_theme_contract().values()
+    }
+except ValueError as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(1) from exc
 THEME_COLOR_MEDIA = {
     "light": "(prefers-color-scheme: light)",
     "dark": "(prefers-color-scheme: dark)",
@@ -334,6 +340,47 @@ def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
     return location, None
 
 
+def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
+    """Find URL blocks, reporting broken boundaries and recovering at the next opener."""
+    blocks: list[tuple[int, str | None, str | None]] = []
+    position = 0
+    active: tuple[int, int] | None = None
+    for match in re.finditer(r"</?url\b[^>]*>", text, flags=re.IGNORECASE):
+        token = match.group(0)
+        if token.startswith("</"):
+            if active is None:
+                position += 1
+                blocks.append((
+                    position,
+                    None,
+                    "has a closing </url> without an opening <url>",
+                ))
+            else:
+                active_position, content_start = active
+                blocks.append((
+                    active_position,
+                    text[content_start:match.start()],
+                    None,
+                ))
+                active = None
+            continue
+
+        if active is not None:
+            active_position, _ = active
+            blocks.append((
+                active_position,
+                None,
+                "is missing closing </url> before the next <url>",
+            ))
+        position += 1
+        active = (position, match.end())
+
+    if active is not None:
+        active_position, _ = active
+        blocks.append((active_position, None, "is missing closing </url>"))
+    return blocks
+
+
 def _sitemap_entries_with_positions_and_findings_from_path(
     sitemap_path: Path,
 ) -> tuple[list[tuple[int, str, str | None]], list[Finding]]:
@@ -341,14 +388,39 @@ def _sitemap_entries_with_positions_and_findings_from_path(
     if not sitemap_path.exists():
         return [], []
     text = sitemap_path.read_text(encoding="utf-8")
+    try:
+        document = parse_sitemap_xml(text)
+    except ET.ParseError:
+        # Keep the recovery parser for malformed XML so existing diagnostics
+        # can identify and skip individual broken URL blocks.
+        document = None
+    if document is not None:
+        entries = []
+        findings = []
+        for entry in document.entries:
+            if entry.issue is not None:
+                findings.append(Finding(
+                    "ERROR",
+                    "sitemap.xml",
+                    f"sitemap URL entry at position {entry.position} {entry.issue}",
+                ))
+                continue
+            if entry.location is not None:
+                entries.append((entry.position, entry.location, entry.lastmod))
+        return entries, findings
+
     entries: list[tuple[int, str, str | None]] = []
     findings: list[Finding] = []
-    blocks = re.findall(
-        r"<url\b[^>]*>(.*?)</url>",
-        text,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    for position, block in enumerate(blocks, start=1):
+    for position, block, boundary_error in _sitemap_url_blocks(text):
+        if boundary_error is not None:
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                f"sitemap URL entry at position {position} {boundary_error}",
+            ))
+            continue
+        if block is None:
+            continue
         loc, location_error = _sitemap_location_from_block(block)
         if location_error is not None:
             findings.append(Finding(
@@ -1245,7 +1317,7 @@ def load_locale_seo_contract() -> tuple[dict[str, dict], list[Finding]]:
 
 def _release_matches(raw: str, pattern: re.Pattern[str]) -> list[str]:
     """Extract release labels from one semantic writing-page element."""
-    matches = pattern.findall(raw)
+    matches = pattern.findall(visible_html_markup(raw))
     return [match.lower() for match in matches]
 
 
@@ -1255,7 +1327,7 @@ FEATURED_CARD_RELEASE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 ARTICLE_RELEASE_RE = re.compile(
-    r"<span\b[^>]*>\s*Article\s+(v\d+(?:\.\d+)+)\s*:",
+    r"<[a-z][a-z0-9:-]*\b[^>]*>\s*Article\s+(v\d+(?:\.\d+)+)\s*:",
     re.IGNORECASE,
 )
 RELEASE_LABEL_RE = re.compile(r"\bv\d+(?:\.\d+)+\b", re.IGNORECASE)
@@ -1361,6 +1433,27 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
     return findings
 
 
+def validate_robots_indexing_directives(
+    location: str,
+    robots_values: list[str],
+) -> list[Finding]:
+    """Reject rendered robots values that disagree on index versus noindex."""
+    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
+    if not {"index", "noindex"}.issubset(set().union(*robots_tokens)):
+        return []
+    conflicting_values = [
+        value
+        for value, tokens in zip(robots_values, robots_tokens)
+        if tokens.intersection(ROBOTS_INDEXING_TOKENS)
+    ]
+    return [Finding(
+        "ERROR",
+        location,
+        "conflicting robots index/noindex directives in rendered content values: "
+        f"{conflicting_values!r}",
+    )]
+
+
 def validate_generated_seo(
     path: Path,
     parser: TagCounter,
@@ -1373,11 +1466,14 @@ def validate_generated_seo(
     rel = path.relative_to(ROOT).as_posix()
     if manifest_page is None:
         if locale_page is not None:
+            findings = validate_robots_indexing_directives(
+                rel,
+                parser.meta.get("robots", []),
+            )
             manifest_boundary = (
                 "indexable" if locale_page.get("indexable") else "noindex"
             )
             rendered_boundary = "noindex" if parser.is_noindex else "indexable"
-            findings = []
             if manifest_boundary != rendered_boundary:
                 findings.append(Finding(
                     "ERROR",
@@ -1414,19 +1510,7 @@ def validate_generated_seo(
     }
     findings = validate_organization_nodes(rel, parser)
     robots_values = parser.meta.get("robots", [])
-    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
-    if {"index", "noindex"}.issubset(set().union(*robots_tokens)):
-        conflicting_values = [
-            value
-            for value, tokens in zip(robots_values, robots_tokens)
-            if tokens.intersection(ROBOTS_INDEXING_TOKENS)
-        ]
-        findings.append(Finding(
-            "ERROR",
-            rel,
-            "conflicting robots index/noindex directives in rendered content values: "
-            f"{conflicting_values!r}",
-        ))
+    findings.extend(validate_robots_indexing_directives(rel, robots_values))
     manifest_boundary = "indexable" if is_indexable_page(manifest_page) else "noindex"
     rendered_boundary = "noindex" if parser.is_noindex else "indexable"
     if rendered_boundary != manifest_boundary:
@@ -2399,10 +2483,19 @@ def main() -> int:
     )
     all_findings.extend(validate_atom_feed())
     all_findings.extend(validate_sitemap_inventory(sitemap_urls))
-    all_findings.extend(validate_csp_hashes(pages))
+    try:
+        all_findings.extend(validate_csp_hashes(pages))
+        all_findings.extend(validate_mermaid_csp_alignment(pages))
+    except CspPageInventoryError as exc:
+        all_findings.append(
+            Finding(
+                "ERROR",
+                "CSP page inventory",
+                str(exc),
+            )
+        )
     all_findings.extend(validate_mermaid_runtime(pages))
     all_findings.extend(validate_mermaid_version_pin(pages))
-    all_findings.extend(validate_mermaid_csp_alignment(pages))
     expected_theme_url = current_content_hashed_url(THEME_STYLESHEET_PATH)
     expected_script_urls = {
         script_path: current_content_hashed_url(script_path)

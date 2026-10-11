@@ -19,6 +19,8 @@ HELPER_SCRIPTS = (
     "csp.py",
     "brand_theme.py",
     "public_page_boundary.py",
+    "sitemap_xml.py",
+    "article_release.py",
     "generate-theme-controls.py",
     "check-mtb-version.py",
     "check-banner.py",
@@ -340,6 +342,24 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         environment["PYTHONUTF8"] = "1"
         return environment
 
+    def test_validate_site_reports_missing_git_worktree_actionably(self) -> None:
+        (self.fixture / ".git").rename(self.fixture / "disabled-git-metadata")
+        result = subprocess.run(
+            [sys.executable, str(self.fixture / "scripts" / "validate-site.py")],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("CSP page inventory requires a Git worktree", output)
+        self.assertIn("Run the release validator from the repository checkout", output)
+        self.assertNotIn("Traceback", output)
+        self.assertNotIn("CalledProcessError", output)
+
     def test_validate_site_wrapper_preserves_failure_status_and_format(self) -> None:
         shutil.rmtree(self.fixture / "fr")
         subprocess.run(
@@ -393,6 +413,45 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         self.assertIn("Locale link check failed:\n", result.stderr)
         self.assertIn("fr/index.html: conflicting duplicate social-card metadata", result.stderr)
         self.assertIn("meta:og:image", result.stderr)
+
+    def test_locale_checker_reports_malformed_or_incomplete_manifest(self) -> None:
+        manifest = self.fixture / "locale-manifest.json"
+        cases = (
+            ("malformed", "{ not valid JSON", "cannot read manifest"),
+            ("invalid encoding", b"\xff", "cannot read manifest"),
+            ("incomplete", "{}", "invalid locale manifest"),
+        )
+
+        for label, content, diagnostic in cases:
+            with self.subTest(label=label):
+                if isinstance(content, bytes):
+                    manifest.write_bytes(content)
+                else:
+                    manifest.write_text(content, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(self.fixture / "scripts" / "check-locale-links.py"),
+                        "--manifest",
+                        str(manifest),
+                        "--sitemap",
+                        str(self.fixture / "locale-sitemap.xml"),
+                        "--search-index",
+                        str(self.fixture / "search-index.fr.json"),
+                    ],
+                    cwd=self.fixture,
+                    env=self._environment(),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertIn("Locale link check failed:\n", result.stderr)
+                self.assertIn(str(manifest), result.stderr)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

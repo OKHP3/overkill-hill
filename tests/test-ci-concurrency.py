@@ -4,13 +4,20 @@ This is a bounded expression fixture, not a GitHub scheduler simulation.
 Live cancellation, deployment ordering, and retry acceptance remain CI checks.
 """
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATE = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
 PAGES = (ROOT / '.github/workflows/pages.yml').read_text(encoding='utf-8')
+FOUNDATION_SITES = json.loads(
+    (ROOT / 'config/theme-control-sites.json').read_text(encoding='utf-8')
+)['sites']
 
 
 def job(source, name):
@@ -75,6 +82,27 @@ def context(workflow='Site Validation', event_name='push', ref='refs/heads/main'
 
 
 class ConcurrencyTests(unittest.TestCase):
+    def test_foundation_fingerprint_report_is_retained_after_verification(self):
+        source = job(VALIDATE, 'validate')
+        verify_step = step(source, 'Verify pinned cross-site foundation fingerprints')
+        upload_step = step(source, 'Upload shared-foundation fingerprint report')
+        self.assertIn('--report-file foundation-fingerprint-report.json', verify_step)
+        self.assertIn(
+            "if: always() && steps.foundation_verification.outcome != 'skipped'",
+            upload_step,
+        )
+        self.assertIn('path: foundation-fingerprint-report.json', upload_step)
+        self.assertIn('retention-days: 30', upload_step)
+        self.assertIn('if-no-files-found: error', upload_step)
+        self.assertRegex(
+            upload_step,
+            r'(?m)^\s+name: foundation-fingerprints-\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}$',
+        )
+        self.assertLess(
+            source.index('- name: Verify pinned cross-site foundation fingerprints'),
+            source.index('- name: Upload shared-foundation fingerprint report'),
+        )
+
     def test_theme_control_fetches_pinned_foundations_before_reviewed_checkouts(self):
         source = job(VALIDATE, 'validate')
         fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
@@ -93,20 +121,18 @@ class ConcurrencyTests(unittest.TestCase):
             'fetched unexpected revision',
             fetch_step,
         )
-        for site, revision_variable in (
-            ('OKH', 'THEME_CONTROL_OKH_REVISION'),
-            ('Glee', 'THEME_CONTROL_GLEE_REVISION'),
-            ('AskJamie', 'THEME_CONTROL_ASKJAMIE_REVISION'),
-        ):
-            with self.subTest(site=site):
+        for site in FOUNDATION_SITES:
+            name = site['name']
+            revision_variable = site['revisionVariable']
+            with self.subTest(site=name):
                 self.assertRegex(
                     fetch_step,
-                    rf'"{re.escape(site)}"\s+\\\n\s+"{re.escape(revision_variable)}"',
+                    rf'"{re.escape(name)}"\s+\\\n\s+"{re.escape(revision_variable)}"',
                 )
                 self.assertIn(
                     revision_variable,
                     fetch_step,
-                    f'{site} fetch gate must use {revision_variable}',
+                    f'{name} fetch gate must use {revision_variable}',
                 )
 
         fetch_position = source.index(
@@ -128,15 +154,101 @@ class ConcurrencyTests(unittest.TestCase):
             'pinned revision fetches must fail before the browser audit',
         )
 
+    def test_theme_control_fetch_results_are_retained_with_revision_variables(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        preserve_step = step(source, 'Preserve pinned foundation fetch failure')
+        upload_step = step(source, 'Upload theme-control revision evidence')
+
+        self.assertIn('id: foundation_fetch', fetch_step)
+        self.assertIn('continue-on-error: true', fetch_step)
+        self.assertIn(
+            'Fetch check: %s (%s=%s): FAILED; could not fetch from %s',
+            fetch_step,
+        )
+        self.assertIn(
+            'Fetch check: %s (%s=%s): FAILED; fetched unexpected revision %s from %s',
+            fetch_step,
+        )
+        self.assertIn(
+            'Fetch check: %s (%s=%s): PASS; fetched %s',
+            fetch_step,
+        )
+        for site in FOUNDATION_SITES:
+            with self.subTest(site=site['name']):
+                self.assertIn(site['name'], fetch_step)
+                self.assertIn(site['revisionVariable'], fetch_step)
+        self.assertEqual(fetch_step.count('|| fetch_status=1'), len(FOUNDATION_SITES))
+        self.assertIn('exit "$fetch_status"', fetch_step)
+        self.assertIn('tee -a theme-control-revisions.txt', fetch_step)
+
+        self.assertIn(
+            "if: always() && steps.foundation_fetch.outcome == 'failure'",
+            preserve_step,
+        )
+        self.assertLess(
+            source.index('- name: Preserve pinned foundation fetch failure'),
+            source.index('- name: Fetch reviewed OKH foundation revision'),
+            'failed fetch preflight must be preserved before revision checkouts run',
+        )
+        self.assertIn('if: always()', upload_step)
+        self.assertIn('path: theme-control-revisions.txt', upload_step)
+        self.assertIn('retention-days: 30', upload_step)
+
+    def test_theme_control_fetch_helper_reports_an_unavailable_revision_offline(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        function_match = re.search(
+            r'(?ms)^          verify_revision\(\) \{\n.*?^          \}',
+            fetch_step,
+        )
+        self.assertIsNotNone(function_match, 'missing workflow verify_revision helper')
+        helper = textwrap.dedent(function_match.group(0))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture_repository = root / 'empty-foundation.git'
+            subprocess.run(
+                ['git', 'init', '--bare', str(fixture_repository)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            environment = os.environ.copy()
+            environment['RUNNER_TEMP'] = str(root / 'runner-temp')
+            script = (
+                'set -euo pipefail\n'
+                f'{helper}\n'
+                'verify_revision "FixtureSite" "THEME_CONTROL_FIXTURE_REVISION" '
+                f'"{fixture_repository}" "{"1" * 40}"\n'
+            )
+            result = subprocess.run(
+                ['bash', '-c', script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, 'unavailable revision must fail')
+            output = result.stdout + result.stderr
+            self.assertIn('FixtureSite', output)
+            self.assertIn('THEME_CONTROL_FIXTURE_REVISION', output)
+            self.assertIn('foundation revision could not be fetched', output)
+            evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
+            self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
+            self.assertIn('FAILED; could not fetch from', evidence)
+
     def test_theme_control_sites_use_all_reviewed_checkout_revisions(self):
         source = job(VALIDATE, 'validate')
         theme_step = step(source, 'Run shared theme-control regressions')
-        sites = (
-            ('OKH', '.', 'THEME_CONTROL_OKH_REVISION', 'Checkout repository', None),
-            ('Glee', '.ci/theme-sites/glee-fullytools', 'THEME_CONTROL_GLEE_REVISION',
-             'Checkout reviewed Glee foundation revision', 'OKHP3/Glee-fullyTools'),
-            ('AskJamie', '.ci/theme-sites/askjamie', 'THEME_CONTROL_ASKJAMIE_REVISION',
-             'Checkout reviewed AskJamie foundation revision', 'OKHP3/AskJamie'),
+        sites = FOUNDATION_SITES
+        self.assertEqual(len(sites), 3, 'shared foundation contract must contain exactly three reviewed sites')
+        expected_names = {site['name'] for site in sites}
+        self.assertEqual(
+            len(expected_names),
+            len(sites),
+            'shared foundation contract must not contain duplicate site names',
         )
         configured_match = re.search(
             r'THEME_CONTROL_SITES: >-\n(?P<json>.*?)\n\s+run:',
@@ -148,7 +260,7 @@ class ConcurrencyTests(unittest.TestCase):
         configured_entries = json.loads(
             ''.join(line.strip() for line in configured_match['json'].splitlines())
         )
-        expected_paths = {name: expected_path for name, expected_path, *_ in sites}
+        expected_paths = {site['name']: site['checkoutPath'] for site in sites}
         configured = {}
         for site in configured_entries:
             name = site.get('name')
@@ -160,7 +272,6 @@ class ConcurrencyTests(unittest.TestCase):
                 )
             configured[name] = site
 
-        expected_names = {name for name, *_ in sites}
         self.assertEqual(
             len(configured_entries),
             len(expected_names),
@@ -172,7 +283,12 @@ class ConcurrencyTests(unittest.TestCase):
             'THEME_CONTROL_SITES must contain exactly OKH, Glee, and AskJamie',
         )
 
-        for name, expected_path, revision_variable, checkout_name, expected_repository in sites:
+        for site in sites:
+            name = site['name']
+            expected_path = site['checkoutPath']
+            revision_variable = site['revisionVariable']
+            checkout_name = site['checkoutStep']
+            expected_repository = site.get('repository')
             with self.subTest(site=name):
                 configured_site = configured.get(name)
                 self.assertIsNotNone(
@@ -186,26 +302,17 @@ class ConcurrencyTests(unittest.TestCase):
                 )
 
                 revision_match = re.search(
-                    rf'(?m)^      {re.escape(revision_variable)}: (?P<revision>[0-9a-f]{{40}})$',
-                    source,
+                    rf'(?m)^\s+{re.escape(revision_variable)}: ([0-9a-f]{{40}})$', source,
                 )
-                self.assertIsNotNone(
-                    revision_match,
-                    f'{name} expected full-SHA {revision_variable} for {expected_path}',
-                )
-                revision = revision_match['revision'] if revision_match else None
+                self.assertIsNotNone(revision_match, f'{name} requires a full immutable SHA')
+                revision = revision_match[1]
                 self.assertEqual(
                     configured_site.get('revision') if configured_site else None,
                     revision,
-                    f'{name} expected THEME_CONTROL_SITES revision from {revision_variable} '
-                    f'for {expected_path}',
+                    f'{name} expected THEME_CONTROL_SITES revision from the accepted workflow pin',
                 )
                 if configured_site:
-                    self.assertRegex(
-                        configured_site.get('revision', ''),
-                        r'^[0-9a-f]{40}$',
-                        f'{name} expected a full-SHA THEME_CONTROL_SITES revision for {expected_path}',
-                    )
+                    self.assertIn(revision_variable, source)
 
                 try:
                     checkout_step = step(source, checkout_name)
@@ -326,6 +433,23 @@ class ConcurrencyTests(unittest.TestCase):
                     f'steps.{upload_id}.outputs.artifact-url',
                     step(source, summary_step),
                 )
+
+        same_attempt = context(run_id='200', run_attempt='3')
+        third_party_name = artifact_name(
+            job(VALIDATE, 'monitor-third-party-runtime'),
+            'Upload third-party runtime inventory',
+            same_attempt,
+        )
+        live_edge_name = artifact_name(
+            job(VALIDATE, 'monitor-live-edge'),
+            'Upload live-edge monitoring report',
+            same_attempt,
+        )
+        self.assertEqual(third_party_name, 'third-party-runtime-200-3')
+        self.assertEqual(live_edge_name, 'live-edge-monitor-200-3')
+        self.assertTrue(third_party_name.startswith('third-party-runtime-'))
+        self.assertTrue(live_edge_name.startswith('live-edge-monitor-'))
+        self.assertNotEqual(third_party_name, live_edge_name)
 
 
 if __name__ == '__main__':

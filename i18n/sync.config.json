@@ -4,6 +4,7 @@
   "state_file": "i18n/sync-state.json",
   "in_scope_routes": ["/", "/about/", "/contact/", "/projects/"],
   "blocking_locales": [],
+  "advisory_content_coverage_locales": ["de", "es"],
   "approval_requirement": "ai-reviewed-accepted; native-certification-optional",
   "target_locales": {
     "fr": {"locale": "fr-FR", "root": "fr", "skill": "okhp3-translation-en-us-fr-fr"},
