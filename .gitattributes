@@ -12,3 +12,6 @@ assets/fonts/*-license.txt -text
 
 # Keep deterministic Atom feed bytes identical across Windows and Linux.
 feed.xml text eol=lf
+
+# Keep integrity-verified Mermaid publisher bytes identical on every host.
+assets/vendor/mermaid/** -text

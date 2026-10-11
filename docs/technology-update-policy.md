@@ -2,8 +2,12 @@
 
 This repository tracks upstream releases through reviewable updates. A newer
 version is a candidate, not proof of compatibility. This policy covers the
-OverKill Hill static site, its build and QA tools, and preserved media tooling.
-Linked applications retain their own repositories and release processes.
+OverKill Hill static site and its build and QA tools. Retained media tooling is
+historical compatibility evidence, not an installed website dependency.
+MurderBird creative production and authoring-host maintenance belong to
+`OKHP3/murderbird-uncaged`, as defined by the
+[repository boundary](murderbird-repository-boundary.md). Linked applications
+retain their own repositories and release processes.
 
 ## Implemented update paths
 
@@ -11,42 +15,56 @@ Linked applications retain their own repositories and release processes.
 | --- | --- | --- |
 | npm direct dependencies and their lockfile | Daily Dependabot | Update manifest and lockfile in a PR; retain exact pins; pass Site Validation |
 | Python QA dependencies | Daily Dependabot | Update `requirements-qa.txt` in a PR; clean environment and Site Validation |
-| Audio-production requirements | Daily Dependabot in the nested source directory | Review a PR; preserve original requirements/delivery evidence; validate a separate reproduction environment and audition before accepting a new toolchain |
+| Retained MurderBird production tooling | Historical inventory with `OKHP3/murderbird-uncaged` ownership | Preserve source and original provenance; current authoring dependencies and host observations belong in the creative repository |
 | GitHub Actions | Daily Dependabot | Review action release notes and SHA changes; validate workflows and release-artifact behavior |
 | Node.js and bundled npm | Daily Technology Version Watch | Coordinate preferred `.nvmrc`/`.node-version` pins, supported package engine bounds, lock metadata, Replit module, stack checker, and README in one migration PR |
-| Python runtime | Daily Technology Version Watch | Test a new stable release alongside the current CI version, then update all workflow selectors and supported Replit modules |
+| Python runtime | Daily Technology Version Watch, including explicit compatibility-matrix selectors | Distinguish primary CI, Replit selectors, and compatibility trials; test candidates before changing primary selectors or supported Replit modules |
 | Vendored Mermaid | Existing daily Mermaid Version Watch, also inventoried here | Review and replace the complete upstream bundle, VERSION and relevant docs; run diagram, CSP, link, accessibility and browser checks |
-| Blender, FFmpeg, GarageBand | Daily publisher lookup; local version gaps remain visible | Upgrade the authoring workstation, preserve originals, and verify new render/export provenance separately |
-| Transitive npm, Mermaid bundle and Python media dependencies | Full daily report | Upgrade the owning parent or refresh a compatible lockfile in a reviewed PR; never force every child to its independent latest major |
+| Blender, FFmpeg and NumPy in retained MurderBird sources | `HISTORICAL` rows preserve recorded or unrecorded versions without publisher lookups | These rows do not claim a current installation or block website maintenance; creative-host verification belongs to `OKHP3/murderbird-uncaged` |
+| Transitive npm and Mermaid bundle dependencies | Full daily report | Upgrade the owning parent or refresh a compatible lockfile in a reviewed PR; never force every child to its independent latest major |
 | Host libraries, browser binaries, standards and hosted services | Host updates plus quarterly owner review | Follow the host/package compatibility contract and regression checks described below |
 
 Dependabot waits three days after a normal package release, groups minor/patch
 updates within each ecosystem, and leaves major changes separate. Major updates
-are not ignored. The Python media group is separate from site QA. Security
+are not ignored. The former audio-production Dependabot entry moved out
+of this website with the production sources. Security
 updates follow GitHub's security-update settings, which were not changed by
 this work. See [GitHub's configuration reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference).
 
 The new watcher runs daily at 15:23 UTC and on manual dispatch from the default
 branch. It saves JSON, a complete Markdown inventory, and a shorter run summary.
-Network failures fail the job and remain UNKNOWN; they cannot close an existing
-tracking issue. Issue content stays unchanged when findings stay unchanged.
+Network failures affecting website dependencies fail the job and remain UNKNOWN;
+they cannot close an existing tracking issue. Historical rows preserve unknown
+installations and any retained error evidence in the report, but neither their
+upgrades nor errors block this website's issue. Both historical scope and the
+explicit creative-repository owner are required for this exclusion; ownership
+alone cannot suppress a current dependency failure.
+Issue content stays unchanged when findings stay unchanged.
 All release lookups share a ten-minute budget, including retries and supplemental
 dependency discovery. Once it expires, pending lookups become UNKNOWN so reports
 can be saved with time left for artifact upload and issue reporting.
 The workflow has no repository-write, merge or deployment permission. PR runs
 execute only the offline regression tests, without issue-write permissions.
 
+When an npm publisher's `latest` tag points to a prerelease, the watcher reads
+the package's full version metadata and compares the highest published stable
+version. The report preserves the prerelease tag, both source URLs, and the
+selected stable version's engine requirements. It never treats a prerelease as
+stable or changes a package pin. Missing stable releases, malformed metadata,
+and failed fallback requests remain UNKNOWN and fail the website lookup check.
+
 ## Activation and acceptance
 
-These files are prepared locally. They become active after a reviewed PR lands
-on the GitHub default branch. No personal access token, external bot installation,
+The watcher is active on the default branch. Changes become active after a
+reviewed PR lands there. No personal access token, external bot installation,
 or new application dependency is required; the scheduled job uses `github.token`.
 
 1. Merge the tracking change through the existing protected-main process.
 2. Run **Technology Version Watch** manually on `main`. Verify both jobs pass,
    the version artifact is downloadable, and one coordinated-maintenance issue
-   records the runtime mismatch and missing media version evidence.
-3. Inspect Dependabot's update logs for all four configured directories/ecosystems.
+   records real website findings while preserving historical media evidence in
+   the report under its creative-repository owner.
+3. Inspect Dependabot's update logs for all three configured ecosystems.
    Check that eligible package updates create PRs and that Site Validation runs
    on those PRs. A configured file alone does not prove successful operation.
 4. Maintain the existing owner merge decision. Auto-merge was disabled when
@@ -60,7 +78,11 @@ after 60 days without activity. Check workflow activity during the quarterly
 review; use manual dispatch to verify a re-enabled watcher. This is ongoing
 maintenance, not a guarantee of zero lag. See [GitHub schedule behavior](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
-## Initial upgrade sequence
+## Initial upgrade sequence (September 18 historical plan)
+
+The following sequence records the original plan. It is not the current runtime
+inventory or current creative-production ownership. Read the live declarations
+and the current report before choosing an update.
 
 1. **Reconcile Node first.** Candidate: Node 24.21.0 LTS and its bundled npm
    11.19.0, verified September 18, 2026. Node 26.9.0 is the latest Current
@@ -100,7 +122,31 @@ maintenance, not a guarantee of zero lag. See [GitHub schedule behavior](https:/
 
 ## Validation and rollback
 
+### Current Python runtime policy (October 11)
+
+Primary GitHub jobs select Python **3.15.0** after the hosted 3.15.0
+compatibility job passed on commit `dd16f0c`
+([job evidence](https://github.com/OKHP3/overkill-hill/actions/runs/38143893042/job/114483127691)).
+The primary selectors cover Site Validation, live-edge monitoring, Technology
+Version Watch, i18n Page Sync, and Translation skill tests. The exact promotion
+commit must still pass its own required checks before release.
+
+The compatibility matrix retains Python 3.11, 3.14.8, and 3.15.0 with unchanged
+QA dependency pins. Older-line coverage tracks its latest patch, while primary
+CI continues comparing against the newest stable Python release. A successful
+trial does not change Replit's managed runtime: `.replit` still declares
+`python-3.11`, and the last actual host observation is **3.11.14**. No matching
+3.15 module availability has been established. Keep that host finding visible
+until actual runtime and module evidence supports a separate change.
+
 ### September 20 runtime maintenance
+
+This dated section preserves observations from September 20. The current
+compatibility selectors are in `.github/workflows/runtime-compatibility.yml`;
+the watcher inventories those trial selectors separately from primary CI and
+Replit. Later trial updates do not establish a primary-runtime migration or
+prove that Replit supplies a matching module. The September 26 creative-repository
+boundary supersedes this section's authoring-host follow-up scope.
 
 The preferred repository and CI pins now use Node 24.21.0 and bundled npm
 11.19.0. Replit currently supplies Node 24.13.0 and npm 11.6.2 through its
@@ -111,11 +157,11 @@ and the Replit major. Verify each host's actual runtime separately. The
 inventory still compares the preferred pin with the current LTS target and
 does not report the managed Replit patch as verified latest.
 
-The **Runtime compatibility** workflow trials Python 3.14.7 alongside the
-current 3.11 line using the unchanged QA requirements, maintained Python
+The **Runtime compatibility** workflow trials Python 3.14.8 and 3.15.0 alongside
+the current 3.11 line using the unchanged QA requirements, maintained Python
 regression suites, and static release gates. Every active Python test entry
 point in `validate.yml`, including the universe-map skill suite, runs under
-both interpreters. `tests/test-runtime-coverage.py` fails if a newly added
+all three interpreters. `tests/test-runtime-coverage.py` fails if a newly added
 validation suite is missing from the matrix. The matrix also checks generated
 release packaging and MurderBird provenance. Browser checks, pinned cross-site
 checkout verification, and live external/hosting probes retain their full
@@ -157,15 +203,12 @@ historical rendered artifact.
 ## Quarterly coverage review
 
 The owner reviews new manifests, external scripts/iframes, runner-image changes,
-Replit modules/Nix channel, the 19 declared OS packages, and media-native
-libraries. Record actual host package versions and provenance on each host.
-For newly verified Blender, FFmpeg or GarageBand installations, the inventory
-accepts an optional `config/technology-host-versions.json` object keyed by
-`Blender`, `FFmpeg`, or `GarageBand (macOS)`. Each entry must include a numeric
-`version`, an ISO `verified_at` date/time, and `evidence` identifying the saved
-host check. Create this only after inspection; no values are prefilled from
-upstream releases. This allows the watcher to compare current installations
-without altering historical media verification records.
+Replit modules/Nix channel, and declared OS packages. Record actual host package
+versions and provenance on each host. New Blender, FFmpeg, GarageBand and NumPy
+authoring-host observations belong in `OKHP3/murderbird-uncaged`. Legacy
+`config/technology-host-versions.json` observations cannot replace this website's
+historical production rows. Neither an upstream release number nor a retained
+production record proves a currently installed tool version.
 Do not equate a NixOS upstream release with a Replit-supported channel name.
 Playwright owns its supported browser and helper binaries; update that bundle
 through Playwright. A browser standards release does not require a package bump:

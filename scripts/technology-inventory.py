@@ -9,6 +9,7 @@ This never installs packages, changes pins, or rewrites preserved media.
 from __future__ import annotations
 
 import argparse
+import ast
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import gzip
@@ -25,6 +26,31 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 STABLE = re.compile(r"v?(\d+(?:\.\d+){0,3})\Z")
+MEDIA_OWNER = "OKHP3/murderbird-uncaged"
+
+
+def is_historical(item):
+    return item.get("scope") == "historical" and item.get("owner") == MEDIA_OWNER
+
+
+def compatibility_python_rows(text, path):
+    """Read this repository's explicit compatibility matrix, not installed versions."""
+    lines = text.splitlines()
+    consumers = [number for number, line in enumerate(lines, 1)
+                 if re.fullmatch(r"\s*python-version:\s*\$\{\{\s*matrix\.python\s*\}\}\s*", line)]
+    matrices = [(number, re.fullmatch(r"\s*python:\s*(\[.*\])\s*", line))
+                for number, line in enumerate(lines, 1)]
+    matrices = [(number, match[1]) for number, match in matrices if match]
+    if not consumers or len(matrices) != 1:
+        raise ValueError(f"Cannot inventory the explicit Python compatibility matrix in {path}")
+    number, raw = matrices[0]
+    pins = ast.literal_eval(raw)
+    if not pins or any(not isinstance(pin, str) or not re.fullmatch(r"\d+\.\d+(?:\.\d+)?", pin)
+                       for pin in pins):
+        raise ValueError(f"Invalid Python compatibility selectors in {path}:{number}")
+    evidence = [f"{path}:{number}"] + [f"{path}:{consumer}" for consumer in consumers]
+    return [{**row("Python (compatibility trial)", "runtime", pin, evidence, "python"),
+             "role": "compatibility trial"} for pin in dict.fromkeys(pins)]
 
 
 def version(value):
@@ -142,7 +168,10 @@ def inventory(root):
     actions = {}
     python = {}
     for path in sorted((root / ".github/workflows").glob("*.y*ml")):
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        text = path.read_text(encoding="utf-8")
+        if path.name == "runtime-compatibility.yml":
+            rows.extend(compatibility_python_rows(text, path.relative_to(root).as_posix()))
+        for number, line in enumerate(text.splitlines(), 1):
             source = f"{path.relative_to(root).as_posix()}:{number}"
             match = re.search(r"\buses:\s*([\w.-]+/[\w./-]+)@([\w.-]+)", line)
             if match:
@@ -153,7 +182,7 @@ def inventory(root):
     for (name, ref), paths in sorted(actions.items()):
         rows.append(row(name, "GitHub Actions", ref, paths, "github-action", owner="dependabot"))
     for pin, paths in python.items():
-        rows.append(row("Python", "runtime", pin, paths, "python"))
+        rows.append({**row("Python", "runtime", pin, paths, "python"), "role": "primary CI"})
     node = (root / ".nvmrc").read_text().strip()
     rows.append(row("Node.js", "runtime", node, [".nvmrc", ".node-version",
                     "package.json:engines.node", "package-lock.json:packages[''].engines.node"], "node"))
@@ -174,10 +203,18 @@ def inventory(root):
     renderer = "scripts/render-murderbird-first-choice.py"
     rows.append(row("numpy", "Python media", "unrecorded", [renderer], "pypi", owner="review"))
     rows.append(row("FFmpeg", "media tool", "unrecorded", [renderer], "ffmpeg"))
+    for item in rows:
+        if item["category"] in ("media tool", "Python media"):
+            item.update(owner=MEDIA_OWNER, scope="historical",
+                        note="Retained compatibility source, not an observed current installation. "
+                             "Creative production and host maintenance belong to " + MEDIA_OWNER + ".")
+            item["evidence"].append("docs/murderbird-repository-boundary.md")
     host_file = root / "config/technology-host-versions.json"
     if host_file.exists():
         records = json.loads(host_file.read_text(encoding="utf-8"))
         for item in rows:
+            if is_historical(item):
+                continue  # A host observation cannot replace immutable production provenance.
             if item["category"] != "media tool" or item["name"] not in records:
                 continue
             record = records[item["name"]]
@@ -220,7 +257,18 @@ def resolve(item, deadline=None):
         data = fetch(source, deadline=deadline)
         latest = data["version"]
         if version(latest) is None:
-            raise ValueError("npm latest tag points at a prerelease; review required")
+            if not re.fullmatch(r"\d+\.\d+\.\d+-[0-9A-Za-z.-]+(?:\+[0-9A-Za-z.-]+)?", latest):
+                raise ValueError("npm latest tag contains an invalid version")
+            extra["latest_tag"] = latest
+            extra["additional_sources"] = [source]
+            source = source.removesuffix("/latest")
+            package = fetch(source, deadline=deadline)
+            versions = package["versions"]
+            latest = stable_max(versions)
+            data = versions[latest]
+            if data.get("version") != latest:
+                raise ValueError("npm stable version metadata disagrees with its registry key")
+            extra["selection_note"] = "The latest tag is a prerelease; compared with the highest published stable version."
         extra["requires"] = data.get("engines", {})
     elif provider == "pypi":
         source = "https://pypi.org/pypi/" + key + "/json"
@@ -257,6 +305,9 @@ def resolve(item, deadline=None):
         latest = stable_max(releases)
         train = ".".join(item["current"].split(".")[:2])
         extra["latest_in_current_line"] = stable_max(v for v in releases if v.startswith(train + "."))
+        if item.get("role") == "compatibility trial":
+            # Deliberate older-line coverage tracks patch freshness, not migration.
+            extra["target"] = extra["latest_in_current_line"]
     elif provider == "github-action":
         source = f"https://api.github.com/repos/{key}/releases/latest"
         release = fetch(source, deadline=deadline)
@@ -292,6 +343,8 @@ def resolve(item, deadline=None):
 
 def enrich(rows, deadline=None):
     def one(item):
+        if is_historical(item):
+            return {**item, "latest": None, "status": "HISTORICAL"}
         try:
             return {**item, **resolve(item, deadline=deadline)}
         except Exception as exc:
@@ -330,7 +383,8 @@ def markdown(report, concise=False):
     lines = ["# Technology version inventory", "", f"Retrieved: {report['retrieved_at']}.",
              f"Source commit: `{report['source_commit']}`. Working-tree files were read.", "",
              "CURRENT compares declared pins with publisher releases. TRACKING means a release-line selector, "
-             "not a verified installed patch. UNKNOWN is not a pass. Latest does not mean compatible.", ""]
+             "not a verified installed patch. UNKNOWN is not a pass. HISTORICAL preserves external-owned "
+             "production evidence without checking it as an installed website dependency. Latest does not mean compatible.", ""]
     if report["findings"]:
         lines += ["## Configuration findings", ""] + ["- " + f for f in report["findings"]] + [""]
     categories = list(dict.fromkeys(r["category"] for r in report["technologies"]))
@@ -346,6 +400,8 @@ def markdown(report, concise=False):
             if r.get("resolved_current"):
                 pin = r["resolved_current"] + " (" + pin + ")"
             latest = str(r.get("latest") or "UNKNOWN")
+            if is_historical(r):
+                latest = "Not checked (external historical tooling)"
             if r.get("source"):
                 latest = f"[{latest}]({r['source']})"
             if r.get("latest_lts") and r["provider"] == "node":
@@ -356,6 +412,10 @@ def markdown(report, concise=False):
             lines.append("| " + " | ".join(map(cell, [r["name"], pin, latest, r["status"], evidence + "; " + r["owner"]])) + " |")
             if r.get("error"):
                 lines += ["", "Lookup error: " + cell(r["name"]) + ": " + cell(r["error"]), ""]
+            if r.get("latest_tag"):
+                lines += ["", "Publisher latest tag: " + cell(r["latest_tag"]) + ". " + cell(r["selection_note"]), ""]
+            if r.get("note"):
+                lines += ["", cell(r["note"]), ""]
         lines.append("")
     lines += ["## Reading this report", "",
               "All npm lock entries are included, including duplicates at different versions. "
@@ -386,7 +446,7 @@ def main(argv=None):
     # One deadline covers both phases and every worker, including queued rows.
     # Leave five minutes of the workflow budget for evidence upload/reporting.
     deadline = time.monotonic() + args.lookup_budget_seconds
-    rows = ([{**r, "latest": None, "status": "NOT_CHECKED"} for r in rows]
+    rows = ([{**r, "latest": None, "status": "HISTORICAL" if is_historical(r) else "NOT_CHECKED"} for r in rows]
             if args.offline else enrich(rows, deadline=deadline))
     if not args.offline and any(r.get("name") == "Mermaid" for r in rows):
         rows += upstream_inventory(rows, deadline=deadline)
@@ -401,7 +461,7 @@ def main(argv=None):
             path.write_text(content, encoding="utf-8")
     counts = {s: sum(r["status"] == s for r in rows) for s in sorted({r["status"] for r in rows})}
     print(json.dumps(dict(technologies=len(rows), statuses=counts, findings=findings), indent=2))
-    return 1 if any("error" in r for r in rows) else 0
+    return 1 if any("error" in r and not is_historical(r) for r in rows) else 0
 
 
 if __name__ == "__main__":

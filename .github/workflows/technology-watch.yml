@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.11'
+          python-version: '3.15.0'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version-file: '.nvmrc'
@@ -46,7 +46,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.11'
+          python-version: '3.15.0'
       - name: Compare declarations and locked packages with stable releases
         id: inventory
         env:
@@ -84,8 +84,10 @@ jobs:
             const report = JSON.parse(fs.readFileSync(file, 'utf8'));
             const marker = '<!-- technology-version-watch -->';
             const {owner, repo} = context.repo;
-            const errors = report.technologies.filter(r => r.error);
+            const inScope = r => !(r.scope === 'historical' && r.owner === 'OKHP3/murderbird-uncaged');
+            const errors = report.technologies.filter(r => r.error && inScope(r));
             const attention = report.technologies.filter(r =>
+              inScope(r) &&
               !['dependabot', 'parent dependency', 'Mermaid Version Watch'].includes(r.owner) &&
               ['UPDATE', 'AHEAD', 'UNKNOWN'].includes(r.target_status || r.status));
             const lines = [marker, 'Coordinated technology maintenance is required.', '',
@@ -97,6 +99,7 @@ jobs:
             }
             for (const r of errors) lines.push(`- Lookup failed for ${r.name}. Check the workflow artifact; do not infer that it is current.`);
             lines.push('', 'This issue updates only when findings change and closes only after a successful check clears them.',
+              'Retained MurderBird production-tool evidence is historical; current host maintenance belongs to OKHP3/murderbird-uncaged. Unknown historical installations are not certified by this website check.',
               'Host-managed software and standards also require the quarterly review described in the policy.');
             const body = lines.join('\n');
             const issues = await github.paginate(github.rest.issues.listForRepo,
