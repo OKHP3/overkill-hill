@@ -412,6 +412,45 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         self.assertIn("fr/index.html: conflicting duplicate social-card metadata", result.stderr)
         self.assertIn("meta:og:image", result.stderr)
 
+    def test_locale_checker_reports_malformed_or_incomplete_manifest(self) -> None:
+        manifest = self.fixture / "locale-manifest.json"
+        cases = (
+            ("malformed", "{ not valid JSON", "cannot read manifest"),
+            ("invalid encoding", b"\xff", "cannot read manifest"),
+            ("incomplete", "{}", "invalid locale manifest"),
+        )
+
+        for label, content, diagnostic in cases:
+            with self.subTest(label=label):
+                if isinstance(content, bytes):
+                    manifest.write_bytes(content)
+                else:
+                    manifest.write_text(content, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(self.fixture / "scripts" / "check-locale-links.py"),
+                        "--manifest",
+                        str(manifest),
+                        "--sitemap",
+                        str(self.fixture / "locale-sitemap.xml"),
+                        "--search-index",
+                        str(self.fixture / "search-index.fr.json"),
+                    ],
+                    cwd=self.fixture,
+                    env=self._environment(),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertIn("Locale link check failed:\n", result.stderr)
+                self.assertIn(str(manifest), result.stderr)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

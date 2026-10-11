@@ -108,10 +108,10 @@ def fail(findings: list[str], message: str) -> None:
 def load_manifest(path: Path) -> dict:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read manifest {path}: {exc}") from exc
     if not isinstance(manifest, dict):
-        raise ValueError("manifest root must be a JSON object")
+        raise ValueError(f"manifest {path} root must be a JSON object")
     return manifest
 
 
@@ -431,8 +431,11 @@ def validate(
     index_path: Path | None = None,
     root: Path = ROOT,
 ) -> list[str]:
-    manifest = load_manifest(manifest_path)
     findings: list[str] = []
+    try:
+        manifest = load_manifest(manifest_path)
+    except ValueError as exc:
+        return [str(exc)]
     try:
         locations = sitemap_locations(sitemap_path)
         urls = set(locations)
@@ -444,7 +447,7 @@ def validate(
     try:
         specs = locale_specs(manifest)
     except ValueError as exc:
-        fail(findings, str(exc))
+        fail(findings, f"invalid locale manifest {manifest_path}: {exc}")
         return findings
 
     for spec in specs:
