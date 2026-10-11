@@ -648,8 +648,8 @@ Do not place application source code, HTML templates (those go in
 
 #### 2.2.1 Per-site directory inventory (OverKill Hill P3)
 
-**Mermaid runtime override (verified 2026-09-20):** This repository uses
-Mermaid **12.0.0**, with the authoritative pin in
+**Mermaid runtime override (verified 2026-10-11):** This repository uses
+Mermaid **12.1.0**, with the authoritative pin in
 `assets/vendor/mermaid/VERSION` and the self-hosted bundle under
 `assets/vendor/mermaid/`. This per-site override supersedes the legacy v11
 description and CDN guidance in Section 2.2 for Mermaid. The shared

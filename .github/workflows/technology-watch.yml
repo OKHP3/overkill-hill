@@ -84,8 +84,10 @@ jobs:
             const report = JSON.parse(fs.readFileSync(file, 'utf8'));
             const marker = '<!-- technology-version-watch -->';
             const {owner, repo} = context.repo;
-            const errors = report.technologies.filter(r => r.error);
+            const inScope = r => !(r.scope === 'historical' && r.owner === 'OKHP3/murderbird-uncaged');
+            const errors = report.technologies.filter(r => r.error && inScope(r));
             const attention = report.technologies.filter(r =>
+              inScope(r) &&
               !['dependabot', 'parent dependency', 'Mermaid Version Watch'].includes(r.owner) &&
               ['UPDATE', 'AHEAD', 'UNKNOWN'].includes(r.target_status || r.status));
             const lines = [marker, 'Coordinated technology maintenance is required.', '',
@@ -97,6 +99,7 @@ jobs:
             }
             for (const r of errors) lines.push(`- Lookup failed for ${r.name}. Check the workflow artifact; do not infer that it is current.`);
             lines.push('', 'This issue updates only when findings change and closes only after a successful check clears them.',
+              'Retained MurderBird production-tool evidence is historical; current host maintenance belongs to OKHP3/murderbird-uncaged. Unknown historical installations are not certified by this website check.',
               'Host-managed software and standards also require the quarterly review described in the policy.');
             const body = lines.join('\n');
             const issues = await github.paginate(github.rest.issues.listForRepo,
