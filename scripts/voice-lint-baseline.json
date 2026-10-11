@@ -41,5 +41,9 @@
     "f49808549e41d987f089181a07c79d8124014932764d7e52b944f5e00e4762a1": 1,
     "f5d5012f34d0068b1abc2f46dc85c6adbd1b7c7d58a212aa1ef1b450214a5558": 1,
     "fa8a3bb54cfd967be518db2d0b2e7ad20bbd71c410f1e040ca0928f1f5fd2035": 1
+  },
+  "locale_finding_counts": {
+    "en-gb": {},
+    "es-mx": {}
   }
 }

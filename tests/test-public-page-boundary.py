@@ -9,6 +9,7 @@ import re
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
@@ -300,6 +301,85 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 public_pages,
                 "release routes remain allowlisted while using shared page eligibility",
             )
+
+    def test_voice_locale_profiles_are_separate_from_en_us_baseline(self) -> None:
+        voice = load_script("lint-voice")
+        with tempfile.TemporaryDirectory(prefix="voice-locale-boundary-") as directory:
+            root = Path(directory).resolve()
+            fixtures = {
+                "index.html": "<main><p>Please utilize the current method.</p></main>",
+                "en-gb/about/index.html": (
+                    "<main><p>Our favorite color is gray; a neighbor is traveling.</p></main>"
+                ),
+                "es-mx/about/index.html": (
+                    "<main><p>Vosotros usáis el ordenador.</p></main>"
+                ),
+                "fr/about/index.html": "<main><p>Our favorite color is gray.</p></main>",
+                "i18n/pilot/es-mx/reviewed/index.html": (
+                    "<main><p>Vosotros usáis el ordenador.</p></main>"
+                ),
+            }
+            for relative, content in fixtures.items():
+                page = root / relative
+                page.parent.mkdir(parents=True, exist_ok=True)
+                page.write_text(content, encoding="utf-8")
+
+            with patch.object(voice, "ROOT", root):
+                en_us_paths = {path.relative_to(root).as_posix() for path in voice.find_html_files(root)}
+                en_gb_paths = {
+                    path.relative_to(root).as_posix()
+                    for path in voice.find_locale_html_files("en-gb", root)
+                }
+                es_mx_paths = {
+                    path.relative_to(root).as_posix()
+                    for path in voice.find_locale_html_files("es-mx", root)
+                }
+                self.assertEqual(en_us_paths, {"index.html", "fr/about/index.html"})
+                self.assertEqual(en_gb_paths, {"en-gb/about/index.html"})
+                self.assertEqual(es_mx_paths, {"es-mx/about/index.html"})
+
+                en_us_findings = voice.lint_file(root / "index.html")
+                en_gb_findings = voice.lint_locale_file(
+                    root / "en-gb/about/index.html", "en-gb"
+                )
+                es_mx_findings = voice.lint_locale_file(
+                    root / "es-mx/about/index.html", "es-mx"
+                )
+                self.assertEqual({finding.label for finding in en_us_findings}, {"utilize"})
+                self.assertEqual(
+                    {finding.label for finding in en_gb_findings},
+                    {"US spelling: favorite", "US spelling: color", "US spelling: gray", "US spelling: neighbor", "US spelling: traveling"},
+                )
+                self.assertEqual(
+                    {finding.label for finding in es_mx_findings},
+                    {"Spain Spanish: vosotros", "Spain Spanish: ordenador"},
+                )
+
+                with tempfile.TemporaryDirectory(prefix="voice-locale-baseline-") as baseline_dir:
+                    baseline_path = Path(baseline_dir) / "baseline.json"
+                    voice.write_baseline(
+                        baseline_path,
+                        en_us_findings,
+                        {"en-gb": en_gb_findings, "es-mx": es_mx_findings},
+                    )
+                    self.assertEqual(
+                        voice.load_baseline(baseline_path),
+                        Counter(finding.identity for finding in en_us_findings),
+                    )
+                    self.assertEqual(
+                        voice.load_locale_baselines(baseline_path),
+                        {
+                            "en-gb": Counter(f.identity for f in en_gb_findings),
+                            "es-mx": Counter(f.identity for f in es_mx_findings),
+                        },
+                    )
+
+        baseline_path = SCRIPTS / "voice-lint-baseline.json"
+        self.assertEqual(
+            set(voice.load_locale_baselines(baseline_path)),
+            {"en-gb", "es-mx"},
+            "the reviewed baseline must keep both locale profiles independent",
+        )
 
     def test_release_manifest_cannot_promote_excluded_evidence(self) -> None:
         release_builder = load_script("build-release")
