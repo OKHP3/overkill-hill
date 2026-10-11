@@ -569,9 +569,30 @@ class SummaryTests(unittest.TestCase):
         for fixture in fixtures:
             with self.subTest(fixture=fixture.name):
                 try:
-                    VERIFY.validate_report_shape(self.load_fixture(fixture.name))
+                    report = self.load_fixture(fixture.name)
+                    self.assertEqual(report['schema_version'], VERIFY.LIVE_EDGE_SCHEMA_VERSION)
+                    VERIFY.validate_report_shape(report)
                 except ValueError as exc:
                     self.fail(f'{fixture.name} is not a live-edge report: {exc}')
+
+    def test_live_edge_schema_version_selects_supported_parser(self):
+        report = self.load_fixture('live-edge-pass.json')
+        VERIFY.validate_report_shape(report)
+        code, summary = self.run_summary(report)
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | PASS |', summary)
+
+        for unsupported_version in (2, True, '1'):
+            with self.subTest(schema_version=unsupported_version):
+                unsupported = copy.deepcopy(report)
+                unsupported['schema_version'] = unsupported_version
+                with self.assertRaisesRegex(
+                    ValueError, 'unsupported live-edge report schema_version'
+                ):
+                    VERIFY.validate_report_shape(unsupported)
+                code, summary = self.run_summary(unsupported)
+                self.assertEqual(code, 1)
+                self.assertIn('unsupported live-edge report schema_version', summary)
 
     def test_malformed_live_edge_fixture_has_a_clear_shape_error(self):
         report = self.load_fixture('live-edge-failure.json')
@@ -1148,6 +1169,10 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(
             SUMMARY_WRITER.CURRENT_EDGE_REPORT_FIELDS,
             frozenset(VERIFY.LIVE_EDGE_REPORT_FIELDS),
+        )
+        self.assertEqual(
+            SUMMARY_WRITER.EDGE_REPORT_SCHEMA_VERSION,
+            VERIFY.LIVE_EDGE_SCHEMA_VERSION,
         )
         self.assertEqual(
             SUMMARY_WRITER.LEGACY_EDGE_REPORT_FIELDS,

@@ -9,11 +9,15 @@ from pathlib import Path
 from urllib.parse import quote
 
 
+EDGE_REPORT_SCHEMA_VERSION = 1
 CURRENT_EDGE_REPORT_FIELDS = frozenset({
-    'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
+    'schema_version', 'verifier', 'run_at', 'base', 'timeout_seconds', 'expected_commit',
     'hosting', 'status', 'summary', 'checks',
 })
 LEGACY_EDGE_REPORT_FIELDS = frozenset({'checks'})
+ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS = frozenset(
+    field for field in CURRENT_EDGE_REPORT_FIELDS if field != 'schema_version'
+)
 EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
 EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
 MARKDOWN_DESTINATION_SAFE = ":/?#[]@!$&'()*+,;=%"
@@ -57,18 +61,37 @@ def prepare_edge_report(report):
     if not isinstance(report, dict):
         raise ValueError('live-edge report must be a JSON object')
 
-    legacy = set(report) == LEGACY_EDGE_REPORT_FIELDS
-    if not legacy and not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+    legacy_format = None
+    if set(report) == LEGACY_EDGE_REPORT_FIELDS:
+        legacy_format = 'checks-only'
+    elif 'schema_version' in report:
+        version = report['schema_version']
+        if type(version) is not int or version != EDGE_REPORT_SCHEMA_VERSION:
+            raise ValueError(
+                f'unsupported live-edge report schema_version {version!r}; '
+                f'supported version: {EDGE_REPORT_SCHEMA_VERSION}.'
+            )
+        if not CURRENT_EDGE_REPORT_FIELDS.issubset(report):
+            raise ValueError(
+                'versioned live-edge report is missing required current envelope '
+                'fields; required action: regenerate it with '
+                'scripts/verify-live-edge.py.'
+            )
+    elif set(report) == ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS:
+        # Retained reports are immutable. Keep their exact pre-versioned envelope
+        # readable, but require a declared version for all other full reports.
+        legacy_format = 'pre-versioned-archive'
+    else:
         raise ValueError(
             'unsupported live-edge report shape; required action: migrate it to '
-            'the current scripts/verify-live-edge.py envelope or use the '
-            'documented checks-only legacy shape with check, status, and evidence '
-            'fields.'
+            'a versioned scripts/verify-live-edge.py envelope or use a documented '
+            'archived shape.'
         )
 
+    legacy = legacy_format is not None
     checks = report.get('checks')
     if not isinstance(checks, list) or not checks:
-        label = 'legacy checks-only live-edge report' if legacy else 'live-edge report'
+        label = 'legacy checks-only live-edge report' if legacy_format == 'checks-only' else 'live-edge report'
         raise ValueError(
             f'{label} has no checks; required action: migrate or regenerate the report.'
         )
@@ -118,13 +141,15 @@ def prepare_edge_report(report):
 
     if legacy:
         report = dict(report)
-        report['expected_commit'] = None
-        report['run_at'] = 'unknown'
-    return report, legacy
+        if legacy_format == 'checks-only':
+            report['expected_commit'] = None
+            report['run_at'] = 'unknown'
+    return report, legacy_format
 
 
 def edge_summary(report):
-    report, legacy = prepare_edge_report(report)
+    report, legacy_format = prepare_edge_report(report)
+    legacy = legacy_format is not None
     checks = report['checks']
     # The verifier currently labels policy checks rather than emitting categories.
     # Unrecognized checks stay in content, so a new failure cannot be hidden.
@@ -142,12 +167,20 @@ def edge_summary(report):
     else:
         edge_evidence = f'{len(edge)} checks; policy checks were evaluated'
     lines = []
-    if legacy:
+    if legacy_format == 'checks-only':
         lines.append(
             row(
                 'Report format',
                 'LEGACY',
                 'checks-only compatibility; no release SHA or report time was recorded',
+            )
+        )
+    elif legacy_format == 'pre-versioned-archive':
+        lines.append(
+            row(
+                'Report format',
+                'LEGACY',
+                'retained pre-versioned envelope; archived evidence remains unchanged',
             )
         )
     lines += [row('Content delivery', state(content), f'{len(content)} checks; sampled delivery and release binding only'),

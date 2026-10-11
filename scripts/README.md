@@ -83,14 +83,13 @@ compatibility does not establish actual retained archive coverage. Whenever a
 registered source is present, the test resolves both paths inside their permitted
 directories and requires the source bytes to match the tracked fixture exactly.
 
-The summary writer supports one documented legacy live-edge shape for archived
-reports: the top-level object contains only `checks`, and each check provides
-`check`, `status` (`PASS`, `FAIL`, `WARN`, or `BLOCKED`), and `evidence`. It labels
-these summaries `LEGACY` and reports release SHA and time as unavailable rather
-than inventing current metadata. Other legacy envelopes and status aliases are
-rejected with migration guidance. `verify-live-edge.py` validates only its current
-full report envelope; use the summary writer to read the supported old shape, or
-rerun the verifier when current evidence is needed.
+New live-edge reports declare `schema_version: 1`; the summary writer dispatches
+on this value and rejects unsupported versions. It also keeps two narrow archive
+compatibility paths: checks-only reports (whose summaries are labeled `LEGACY`
+and show release SHA and time as unavailable) and the exact pre-versioned full
+envelope used by retained historical evidence. The verifier validates version 1
+reports and that exact pre-versioned archive envelope, but does not accept
+checks-only reports as new verification input.
 
 For an operator audit that requires every registered source to be present, set
 the repository Actions variable `OKHP3_STRICT_LIVE_EDGE_ARCHIVE_AUDIT` to `1`.

@@ -271,6 +271,7 @@ def report_for(scenario: dict[str, Any]) -> dict[str, Any]:
     warnings = sum(item["status"] == "WARN" for item in checks)
     status = "FAILED" if failures else ("PARTIAL" if blocked or warnings else "PASS")
     report = {
+        "schema_version": VERIFY.LIVE_EDGE_SCHEMA_VERSION,
         "verifier": "verify-live-edge.py",
         "run_at": RUN_AT,
         "base": BASE,
