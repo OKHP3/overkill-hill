@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report whether open Glee foundation-sync PRs match the current main branch.
+"""Report whether open, labeled Glee foundation PRs match the current main branch.
 
 This is a read-only diagnostic. It never updates a branch or merges a pull
 request; GitHub branch protection and review requirements remain authoritative.
@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 OWNER = 'OKHP3'
 REPOSITORY = 'Glee-fullyTools'
 BASE_BRANCH = 'main'
-FOUNDATION_BRANCH_PREFIX = 'agent/foundation-sync-'
+FOUNDATION_PR_LABEL = 'foundation-sync'
 HISTORICAL_PR_NUMBER = 42
 PAGE_SIZE = 100
 API_ROOT = 'https://api.github.com'
@@ -82,10 +82,18 @@ def list_open_foundation_prs(get_json):
                 raise GitHubAPIError(
                     'GitHub returned a pull request without base or head details'
                 )
+            labels = pull.get('labels')
+            if not isinstance(labels, list) or any(
+                not isinstance(label, dict)
+                or not isinstance(label.get('name'), str)
+                for label in labels
+            ):
+                raise GitHubAPIError(
+                    'GitHub returned a pull request with invalid labels'
+                )
             base_ref = base.get('ref')
-            head_ref = head.get('ref', '')
-            if base_ref == BASE_BRANCH and head_ref.startswith(
-                FOUNDATION_BRANCH_PREFIX
+            if base_ref == BASE_BRANCH and any(
+                label['name'] == FOUNDATION_PR_LABEL for label in labels
             ):
                 matches.append(pull)
         if len(response) < PAGE_SIZE:

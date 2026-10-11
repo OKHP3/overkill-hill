@@ -33,6 +33,16 @@ reviewed release is published on the PR branch:
 
 <https://github.com/OKHP3/Glee-fullyTools/pull/42>
 
+## Foundation PR freshness tracking
+
+The read-only freshness checker identifies open Glee foundation PRs by the
+exact `foundation-sync` pull-request label and the `main` base branch. Apply
+this label to every active foundation PR, regardless of its head-branch name;
+remove it when the PR is no longer a foundation candidate. Branch names are
+descriptive only and must not be used to decide whether a PR is included.
+The checker only reads GitHub API data and never changes labels, branches, or
+pull-request state.
+
 ## Final foundation fingerprints
 
 | File | SHA-256 | Bytes |
