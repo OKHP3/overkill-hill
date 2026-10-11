@@ -58,6 +58,8 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
         include_asset_fingerprint: bool = True,
+        asset_query_before_fingerprint: str | None = None,
+        asset_query_after_fingerprint: str | None = None,
         asset_kind: str = "css",
         asset_kinds: tuple[str, ...] | None = None,
         stale_asset_kind: str | None = None,
@@ -222,7 +224,14 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             if asset_bytes is None:
                 asset_bytes = verify_live_edge.canonical_text_bytes(ROOT / asset_path.lstrip("/"))
             asset_hash = asset_fingerprint or hashlib.sha256(asset_bytes).hexdigest()[:8]
-            asset_query = f"?v={asset_hash}" if include_asset_fingerprint else ""
+            query_parts = []
+            if asset_query_before_fingerprint:
+                query_parts.append(asset_query_before_fingerprint)
+            if include_asset_fingerprint:
+                query_parts.append(f"v={asset_hash}")
+            if asset_query_after_fingerprint:
+                query_parts.append(asset_query_after_fingerprint)
+            asset_query = f"?{'&'.join(query_parts)}" if query_parts else ""
             return {
                 "kind": kind,
                 "details": asset_details,
@@ -1073,9 +1082,47 @@ import(bareSpecifier);
         self.assertIn("!= local", asset_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_unrelated_query_options_before_and_after_asset_fingerprint(self) -> None:
+        for query_position, fixture_options in (
+            ("before", {"asset_query_before_fingerprint": "mode=dark"}),
+            ("after", {"asset_query_after_fingerprint": "theme=compact"}),
+        ):
+            with self.subTest(query_position=query_position):
+                return_code, report = self.run_live_edge_fixture(**fixture_options)
+                self.assertEqual(return_code, 0)
+                self.assertEqual(report["summary"]["failures"], 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/css/theme.css"]
+                self.assertEqual(asset_check["status"], "BLOCKED")
+                self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_query_option_does_not_hide_local_or_live_fingerprint_mismatch(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_fingerprint="00000000",
+            asset_query_after_fingerprint="mode=dark",
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "FAIL")
+        self.assertIn("!= local", checks["asset /assets/css/theme.css"]["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+        local_css = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        return_code, report = self.run_live_edge_fixture(
+            asset_body=local_css + b"\n/* changed live fixture */\n",
+            asset_query_before_fingerprint="mode=dark",
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "FAIL")
+        self.assertIn("!= live", checks["asset /assets/css/theme.css"]["evidence"])
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_missing_asset_fingerprint_fails_despite_pages_limitations(self) -> None:
         return_code, report = self.run_live_edge_fixture(
-            include_asset_fingerprint=False
+            include_asset_fingerprint=False,
+            asset_query_after_fingerprint="mode=dark",
         )
 
         self.assertEqual(return_code, 1)
