@@ -11,6 +11,8 @@ import unittest
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
+from unittest.mock import MagicMock
+from urllib.error import HTTPError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +34,40 @@ def load_script(name: str):
         sys.modules.pop(module_name, None)
         raise
     return module
+
+
+class ExternalArchiveRetryTests(unittest.TestCase):
+    def test_transient_failure_then_success(self) -> None:
+        links = load_script("check-links")
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        with patch.object(links, "urlopen", side_effect=[
+            HTTPError("https://example.test", 503, "unavailable", {}, None), response,
+        ]) as opener, patch.object(links.time, "sleep") as sleep:
+            self.assertIsNone(links.archive_link_error("https://example.test"))
+            self.assertEqual(opener.call_count, 2)
+            sleep.assert_called_once_with(1)
+
+    def test_missing_destination_is_not_retried(self) -> None:
+        links = load_script("check-links")
+        with patch.object(links, "urlopen", side_effect=HTTPError(
+            "https://example.test", 404, "missing", {}, None,
+        )) as opener, patch.object(links.time, "sleep") as sleep:
+            self.assertEqual(links.archive_link_error("https://example.test"), "HTTP 404")
+            self.assertEqual(opener.call_count, 1)
+            sleep.assert_not_called()
+
+    def test_persistent_failure_remains_blocking_and_bounded(self) -> None:
+        links = load_script("check-links")
+        for failure in (TimeoutError("timeout"), HTTPError(
+            "https://example.test", 503, "unavailable", {}, None,
+        )):
+            with self.subTest(failure=str(failure)), patch.object(
+                links, "urlopen", side_effect=failure,
+            ) as opener, patch.object(links.time, "sleep") as sleep:
+                self.assertIsNotNone(links.archive_link_error("https://example.test"))
+                self.assertEqual(opener.call_count, 3)
+                self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
 
 
 class PublicPageBoundaryTests(unittest.TestCase):

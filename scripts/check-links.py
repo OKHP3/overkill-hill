@@ -23,6 +23,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
@@ -48,6 +49,37 @@ ARTICLE_ARCHIVE_PAGE = (
 ARCHIVE_REPOSITORY = "https://github.com/OKHP3/first-diagram-is-a-liar"
 ARCHIVE_REPOSITORY_PATH = urlsplit(ARCHIVE_REPOSITORY).path
 ARCHIVE_LINK_TIMEOUT = 15
+ARCHIVE_LINK_ATTEMPTS = 3
+ARCHIVE_RETRY_STATUSES = {429, 500, 502, 503, 504}
+
+
+def archive_link_error(href: str) -> str | None:
+    """Retry transient service failures, but never forgive a broken destination."""
+    request = Request(
+        href, method="HEAD",
+        headers={"User-Agent": "OverKill-Hill-archive-link-check/1.0"},
+    )
+    for attempt in range(ARCHIVE_LINK_ATTEMPTS):
+        retryable = False
+        try:
+            with urlopen(request, timeout=ARCHIVE_LINK_TIMEOUT) as response:
+                status = response.status
+            if 200 <= status < 400:
+                return None
+            error_text = f"HTTP {status}"
+            retryable = status in ARCHIVE_RETRY_STATUSES
+        except HTTPError as error:
+            error_text = f"HTTP {error.code}"
+            retryable = error.code in ARCHIVE_RETRY_STATUSES
+            error.close()
+        except (URLError, TimeoutError, OSError) as error:
+            error_text = str(error)
+            retryable = True
+        if not retryable or attempt + 1 == ARCHIVE_LINK_ATTEMPTS:
+            return error_text
+        print(f"  Retry archive destination after {error_text}: {href}")
+        time.sleep(2 ** attempt)
+    raise AssertionError("archive link attempts must be positive")
 
 
 class PageIndexingMeta(HTMLParser):
@@ -142,27 +174,10 @@ def check_external_archive_links() -> int:
 
     failures: list[dict[str, str]] = []
     for href, labels in links_by_url.items():
-        request = Request(
-            href,
-            method="HEAD",
-            headers={"User-Agent": "OverKill-Hill-archive-link-check/1.0"},
-        )
-        try:
-            with urlopen(request, timeout=ARCHIVE_LINK_TIMEOUT) as response:
-                status = response.status
-                if not 200 <= status < 400:
-                    failures.extend(
-                        {"label": label, "href": href, "error": f"HTTP {status}"}
-                        for label in labels
-                    )
-        except HTTPError as error:
+        error = archive_link_error(href)
+        if error is not None:
             failures.extend(
-                {"label": label, "href": href, "error": f"HTTP {error.code}"}
-                for label in labels
-            )
-        except (URLError, TimeoutError, OSError) as error:
-            failures.extend(
-                {"label": label, "href": href, "error": str(error)}
+                {"label": label, "href": href, "error": error}
                 for label in labels
             )
 
