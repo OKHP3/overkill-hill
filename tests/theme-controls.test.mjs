@@ -17,9 +17,20 @@ const appScript = await readFile(join(repositoryRoot, "assets", "js", "app.js"),
 const brandThemeContract = JSON.parse(
   await readFile(join(repositoryRoot, "config", "brand-theme-contract.json"), "utf8"),
 );
+const foundationSiteContract = JSON.parse(
+  await readFile(join(repositoryRoot, "config", "theme-control-sites.json"), "utf8"),
+).sites;
 const execFileAsync = promisify(execFile);
 
 const BRAND_EXPECTATIONS = brandThemeContract.brands;
+assert.ok(Array.isArray(foundationSiteContract), "shared foundation site contract must be an array");
+assert.equal(foundationSiteContract.length, 3, "shared foundation contract must contain exactly three reviewed sites");
+const FOUNDATION_SITE_NAMES = foundationSiteContract.map(({ name }) => name);
+assert.equal(
+  new Set(FOUNDATION_SITE_NAMES).size,
+  foundationSiteContract.length,
+  "shared foundation contract must not contain duplicate site names",
+);
 
 let browser;
 
@@ -524,11 +535,11 @@ for (const scenario of GENERATED_HEAD_SCENARIOS) {
   });
 }
 
-const DEFAULT_SITE_ROOTS = [
-  { name: "OKH", expectedRoot: ".", root: join(repositoryRoot, "..", "overkill-hill"), bodyClass: "", selector: ".theme-toggle" },
-  { name: "Glee", expectedRoot: ".ci/theme-sites/glee-fullytools", root: join(repositoryRoot, "..", "glee-fullytools"), bodyClass: "glee-main", selector: ".glee-color-toggle" },
-  { name: "AskJamie", expectedRoot: ".ci/theme-sites/askjamie", root: join(repositoryRoot, "..", "askjamie"), bodyClass: "askjamie-main", selector: ".glee-color-toggle" },
-];
+const DEFAULT_SITE_ROOTS = foundationSiteContract.map((site) => ({
+  ...site,
+  expectedRoot: site.checkoutPath,
+  root: resolve(repositoryRoot, site.localPath),
+}));
 
 function configuredSiteInputs() {
   if (process.env.THEME_CONTROL_SITES) {
@@ -540,7 +551,7 @@ function configuredSiteInputs() {
         const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
         throw new Error(
           `duplicate THEME_CONTROL_SITES site ${site.name}; ` +
-          `expected checkout path ${expected?.expectedRoot || site.root || "<unknown>"}`,
+          `expected checkout path ${expected?.checkoutPath || site.root || "<unknown>"}`,
         );
       }
       names.add(site.name);
@@ -553,9 +564,15 @@ function configuredSiteInputs() {
     assert.deepEqual(
       [...names].sort(),
       DEFAULT_SITE_ROOTS.map(({ name }) => name).sort(),
-      "THEME_CONTROL_SITES must contain exactly OKH, Glee, and AskJamie",
+      `THEME_CONTROL_SITES must contain exactly ${FOUNDATION_SITE_NAMES.join(", ")}`,
     );
     for (const site of configured) {
+      const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
+      assert.equal(
+        site.root,
+        expected?.checkoutPath,
+        `${site.name || "configured site"} expected checkout path ${expected?.checkoutPath || "<unknown>"}`,
+      );
       assert.match(
         site.revision || "",
         /^[0-9a-f]{40}$/,
@@ -575,6 +592,50 @@ function configuredSiteInputs() {
   }
   return available;
 }
+
+test("configured foundation paths match the shared site contract", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract.map((site) => ({
+    name: site.name,
+    root: site.checkoutPath,
+    revision: "a".repeat(40),
+  }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify(configured);
+    assert.equal(configuredSiteInputs().length, 3);
+
+    const drifted = configured.map((site) => (
+      site.name === "Glee" ? { ...site, root: ".ci/theme-sites/wrong-glee-path" } : site
+    ));
+    process.env.THEME_CONTROL_SITES = JSON.stringify(drifted);
+    assert.throws(
+      () => configuredSiteInputs(),
+      /Glee expected checkout path \.ci\/theme-sites\/glee-fullytools/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
+
+test("duplicate configured sites retain the expected checkout-path diagnostic", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract.map((site) => ({
+    name: site.name,
+    root: site.checkoutPath,
+    revision: "a".repeat(40),
+  }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify([...configured, { ...configured[1] }]);
+    assert.throws(
+      () => configuredSiteInputs(),
+      /duplicate THEME_CONTROL_SITES site Glee; expected checkout path \.ci\/theme-sites\/glee-fullytools/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
 
 function directoryExists(path) {
   return existsSync(join(path, "index.html")) &&
@@ -652,7 +713,7 @@ test("configured sites keep foundation bytes and run against actual markup hooks
   );
   const sites = await Promise.all(inputs.map(loadConfiguredSite));
   const byName = new Map(sites.map((site) => [site.name, site]));
-  for (const expectedName of ["OKH", "Glee", "AskJamie"]) {
+  for (const expectedName of FOUNDATION_SITE_NAMES) {
     assert.ok(byName.has(expectedName), `missing configured site ${expectedName}`);
   }
 

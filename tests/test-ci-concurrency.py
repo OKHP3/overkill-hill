@@ -11,6 +11,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATE = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
 PAGES = (ROOT / '.github/workflows/pages.yml').read_text(encoding='utf-8')
+FOUNDATION_SITES = json.loads(
+    (ROOT / 'config/theme-control-sites.json').read_text(encoding='utf-8')
+)['sites']
 
 
 def job(source, name):
@@ -114,20 +117,18 @@ class ConcurrencyTests(unittest.TestCase):
             'fetched unexpected revision',
             fetch_step,
         )
-        for site, revision_variable in (
-            ('OKH', 'THEME_CONTROL_OKH_REVISION'),
-            ('Glee', 'THEME_CONTROL_GLEE_REVISION'),
-            ('AskJamie', 'THEME_CONTROL_ASKJAMIE_REVISION'),
-        ):
-            with self.subTest(site=site):
+        for site in FOUNDATION_SITES:
+            name = site['name']
+            revision_variable = site['revisionVariable']
+            with self.subTest(site=name):
                 self.assertRegex(
                     fetch_step,
-                    rf'"{re.escape(site)}"\s+\\\n\s+"{re.escape(revision_variable)}"',
+                    rf'"{re.escape(name)}"\s+\\\n\s+"{re.escape(revision_variable)}"',
                 )
                 self.assertIn(
                     revision_variable,
                     fetch_step,
-                    f'{site} fetch gate must use {revision_variable}',
+                    f'{name} fetch gate must use {revision_variable}',
                 )
 
         fetch_position = source.index(
@@ -158,12 +159,13 @@ class ConcurrencyTests(unittest.TestCase):
     def test_theme_control_sites_use_all_reviewed_checkout_revisions(self):
         source = job(VALIDATE, 'validate')
         theme_step = step(source, 'Run shared theme-control regressions')
-        sites = (
-            ('OKH', '.', 'THEME_CONTROL_OKH_REVISION', 'Checkout repository', None),
-            ('Glee', '.ci/theme-sites/glee-fullytools', 'THEME_CONTROL_GLEE_REVISION',
-             'Checkout reviewed Glee foundation revision', 'OKHP3/Glee-fullyTools'),
-            ('AskJamie', '.ci/theme-sites/askjamie', 'THEME_CONTROL_ASKJAMIE_REVISION',
-             'Checkout reviewed AskJamie foundation revision', 'OKHP3/AskJamie'),
+        sites = FOUNDATION_SITES
+        self.assertEqual(len(sites), 3, 'shared foundation contract must contain exactly three reviewed sites')
+        expected_names = {site['name'] for site in sites}
+        self.assertEqual(
+            len(expected_names),
+            len(sites),
+            'shared foundation contract must not contain duplicate site names',
         )
         configured_match = re.search(
             r'THEME_CONTROL_SITES: >-\n(?P<json>.*?)\n\s+run:',
@@ -175,7 +177,7 @@ class ConcurrencyTests(unittest.TestCase):
         configured_entries = json.loads(
             ''.join(line.strip() for line in configured_match['json'].splitlines())
         )
-        expected_paths = {name: expected_path for name, expected_path, *_ in sites}
+        expected_paths = {site['name']: site['checkoutPath'] for site in sites}
         configured = {}
         for site in configured_entries:
             name = site.get('name')
@@ -187,7 +189,6 @@ class ConcurrencyTests(unittest.TestCase):
                 )
             configured[name] = site
 
-        expected_names = {name for name, *_ in sites}
         self.assertEqual(
             len(configured_entries),
             len(expected_names),
@@ -199,7 +200,12 @@ class ConcurrencyTests(unittest.TestCase):
             'THEME_CONTROL_SITES must contain exactly OKH, Glee, and AskJamie',
         )
 
-        for name, expected_path, revision_variable, checkout_name, expected_repository in sites:
+        for site in sites:
+            name = site['name']
+            expected_path = site['checkoutPath']
+            revision_variable = site['revisionVariable']
+            checkout_name = site['checkoutStep']
+            expected_repository = site.get('repository')
             with self.subTest(site=name):
                 configured_site = configured.get(name)
                 self.assertIsNotNone(
