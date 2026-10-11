@@ -57,6 +57,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         manifest_content_type: str | None = "application/json",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
+        asset_fingerprints: dict[str, str] | None = None,
         include_asset_fingerprint: bool = True,
         asset_query_before_fingerprint: str | None = None,
         asset_query_after_fingerprint: str | None = None,
@@ -198,6 +199,19 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             raise ValueError("CSS fixture dependencies require the css-fixture asset")
         if stale_asset_kind is not None and stale_asset_kind not in all_kinds:
             raise ValueError(f"stale asset kind is not rendered: {stale_asset_kind}")
+        asset_fingerprints = asset_fingerprints or {}
+        if any(kind not in all_kinds for kind in asset_fingerprints):
+            raise ValueError("fingerprint override is for an unselected asset kind")
+        if asset_fingerprint is not None and asset_fingerprints:
+            raise ValueError(
+                "use either the shared asset_fingerprint or per-kind "
+                "asset_fingerprints, not both"
+            )
+        if asset_fingerprint is not None and len(all_kinds) > 1:
+            raise ValueError(
+                "asset_fingerprint cannot be shared across multiple rendered "
+                "assets; use asset_fingerprints by kind"
+            )
         if stale_asset_kind is not None and asset_body is None:
             raise ValueError("stale_asset_kind requires asset_body")
         if asset_body is not None and len(all_kinds) > 1 and stale_asset_kind is None:
@@ -223,7 +237,8 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             )
             if asset_bytes is None:
                 asset_bytes = verify_live_edge.canonical_text_bytes(ROOT / asset_path.lstrip("/"))
-            asset_hash = asset_fingerprint or hashlib.sha256(asset_bytes).hexdigest()[:8]
+            fingerprint_override = asset_fingerprints.get(kind, asset_fingerprint)
+            asset_hash = fingerprint_override or hashlib.sha256(asset_bytes).hexdigest()[:8]
             query_parts = []
             if asset_query_before_fingerprint:
                 query_parts.append(asset_query_before_fingerprint)
@@ -981,6 +996,37 @@ import(bareSpecifier);
                 css_asset_kinds=("image", "font"),
                 asset_body=b"stale dependency asset",
             )
+
+    def test_shared_asset_fingerprint_override_is_rejected_for_mixed_assets(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "asset_fingerprint cannot be shared across multiple rendered assets",
+        ):
+            self.run_live_edge_fixture(
+                asset_kinds=("css", "js"),
+                asset_fingerprint="00000000",
+            )
+
+    def test_mixed_asset_fingerprint_override_targets_only_selected_kind(self) -> None:
+        local_css = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        local_css_fingerprint = hashlib.sha256(local_css).hexdigest()[:8]
+        return_code, report = self.run_live_edge_fixture(
+            asset_kinds=("css", "js"),
+            asset_fingerprints={"js": "00000000"},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "FAIL")
+        self.assertIn("!= local", checks["asset /assets/js/app.js"]["evidence"])
+        self.assertIn(
+            f"/assets/css/theme.css?v={local_css_fingerprint}",
+            self.last_fixture_requests,
+        )
+        self.assertIn("/assets/js/app.js?v=00000000", self.last_fixture_requests)
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_stale_asset_selection_must_match_a_rendered_asset(self) -> None:
         with self.assertRaisesRegex(
