@@ -160,6 +160,51 @@ def mutate_navigation(raw: str, key: str, value: str) -> str:
 
 
 class SEOFixtureTests(unittest.TestCase):
+    def test_article_date_parity_rejects_python_only_syntax_before_equality(self) -> None:
+        calendar = "2026-06-12T00:00:00Z"
+        for value in (
+            "2026-W24-5", "2026-W24-5T00:00:00Z", "20260612", "20260612T00:00:00Z",
+            "2026-06-12 00:00:00Z", "2026-06-12t00:00:00Z",
+            "2026-06-12T000000Z", "2026-06-12T00:00:00+0000",
+            "2026-06-12T00:00:00+00:00:00", "2026-06-12T00:00:00+00:60",
+            "2026-06-12T24:00Z", "2026-06-12T24:00:00Z",
+            "2026-06-12T00:60:00Z", "2026-06-12T00:00:60Z",
+            "2026-02-30", "not-a-date",
+        ):
+            with self.subTest(value=value):
+                self.assertFalse(validator._article_date_values_match(value, calendar))
+                self.assertFalse(validator._article_date_values_match(calendar, value))
+                self.assertFalse(validator._article_date_values_match(value, value))
+        for value in ("2026-06-12T24:00Z", "2026-06-12T24:00:00Z"):
+            with self.subTest(value=value):
+                self.assertFalse(validator._article_date_values_match(value, "2026-06-13T00:00:00Z"))
+
+    def test_extended_article_dates_keep_calendar_and_instant_semantics(self) -> None:
+        for first, second in (
+            ("2024-02-29", "2024-02-29"),
+            ("2026-06-12T00:00Z", "2026-06-11T19:00-05:00"),
+            ("2026-06-12T00:00:00Z", "2026-06-11T19:00:00-05:00"),
+            ("2026-06-12T00:00:00.125Z", "2026-06-11T19:00:00.125-05:00"),
+            ("2026-06-12T00:00:00", "2026-06-12T00:00:00"),
+        ):
+            with self.subTest(first=first, second=second):
+                self.assertTrue(validator._article_date_values_match(first, second))
+
+    def test_article_sitemap_rejects_week_dates_in_source_and_generated_contracts(self) -> None:
+        route = "/writings/first-diagram-is-a-liar/"
+        page = self.pages_by_route[route]
+        fixture_path = GENERATED_FIXTURE / "article.html.fixture"
+        raw = mutate_jsonld_field(fixture_path.read_text(encoding="utf-8"), "dateModified", "2026-06-12T00:00:00Z")
+        parser = parse_html(raw)
+        findings = validator.validate_article_sitemap_dates(str(fixture_path), parser, page["canonical"], "2026-W24-5T00:00:00Z")
+        self.assert_rejected(findings, "article sitemap lastmod is not ISO 8601")
+        entries = validator.load_sitemap_entries()
+        entries[page["canonical"]] = "2026-W24-5T00:00:00Z"
+        findings = validator.validate_article_jsonld_source(self.source_pages, entries)
+        self.assert_rejected(findings, "article sitemap lastmod is not ISO 8601")
+        findings = validator.validate_generated_seo(fixture_path, parser, page, sitemap_entries={page["canonical"]: "2026-W24-5T00:00:00Z"})
+        self.assert_rejected(findings, "article sitemap lastmod is not ISO 8601")
+
     def _write_mixed_locale_fixture(
         self,
         root: Path,

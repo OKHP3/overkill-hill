@@ -36,7 +36,7 @@ import struct
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -609,6 +609,17 @@ def validate_atom_feed() -> list[Finding]:
             )
         )
 
+    self_links = [link for link in feed.findall(ATOM + "link") if link.get("rel") == "self"]
+    if (
+        len(self_links) != 1
+        or self_links[0].get("href") != SITE_ORIGIN + "/feed.xml"
+        or self_links[0].get("type") != "application/atom+xml"
+    ):
+        findings.append(Finding(
+            "ERROR", "feed.xml",
+            "Atom feed must have one canonical self link with application/atom+xml type",
+        ))
+
     entries = feed.findall(ATOM + "entry")
     if not entries:
         findings.append(Finding("ERROR", "feed.xml", "Atom feed contains no entries"))
@@ -990,6 +1001,18 @@ def validate_organization_nodes(location: str, parser: TagCounter) -> list[Findi
     return findings
 
 
+def _parse_article_date(value: str) -> datetime:
+    """Parse extended calendar dates with literal punctuation before parity."""
+    if not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
+        r"(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9](?:\.[0-9]+)?)?"
+        r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?)?",
+        value,
+    ):
+        raise ValueError("Article date requires extended calendar syntax")
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def _article_date_values_match(article_date: str, published_time: str) -> bool:
     """Compare Article dates without losing either calendar or instant meaning.
 
@@ -1003,23 +1026,15 @@ def _article_date_values_match(article_date: str, published_time: str) -> bool:
     date-time are not interchangeable; values outside those exact or
     normalized matches fail parity.
     """
-    if article_date == published_time:
-        return True
-
-    def is_date_only(value: str) -> bool:
-        try:
-            date.fromisoformat(value)
-        except ValueError:
-            return False
-        return "T" not in value and "t" not in value
-
-    if is_date_only(article_date) or is_date_only(published_time):
+    try:
+        article_datetime = _parse_article_date(article_date)
+        published_datetime = _parse_article_date(published_time)
+    except ValueError:
         return False
 
-    try:
-        article_datetime = datetime.fromisoformat(article_date.replace("Z", "+00:00"))
-        published_datetime = datetime.fromisoformat(published_time.replace("Z", "+00:00"))
-    except ValueError:
+    if article_date == published_time:
+        return True
+    if "T" not in article_date or "T" not in published_time:
         return False
 
     article_offset = article_datetime.utcoffset()
@@ -1127,7 +1142,7 @@ def validate_article_jsonld_dates(
                 ))
                 continue
             try:
-                datetime.fromisoformat(value.replace("Z", "+00:00"))
+                _parse_article_date(value)
             except ValueError:
                 findings.append(Finding(
                     "ERROR",
@@ -1172,7 +1187,7 @@ def validate_article_sitemap_dates(
         return findings
 
     try:
-        datetime.fromisoformat(sitemap_lastmod.replace("Z", "+00:00"))
+        _parse_article_date(sitemap_lastmod)
     except ValueError:
         findings.append(
             Finding(
@@ -1427,7 +1442,7 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
                 findings.append(Finding("ERROR", rel, "article source page is missing article:published_time"))
             else:
                 try:
-                    datetime.fromisoformat(published.replace("Z", "+00:00"))
+                    _parse_article_date(published)
                 except ValueError:
                     findings.append(Finding("ERROR", rel, f"article:published_time is not ISO 8601: {published!r}"))
     return findings
@@ -1544,7 +1559,7 @@ def validate_generated_seo(
             findings.append(Finding("ERROR", rel, "article generated page is missing article:published_time"))
         else:
             try:
-                datetime.fromisoformat(published.replace("Z", "+00:00"))
+                _parse_article_date(published)
             except ValueError:
                 findings.append(Finding("ERROR", rel, f"article:published_time is not ISO 8601: {published!r}"))
         if sitemap_entries is not None:
