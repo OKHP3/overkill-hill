@@ -3,10 +3,12 @@
 import argparse
 from collections import Counter
 import html
+import ipaddress
 import json
 import os
 from pathlib import Path
-from urllib.parse import quote
+import re
+from urllib.parse import quote, urlsplit
 
 
 EDGE_REPORT_SCHEMA_VERSION = 1
@@ -21,6 +23,7 @@ ARCHIVED_PRE_VERSION_EDGE_REPORT_FIELDS = frozenset(
 EDGE_CHECK_FIELDS = frozenset({'check', 'status', 'evidence'})
 EDGE_CHECK_STATUSES = frozenset({'PASS', 'FAIL', 'WARN', 'BLOCKED'})
 MARKDOWN_DESTINATION_SAFE = ":/?#[]@!$&'()*+,;=%"
+HOST_LABEL = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z')
 
 
 def cell(value):
@@ -34,6 +37,55 @@ def markdown_label(value):
 def markdown_link(label, destination):
     escaped_destination = quote(str(destination), safe=MARKDOWN_DESTINATION_SAFE)
     return f'[{markdown_label(label)}](<{escaped_destination}>)'
+
+
+def is_valid_artifact_url(value):
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or any(ord(character) < 0x20 or ord(character) == 0x7f for character in value)
+        or re.search(r'%(?![0-9A-Fa-f]{2})', value)
+    ):
+        return False
+    try:
+        parsed = urlsplit(value)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return False
+    if (
+        parsed.scheme.lower() != 'https'
+        or not parsed.netloc
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or '\\' in parsed.netloc
+        or (port is not None and port > 65535)
+    ):
+        return False
+
+    if ':' in hostname:
+        try:
+            ipaddress.IPv6Address(hostname)
+        except ValueError:
+            return False
+    else:
+        try:
+            ascii_hostname = hostname.encode('idna').decode('ascii')
+        except UnicodeError:
+            return False
+        canonical_hostname = (
+            ascii_hostname[:-1] if ascii_hostname.endswith('.') else ascii_hostname
+        )
+        labels = canonical_hostname.split('.')
+        if (
+            len(canonical_hostname) > 253
+            or not labels
+            or any(not HOST_LABEL.fullmatch(label) for label in labels)
+        ):
+            return False
+    return True
 
 
 def artifact_link_label(report_name):
@@ -271,6 +323,7 @@ def main():
     )
     parser.add_argument('--summary', type=Path, default=os.environ.get('GITHUB_STEP_SUMMARY'))
     args = parser.parse_args()
+    artifact_url = args.artifact_url if is_valid_artifact_url(args.artifact_url) else ''
     lines = ['## Site delivery evidence', '',
              f"Workflow checkout SHA: {cell(os.environ.get('GITHUB_SHA', 'local'))}",
              f"Run / attempt: {cell(os.environ.get('GITHUB_RUN_ID', 'local'))} / {cell(os.environ.get('GITHUB_RUN_ATTEMPT', 'local'))}",
@@ -286,8 +339,8 @@ def main():
     except (OSError, ValueError) as exc:
         failed = True
         lines.append(row('Evidence', 'UNKNOWN', f'No usable {args.kind} report: {exc}'))
-    if args.kind == 'external' and args.artifact_url:
-        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
+    if args.kind == 'external' and artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence} (direct artifact link)', '']
     elif args.kind == 'external' and report_available:
         lines += [
@@ -304,8 +357,8 @@ def main():
             f'exists ({cell(args.report.name)}). Check the monitor and upload steps.',
             '',
         ]
-    elif args.artifact_url:
-        evidence = markdown_link(artifact_link_label(args.report.name), args.artifact_url)
+    elif artifact_url:
+        evidence = markdown_link(artifact_link_label(args.report.name), artifact_url)
         lines += ['', f'Full route evidence artifact: {evidence}', '']
     else:
         lines += ['', f'Full route evidence file: {cell(args.report.name)}. Check the upload step for artifact availability.', '']

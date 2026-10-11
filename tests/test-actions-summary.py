@@ -1262,6 +1262,33 @@ class SummaryTests(unittest.TestCase):
             summary,
         )
 
+    def test_invalid_artifact_destinations_are_not_rendered_as_markdown_links(self):
+        invalid_urls = (
+            'javascript:alert(1)',
+            '//evil.example/artifact',
+            'https:///missing-host/artifact',
+            'https://',
+            'http://github.com/example/site/actions/runs/123/artifacts/456',
+            '/relative/artifact',
+            'https://github.com:99999/example/artifact',
+            'https://user:password@github.com/example/artifact',
+            'https://example..com/artifact',
+            'https://github.com/example/%zz',
+        )
+        reports = {
+            'edge': self.load_fixture('live-edge-failure.json'),
+            'external': self.load_fixture('external-runtime-degraded.json'),
+        }
+        for kind, report in reports.items():
+            for artifact_url in invalid_urls:
+                with self.subTest(kind=kind, artifact_url=artifact_url):
+                    code, summary = self.run_summary(
+                        report, kind, artifact_url=artifact_url
+                    )
+
+                    self.assertEqual(code, 1 if kind == 'edge' else 0)
+                    self.assertNotRegex(summary, r'\[[^\]]*\]\(<[^>]*>\)')
+
     def test_live_edge_workflows_pass_uploaded_artifact_url_to_summary(self):
         for workflow in ('.github/workflows/validate.yml', '.github/workflows/pages.yml'):
             with self.subTest(workflow=workflow):
