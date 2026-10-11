@@ -1078,6 +1078,7 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertFalse(generated_findings, findings_text(generated_findings))
 
     def test_rendered_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
+        robots_fixture = self.fixture_data["robots_directive_conflicts"]
         index_path = GENERATED_FIXTURE / "index.html.fixture"
         index_page = self.pages_by_route["/"]
         index_raw = index_path.read_text(encoding="utf-8")
@@ -1092,7 +1093,7 @@ class SEOFixtureTests(unittest.TestCase):
         )
         across_tags_conflict = index_raw.replace(
             "</head>",
-            '<meta name="robots" content="NOINDEX, follow"></head>',
+            f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
             1,
         )
         conflict_cases = (
@@ -1102,10 +1103,10 @@ class SEOFixtureTests(unittest.TestCase):
                 draft_page,
                 draft_raw.replace(
                     "</head>",
-                    '<meta name="robots" content="INDEX, follow"></head>',
+                    f'<meta name="robots" content="{robots_fixture["index"]}"></head>',
                     1,
                 ),
-                ("INDEX, follow",),
+                (robots_fixture["index"],),
             ),
             (
                 "within one noindex tag",
@@ -1119,7 +1120,7 @@ class SEOFixtureTests(unittest.TestCase):
                 index_path,
                 index_page,
                 across_tags_conflict,
-                ("index, follow", "NOINDEX, follow"),
+                (robots_fixture["index"], robots_fixture["noindex"]),
             ),
         )
         for case, path, page, raw, expected_values in conflict_cases:
@@ -1131,7 +1132,7 @@ class SEOFixtureTests(unittest.TestCase):
                 )
                 conflicts = [
                     finding for finding in findings
-                    if "conflicting robots index/noindex directives" in finding.msg
+                    if robots_fixture["expected"] in finding.msg
                 ]
                 self.assertEqual(len(conflicts), 1, findings_text(findings))
                 conflict = conflicts[0]
@@ -1159,7 +1160,7 @@ class SEOFixtureTests(unittest.TestCase):
                 draft_page,
                 draft_raw.replace(
                     "</head>",
-                    '<meta name="robots" content="NOINDEX, NOFOLLOW"></head>',
+                    f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
                     1,
                 ),
             ),
@@ -1182,6 +1183,58 @@ class SEOFixtureTests(unittest.TestCase):
                     page,
                 )
                 self.assertFalse(findings, findings_text(findings))
+
+    def test_locale_robots_conflicts_are_rejected_and_consistent_duplicates_pass(self) -> None:
+        fixture = self.fixture_data["robots_directive_conflicts"]
+        relative_path = "de/index.html"
+        path = ROOT / relative_path
+        contract = self.locale_contract[relative_path]
+        original_raw = path.read_text(encoding="utf-8")
+
+        conflicting_raw = original_raw.replace(
+            "</head>",
+            f'<meta name="robots" content="{fixture["index"]}"></head>',
+            1,
+        )
+        conflicting_parser = parse_html(conflicting_raw)
+        findings = validator.validate_generated_seo(
+            path,
+            conflicting_parser,
+            None,
+            contract,
+        )
+        conflict = next(
+            (
+                finding
+                for finding in findings
+                if fixture["expected"] in finding.msg
+            ),
+            None,
+        )
+        self.assertIsNotNone(conflict, findings_text(findings))
+        assert conflict is not None
+        self.assertEqual(conflict.page, relative_path)
+        for value in conflicting_parser.meta["robots"]:
+            if validator.robots_indexing_tokens(value).intersection(
+                validator.ROBOTS_INDEXING_TOKENS
+            ):
+                self.assertIn(value, conflict.msg)
+
+        consistent_raw = original_raw.replace(
+            "</head>",
+            f'<meta name="robots" content="{fixture["noindex"]}"></head>',
+            1,
+        )
+        consistent_findings = validator.validate_generated_seo(
+            path,
+            parse_html(consistent_raw),
+            None,
+            contract,
+        )
+        self.assertFalse(
+            consistent_findings,
+            "consistent duplicate noindex directives are explicitly accepted",
+        )
 
     def test_draft_article_promotion_requires_article_metadata(self) -> None:
         mutation = self.fixture_data["draft_article_promotion"]

@@ -1410,6 +1410,27 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
     return findings
 
 
+def validate_robots_indexing_directives(
+    location: str,
+    robots_values: list[str],
+) -> list[Finding]:
+    """Reject rendered robots values that disagree on index versus noindex."""
+    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
+    if not {"index", "noindex"}.issubset(set().union(*robots_tokens)):
+        return []
+    conflicting_values = [
+        value
+        for value, tokens in zip(robots_values, robots_tokens)
+        if tokens.intersection(ROBOTS_INDEXING_TOKENS)
+    ]
+    return [Finding(
+        "ERROR",
+        location,
+        "conflicting robots index/noindex directives in rendered content values: "
+        f"{conflicting_values!r}",
+    )]
+
+
 def validate_generated_seo(
     path: Path,
     parser: TagCounter,
@@ -1422,11 +1443,14 @@ def validate_generated_seo(
     rel = path.relative_to(ROOT).as_posix()
     if manifest_page is None:
         if locale_page is not None:
+            findings = validate_robots_indexing_directives(
+                rel,
+                parser.meta.get("robots", []),
+            )
             manifest_boundary = (
                 "indexable" if locale_page.get("indexable") else "noindex"
             )
             rendered_boundary = "noindex" if parser.is_noindex else "indexable"
-            findings = []
             if manifest_boundary != rendered_boundary:
                 findings.append(Finding(
                     "ERROR",
@@ -1463,19 +1487,7 @@ def validate_generated_seo(
     }
     findings = validate_organization_nodes(rel, parser)
     robots_values = parser.meta.get("robots", [])
-    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
-    if {"index", "noindex"}.issubset(set().union(*robots_tokens)):
-        conflicting_values = [
-            value
-            for value, tokens in zip(robots_values, robots_tokens)
-            if tokens.intersection(ROBOTS_INDEXING_TOKENS)
-        ]
-        findings.append(Finding(
-            "ERROR",
-            rel,
-            "conflicting robots index/noindex directives in rendered content values: "
-            f"{conflicting_values!r}",
-        ))
+    findings.extend(validate_robots_indexing_directives(rel, robots_values))
     manifest_boundary = "indexable" if is_indexable_page(manifest_page) else "noindex"
     rendered_boundary = "noindex" if parser.is_noindex else "indexable"
     if rendered_boundary != manifest_boundary:
