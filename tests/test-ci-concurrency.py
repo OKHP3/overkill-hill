@@ -4,8 +4,12 @@ This is a bounded expression fixture, not a GitHub scheduler simulation.
 Live cancellation, deployment ordering, and retry acceptance remain CI checks.
 """
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -196,6 +200,50 @@ class ConcurrencyTests(unittest.TestCase):
         self.assertIn('if: always()', upload_step)
         self.assertIn('path: theme-control-revisions.txt', upload_step)
         self.assertIn('retention-days: 30', upload_step)
+
+    def test_theme_control_fetch_helper_reports_an_unavailable_revision_offline(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        function_match = re.search(
+            r'(?ms)^          verify_revision\(\) \{\n.*?^          \}',
+            fetch_step,
+        )
+        self.assertIsNotNone(function_match, 'missing workflow verify_revision helper')
+        helper = textwrap.dedent(function_match.group(0))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture_repository = root / 'empty-foundation.git'
+            subprocess.run(
+                ['git', 'init', '--bare', str(fixture_repository)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            environment = os.environ.copy()
+            environment['RUNNER_TEMP'] = str(root / 'runner-temp')
+            script = (
+                'set -euo pipefail\n'
+                f'{helper}\n'
+                'verify_revision "FixtureSite" "THEME_CONTROL_FIXTURE_REVISION" '
+                f'"{fixture_repository}" "{"1" * 40}"\n'
+            )
+            result = subprocess.run(
+                ['bash', '-c', script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, 'unavailable revision must fail')
+            output = result.stdout + result.stderr
+            self.assertIn('FixtureSite', output)
+            self.assertIn('THEME_CONTROL_FIXTURE_REVISION', output)
+            self.assertIn('foundation revision could not be fetched', output)
+            evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
+            self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
+            self.assertIn('FAILED; could not fetch from', evidence)
 
     def test_theme_control_sites_use_all_reviewed_checkout_revisions(self):
         source = job(VALIDATE, 'validate')
