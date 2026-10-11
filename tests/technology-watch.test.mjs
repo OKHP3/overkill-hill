@@ -45,6 +45,20 @@ test('does not treat a compliant LTS selector as needing Current migration', asy
   assert.equal(calls[0].state, 'closed');
 });
 
+test('Python trial coverage alerts on stale patches while primary CI still tracks migration', async () => {
+  const trial = row({name: 'Python (compatibility trial)', role: 'compatibility trial',
+    current: '3.14.8', latest: '3.15.0', target: '3.14.8', target_status: 'CURRENT'});
+  const current = await execute({findings: [], technologies: [trial]}, [issue(marker)]);
+  assert.equal(current[0].state, 'closed');
+  const stale = await execute({findings: [], technologies: [{...trial,
+    current: '3.14.7', target_status: 'UPDATE'}]});
+  assert.match(stale[0].body, /Python \(compatibility trial\): 3\.14\.7; latest stable 3\.15\.0; policy target 3\.14\.8/);
+  const primary = await execute({findings: [], technologies: [trial,
+    row({name: 'Python', current: '3.11', latest: '3.15.0', target: undefined, target_status: undefined})]});
+  assert.match(primary[0].body, /Python: 3\.11; latest stable 3\.15\.0\. Status: UPDATE/);
+  assert.doesNotMatch(primary[0].body, /Python \(compatibility trial\)/);
+});
+
 test('failed registry lookups keep issues open even for Dependabot-owned entries', async () => {
   const calls = await execute({findings: [], technologies: [row({owner: 'dependabot',
     target_status: undefined, status: 'UNKNOWN', error: 'timeout'})]}, [issue(marker)]);
@@ -76,4 +90,23 @@ test('an unrecorded authoring version remains actionable', async () => {
     current: 'unrecorded', target_status: undefined, status: 'UNKNOWN'})]});
   assert.equal(calls[0].type, 'create');
   assert.match(calls[0].body, /FFmpeg: unrecorded/);
+});
+
+test('external historical tooling does not block website closeout or claim installed versions', async () => {
+  const historical = row({name: 'FFmpeg', current: 'unrecorded', owner: 'OKHP3/murderbird-uncaged',
+    scope: 'historical', status: 'HISTORICAL', target_status: undefined, error: 'retained lookup error'});
+  const calls = await execute({findings: [], technologies: [historical]}, [issue(marker)]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].state, 'closed');
+  const mixed = await execute({findings: [], technologies: [historical,
+    row({name: 'site dependency', status: 'UNKNOWN', target_status: undefined, error: 'offline'})]});
+  assert.match(mixed[0].body, /Lookup failed for site dependency/);
+  assert.doesNotMatch(mixed[0].body, /Lookup failed for FFmpeg/);
+  assert.match(mixed[0].body, /Unknown historical installations are not certified/);
+});
+
+test('external ownership alone cannot suppress a current website dependency failure', async () => {
+  const calls = await execute({findings: [], technologies: [row({owner: 'OKHP3/murderbird-uncaged',
+    status: 'UNKNOWN', target_status: undefined, error: 'offline'})]});
+  assert.match(calls[0].body, /Lookup failed/);
 });

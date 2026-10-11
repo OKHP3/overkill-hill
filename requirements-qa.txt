@@ -1,8 +1,8 @@
 # Pinned Python dependencies for the static-site QA and build helpers.
 # Beautiful Soup supports structural checks; Pillow supports accepted still
 # generation and byte/dimension validation. The site has no Python runtime dependency.
-# Versions reflect the compatible local runtime
-# inventory on 2026-09-04 (Python 3.14) and support the CI Python 3.11 job.
+# Primary GitHub CI uses Python 3.15.0. The compatibility matrix also retains
+# Python 3.11 and 3.14 coverage with these same dependency pins.
 beautifulsoup4==4.15.0
 soupsieve==2.10
 typing-extensions==4.16.0
