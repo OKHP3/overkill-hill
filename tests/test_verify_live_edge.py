@@ -1499,14 +1499,33 @@ import(bareSpecifier);
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_javascript_content_type_with_parameters_is_accepted(self) -> None:
+        for content_type in (
+            "application/javascript; charset=utf-8",
+            "text/javascript; charset=utf-8",
+            "APPLICATION/JAVASCRIPT; charset=UTF-8",
+        ):
+            with self.subTest(content_type=content_type):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="js",
+                    asset_content_type=content_type,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                content_type_check = checks[
+                    "asset /assets/js/app.js content type"
+                ]
+                self.assertEqual(content_type_check["status"], "PASS")
+
+    def test_css_content_type_with_parameters_is_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
-            asset_kind="js",
-            asset_content_type="application/javascript; charset=utf-8",
+            asset_kind="css",
+            asset_content_type="TEXT/CSS; charset=UTF-8",
         )
 
         self.assertEqual(return_code, 0)
         checks = {item["check"]: item for item in report["checks"]}
-        content_type_check = checks["asset /assets/js/app.js content type"]
+        content_type_check = checks["asset /assets/css/theme.css content type"]
         self.assertEqual(content_type_check["status"], "PASS")
 
     def test_wrong_image_content_type_fails_with_explicit_mime_evidence(self) -> None:
