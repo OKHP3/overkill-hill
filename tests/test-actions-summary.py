@@ -1654,6 +1654,108 @@ class SummaryTests(unittest.TestCase):
             workflow.index('Upload failed CSP fixture report'),
         )
 
+    def test_failed_csp_check_without_report_stays_failed_after_optional_evidence_steps(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        fixture = step('Run CSP fixture regressions')
+        upload = step('Upload failed CSP fixture report')
+        summary = step('Summarize failed CSP fixture regressions')
+        preserve = step('Preserve CSP fixture regression failure')
+        self.assertIn('continue-on-error: true', fixture)
+        self.assertIn('if-no-files-found: warn', upload)
+        failure_condition = "if: always() && steps.csp-fixtures.outcome == 'failure'"
+        for optional_step in (upload, summary, preserve):
+            self.assertIn(failure_condition, optional_step)
+        self.assertNotIn('continue-on-error: true', preserve)
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / 'csp-fixture-report.json'
+            summary_path = Path(directory) / 'github-step-summary.md'
+
+            # Model a failed fixture command that did not write its optional report.
+            originating_check = subprocess.run(
+                ['bash', '-c', 'exit 23'],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(originating_check.returncode, 0)
+            self.assertFalse(report_path.exists())
+            fixture_outcome = 'failure' if originating_check.returncode else 'success'
+            self.assertEqual(fixture_outcome, 'failure')
+
+            # The upload action itself is hosted; model its documented warn policy
+            # for an absent path without claiming this test executes GitHub Actions.
+            if report_path.exists():
+                upload_result = 0
+            elif 'if-no-files-found: warn' in upload:
+                upload_result = 0
+            else:
+                upload_result = 1
+            self.assertEqual(upload_result, 0, 'missing optional evidence must not fail upload')
+
+            dependency = subprocess.run(
+                [shutil.which('node') or 'node', '--input-type=module', '--eval', "import.meta.resolve('playwright')"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            dependency_output = dependency.stdout + dependency.stderr
+            if dependency.returncode != 0 and 'ERR_MODULE_NOT_FOUND' in dependency_output:
+                self.skipTest('optional Playwright QA package is absent; focused summary was not run')
+
+            run_match = re.search(
+                r'(?ms)^        run: >-\n((?:^          [^\n]*\n?)+)',
+                summary,
+            )
+            self.assertIsNotNone(run_match, 'CSP summary run block is not the supported folded form')
+            summary_tokens = shlex.split(
+                ' '.join(line.strip() for line in run_match.group(1).splitlines()),
+                posix=True,
+            )
+            self.assertEqual(summary_tokens[:2], ['node', 'scripts/csp-qa.mjs'])
+            summary_result = subprocess.run(
+                [
+                    shutil.which(summary_tokens[0]) or summary_tokens[0],
+                    str(ROOT / summary_tokens[1]),
+                    f'--fixture-summary={report_path}',
+                    '--artifact-url=',
+                ],
+                cwd=directory,
+                env={**os.environ, 'GITHUB_STEP_SUMMARY': str(summary_path)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(summary_result.returncode, 0, summary_result.stdout + summary_result.stderr)
+            self.assertIn('Focused CSP fixture report is missing', summary_path.read_text(encoding='utf-8'))
+            self.assertFalse(report_path.exists(), 'summary generation must not create the missing report')
+
+            preserve_run = re.search(r'(?m)^        run: ([^\r\n]+)$', preserve)
+            self.assertIsNotNone(preserve_run, 'failure-preservation command is missing')
+            final_guard = subprocess.run(
+                preserve_run.group(1).strip(),
+                shell=True,
+                cwd=directory,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(final_guard.returncode, 0)
+            workflow_result = final_guard.returncode
+            self.assertNotEqual(
+                workflow_result,
+                0,
+                'the originating CSP failure must remain a failed workflow after optional evidence steps',
+            )
+
     def test_pages_only_blocked_fixture_is_partial_and_not_enforcement_proof(self):
         code, summary = self.run_summary(self.load_fixture('live-edge-pages-blocked.json'))
 
