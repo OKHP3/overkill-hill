@@ -21,6 +21,32 @@ BRAND_THEME_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 BRAND_THEME_COLOR_SCHEMES = {"dark light", "light dark"}
 
 
+class _JSONPairs(list[tuple[str, object]]):
+    """Preserve JSON object pairs until duplicate keys have been checked."""
+
+
+def _materialize_json_pairs(value: object, path: tuple[str, ...] = ()) -> object:
+    if isinstance(value, _JSONPairs):
+        result: dict[str, object] = {}
+        for key, child in value:
+            if key in result:
+                if path == ("brands",):
+                    raise ValueError(f"duplicate brand entry {key!r} in brand theme contract")
+                if len(path) >= 2 and path[0] == "brands":
+                    raise ValueError(
+                        f"brand {path[1]!r} has duplicate JSON key {key!r}"
+                    )
+                location = ".".join(path) if path else "JSON root"
+                raise ValueError(
+                    f"duplicate JSON key {key!r} in brand theme contract at {location}"
+                )
+            result[key] = _materialize_json_pairs(child, path + (key,))
+        return result
+    if isinstance(value, list):
+        return [_materialize_json_pairs(item, path) for item in value]
+    return value
+
+
 def validate_brand_theme_contract(raw_contract: object) -> None:
     """Reject malformed brand theme metadata before generation or release."""
     if not isinstance(raw_contract, dict):
@@ -90,8 +116,14 @@ def load_brand_theme_contract(
 ) -> dict[str, dict[str, str]]:
     """Load and validate the reviewed brand metadata contract."""
     try:
-        raw_contract = json.loads(path.read_text(encoding="utf-8"))
+        parsed = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_JSONPairs,
+        )
+        raw_contract = _materialize_json_pairs(parsed)
     except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cannot read brand theme contract {path}: {exc}") from exc
+    except ValueError as exc:
         raise ValueError(f"Cannot read brand theme contract {path}: {exc}") from exc
     validate_brand_theme_contract(raw_contract)
     return raw_contract["brands"]

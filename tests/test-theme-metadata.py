@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -50,6 +51,29 @@ class BrandThemeMetadataTests(unittest.TestCase):
                 {"brands": BRAND_THEME_CONTRACT}
             )
         )
+
+    def test_contract_loader_rejects_duplicate_brand_object_key(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(
+                f'{{"brands":{{"glee":{glee},"glee":{glee}}}}}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, r"duplicate brand entry 'glee'"):
+                validator.load_brand_theme_contract(path)
+
+    def test_contract_loader_names_brand_with_duplicate_property_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(
+                '{"brands":{"glee":{"name":"Glee","name":"Hidden"}}}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, r"brand 'glee' has duplicate JSON key 'name'"
+            ):
+                validator.load_brand_theme_contract(path)
 
     def test_contract_reports_missing_required_field_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
