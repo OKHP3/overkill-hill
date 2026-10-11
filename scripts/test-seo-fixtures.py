@@ -221,6 +221,31 @@ class SEOFixtureTests(unittest.TestCase):
         )
         return manifest_path, sitemap_path, index_path
 
+    def _write_legacy_locale_fixture(
+        self,
+        root: Path,
+        sitemap_routes: Iterable[str],
+        index_routes: set[str],
+    ) -> tuple[Path, Path, Path]:
+        manifest_path, sitemap_path, index_path = self._write_mixed_locale_fixture(
+            root,
+            sitemap_routes,
+            index_routes,
+        )
+        mixed_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        locale_spec = mixed_manifest["locales"]["fr"]
+        manifest_path.write_text(
+            json.dumps({
+                "target_locale": "fr",
+                "status": locale_spec["status"],
+                "indexable": locale_spec["indexable"],
+                "metadata_source": locale_spec["metadata_source"],
+                "pages": locale_spec["pages"],
+            }),
+            encoding="utf-8",
+        )
+        return manifest_path, sitemap_path, index_path
+
     def _write_unpublished_locale_fixture(
         self,
         root: Path,
@@ -352,6 +377,90 @@ class SEOFixtureTests(unittest.TestCase):
             )
             self.assertIn(
                 "draft locale routes appear in the search index: /fr/contact/",
+                findings,
+            )
+
+    def test_legacy_locale_manifest_requires_coverage_and_distinguishes_routes(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+        draft_route = "/fr/contact/"
+        retired_route = "/fr/retired/"
+        complete_sitemap = source_routes | promoted_routes
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap,
+                promoted_routes,
+            )
+            self.assertFalse(
+                locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    index_path=index_path,
+                    root=root,
+                ),
+                "valid legacy single-locale manifest should pass complete coverage",
+            )
+
+            _, missing_sitemap, complete_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap - {"/fr/projects/"},
+                promoted_routes,
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=missing_sitemap,
+                index_path=complete_index,
+                root=root,
+            )
+            self.assertIn(
+                "indexable locale route is missing from sitemap.xml: /fr/projects/",
+                findings,
+            )
+
+            _, complete_sitemap_path, missing_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap,
+                promoted_routes - {"/fr/about/"},
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=complete_sitemap_path,
+                index_path=missing_index,
+                root=root,
+            )
+            self.assertIn(
+                "locale search index is missing routes: /fr/about/",
+                findings,
+            )
+
+            _, draft_sitemap, draft_index = self._write_legacy_locale_fixture(
+                root,
+                complete_sitemap | {draft_route, retired_route},
+                promoted_routes | {draft_route, retired_route},
+            )
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=draft_sitemap,
+                index_path=draft_index,
+                root=root,
+            )
+            self.assertIn(
+                f"draft locale route is in sitemap.xml: {draft_route}",
+                findings,
+            )
+            self.assertIn(
+                f"draft locale routes appear in the search index: {draft_route}",
+                findings,
+            )
+            self.assertIn(
+                f"locale sitemap contains undeclared routes: {retired_route}",
+                findings,
+            )
+            self.assertIn(
+                f"locale search index contains undeclared routes: {retired_route}",
                 findings,
             )
 
