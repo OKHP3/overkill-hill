@@ -50,6 +50,11 @@ SOCIAL_CARD_VALUES = {
     "twitter:image": SOCIAL_IMAGE,
     "twitter:image:alt": "Fixture social preview",
 }
+MIXED_CONFLICTING_KEYS = (
+    "og:image:alt",
+    "og:image:width",
+    "twitter:image",
+)
 
 
 def social_card_tags(*, duplicate: str | None = None) -> str:
@@ -62,21 +67,30 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
         ("twitter:image", f'<meta name="twitter:image" content="{SOCIAL_IMAGE}">'),
         ("twitter:image:alt", '<meta name="twitter:image:alt" content="Fixture social preview">'),
     ]
-    duplicate_keys = (
-        set(SOCIAL_CARD_DUPLICATE_KEYS)
-        if duplicate == "identical"
-        else {"og:image" if duplicate == "conflict" else duplicate}
-        if duplicate is not None
-        else set()
-    )
-    unknown_keys = duplicate_keys - set(SOCIAL_CARD_DUPLICATE_KEYS)
+    mixed_duplicates = {
+        "og:image": "identical",
+        "og:image:alt": "conflict",
+        "og:image:width": "conflict",
+        "twitter:image": "conflict",
+        "twitter:image:alt": "identical",
+    }
+    if duplicate == "identical":
+        duplicate_modes = {key: "identical" for key in SOCIAL_CARD_DUPLICATE_KEYS}
+    elif duplicate == "mixed":
+        duplicate_modes = mixed_duplicates
+    elif duplicate is not None:
+        duplicate_key = "og:image" if duplicate == "conflict" else duplicate
+        duplicate_modes = {duplicate_key: "conflict"}
+    else:
+        duplicate_modes = {}
+    unknown_keys = duplicate_modes.keys() - set(SOCIAL_CARD_DUPLICATE_KEYS)
     if unknown_keys:
         raise ValueError(f"unknown social-card duplicate key: {sorted(unknown_keys)[0]}")
     tags = []
     for key, tag in fields:
         tags.append(tag)
-        if key in duplicate_keys:
-            if duplicate == "identical":
+        if key in duplicate_modes:
+            if duplicate_modes[key] == "identical":
                 tags.append(tag)
             else:
                 prefix = f'property="{key}"' if key.startswith("og:") else f'name="{key}"'
@@ -291,6 +305,26 @@ class SocialCardDuplicateTests(unittest.TestCase):
 
         self.assertEqual(0, exit_code, stdout + stderr)
 
+    def test_site_release_command_reports_each_mixed_duplicate_conflict(self):
+        exit_code, stdout, stderr = self._run_site_command(
+            duplicate="mixed",
+            noindex=False,
+        )
+
+        output = stdout + stderr
+        self.assertEqual(1, exit_code)
+        self.assertEqual(
+            len(MIXED_CONFLICTING_KEYS),
+            output.count("conflicting duplicate social-card metadata for meta:"),
+            output,
+        )
+        for key in MIXED_CONFLICTING_KEYS:
+            self.assertEqual(
+                1,
+                output.count(f"conflicting duplicate social-card metadata for meta:{key}:"),
+                output,
+            )
+
     def test_site_release_command_exempts_noindex_pilot_duplicate(self):
         exit_code, stdout, stderr = self._run_site_command(
             duplicate="conflict",
@@ -399,6 +433,25 @@ class SocialCardDuplicateTests(unittest.TestCase):
         )
 
         self.assertEqual(0, exit_code, output)
+
+    def test_locale_release_command_reports_each_mixed_duplicate_conflict(self):
+        exit_code, output = self._run_locale_command(
+            duplicate="mixed",
+            noindex=False,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertEqual(
+            len(MIXED_CONFLICTING_KEYS),
+            output.count("conflicting duplicate social-card metadata for meta:"),
+            output,
+        )
+        for key in MIXED_CONFLICTING_KEYS:
+            self.assertEqual(
+                1,
+                output.count(f"conflicting duplicate social-card metadata for meta:{key}:"),
+                output,
+            )
 
     def test_locale_release_command_exempts_noindex_pilot_duplicate(self):
         exit_code, output = self._run_locale_command(
