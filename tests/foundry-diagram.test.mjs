@@ -44,6 +44,7 @@ test('FoundRy diagram remains readable and meaningfully described', async () => 
           if (fault === 'hidden') label.style.visibility = 'hidden';
           if (fault === 'scaled') label.style.transform = 'scale(.5)';
           if (fault === 'clipped') label.closest('foreignObject').setAttribute('height', '1');
+          if (fault === 'hidden-return') diagram.querySelector('[id$="L_D_C_0"]').style.display = 'none';
           if (fault === 'swapped') {
             diagram.querySelector('[data-id="L_D_C_0"] p').textContent = 'passes the gate';
             diagram.querySelector('[data-id="L_D_E_0"] p').textContent = 'fails the gate';
@@ -76,7 +77,18 @@ test('FoundRy diagram remains readable and meaningfully described', async () => 
           return {
             labels,
             nodes: [...diagram.querySelectorAll('g.node .nodeLabel')].map(labelText),
-            edges: [...diagram.querySelectorAll('.flowchart-link')].map(e => e.id),
+            edges: [...diagram.querySelectorAll('.flowchart-link')].map(e => {
+              const style = getComputedStyle(e);
+              const markerId = e.getAttribute('marker-end')?.match(/#([^\)]+)/)?.[1];
+              const marker = markerId && document.getElementById(markerId)?.querySelector('path');
+              const markerStyle = marker && getComputedStyle(marker);
+              const length = e.getTotalLength();
+              const start = e.getPointAtLength(0), end = e.getPointAtLength(length);
+              const bounds = e.getBoundingClientRect();
+              return { id: e.id, visible: style.display !== 'none' && style.visibility === 'visible' && Number(style.opacity) > 0 && Number(style.strokeOpacity) > 0 && style.stroke !== 'none' && parseFloat(style.strokeWidth) > 0 && bounds.height > 0,
+                markerVisible: !!markerStyle && markerStyle.display !== 'none' && markerStyle.visibility === 'visible' && Number(markerStyle.opacity) > 0 && markerStyle.fill !== 'none',
+                length, direction: end.y > start.y ? 'down' : end.y < start.y ? 'up' : 'horizontal' };
+            }),
             role: diagram.getAttribute('role'), name: diagram.getAttribute('aria-label'),
             description: (diagram.getAttribute('aria-describedby') || ids).split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' '),
             overflow: document.documentElement.scrollWidth - innerWidth,
@@ -91,7 +103,8 @@ test('FoundRy diagram remains readable and meaningfully described', async () => 
           check(result.labels.length === 9 && result.labels.every(label => label.effectivePx >= 14 && label.width > 0 && label.height > 0 && label.visible && label.unclipped && label.untransformed), `${width}/${theme}/${phase}: nine visible unclipped labels at least 14px without unmeasured HTML transforms: ${JSON.stringify(result.labels)}`);
           check(JSON.stringify(result.nodes) === JSON.stringify(expectedNodes), `${width}/${theme}/${phase}: seven stages preserved`);
           const expectedEdges = ['A_B', 'B_C', 'C_D', 'D_C', 'D_E', 'E_F', 'F_G'];
-          check(result.edges.length === 7 && expectedEdges.every(edge => result.edges.some(id => id.includes(edge))), `${width}/${theme}/${phase}: directed path and failure return preserved: ${result.edges}`);
+          check(result.edges.length === 7 && expectedEdges.every(edge => result.edges.some(value => value.id.includes(edge))), `${width}/${theme}/${phase}: directed path and failure return preserved: ${JSON.stringify(result.edges)}`);
+          check(result.edges.every(edge => edge.visible && edge.markerVisible && edge.length > 0 && edge.direction === (edge.id.includes('D_C') ? 'up' : 'down')), `${width}/${theme}/${phase}: visible connectors and arrowheads retain forward and return direction: ${JSON.stringify(result.edges)}`);
           check(result.labels.some(label => label.text === 'fails the gate') && result.labels.some(label => label.text === 'passes the gate'), 'both gate outcomes preserved');
           check(result.labels.some(label => label.edge === 'L_D_C_0' && label.text === 'fails the gate') && result.labels.some(label => label.edge === 'L_D_E_0' && label.text === 'passes the gate'), 'gate labels attached to the correct return and delivery edges');
           check(result.role === 'img' && result.name === 'The Forge Path', `${width}/${theme}/${phase}: authored image name`);
