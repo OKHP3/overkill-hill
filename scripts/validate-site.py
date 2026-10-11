@@ -1005,7 +1005,7 @@ def _parse_article_date(value: str) -> datetime:
     """Parse extended calendar dates with literal punctuation before parity."""
     if not re.fullmatch(
         r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
-        r"(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?"
+        r"(?:T(?:[01][0-9]|2[0-3]):[0-5][0-9](?::[0-5][0-9](?:\.[0-9]+)?)?"
         r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?)?",
         value,
     ):

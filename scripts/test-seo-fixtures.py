@@ -167,12 +167,17 @@ class SEOFixtureTests(unittest.TestCase):
             "2026-06-12 00:00:00Z", "2026-06-12t00:00:00Z",
             "2026-06-12T000000Z", "2026-06-12T00:00:00+0000",
             "2026-06-12T00:00:00+00:00:00", "2026-06-12T00:00:00+00:60",
+            "2026-06-12T24:00Z", "2026-06-12T24:00:00Z",
+            "2026-06-12T00:60:00Z", "2026-06-12T00:00:60Z",
             "2026-02-30", "not-a-date",
         ):
             with self.subTest(value=value):
                 self.assertFalse(validator._article_date_values_match(value, calendar))
                 self.assertFalse(validator._article_date_values_match(calendar, value))
                 self.assertFalse(validator._article_date_values_match(value, value))
+        for value in ("2026-06-12T24:00Z", "2026-06-12T24:00:00Z"):
+            with self.subTest(value=value):
+                self.assertFalse(validator._article_date_values_match(value, "2026-06-13T00:00:00Z"))
 
     def test_extended_article_dates_keep_calendar_and_instant_semantics(self) -> None:
         for first, second in (
