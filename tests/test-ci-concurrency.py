@@ -156,6 +156,47 @@ class ConcurrencyTests(unittest.TestCase):
             'pinned revision fetches must fail before the browser audit',
         )
 
+    def test_theme_control_fetch_results_are_retained_with_revision_variables(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        preserve_step = step(source, 'Preserve pinned foundation fetch failure')
+        upload_step = step(source, 'Upload theme-control revision evidence')
+
+        self.assertIn('id: foundation_fetch', fetch_step)
+        self.assertIn('continue-on-error: true', fetch_step)
+        self.assertIn(
+            'Fetch check: %s (%s=%s): FAILED; could not fetch from %s',
+            fetch_step,
+        )
+        self.assertIn(
+            'Fetch check: %s (%s=%s): FAILED; fetched unexpected revision %s from %s',
+            fetch_step,
+        )
+        self.assertIn(
+            'Fetch check: %s (%s=%s): PASS; fetched %s',
+            fetch_step,
+        )
+        for site in FOUNDATION_SITES:
+            with self.subTest(site=site['name']):
+                self.assertIn(site['name'], fetch_step)
+                self.assertIn(site['revisionVariable'], fetch_step)
+        self.assertEqual(fetch_step.count('|| fetch_status=1'), len(FOUNDATION_SITES))
+        self.assertIn('exit "$fetch_status"', fetch_step)
+        self.assertIn('tee -a theme-control-revisions.txt', fetch_step)
+
+        self.assertIn(
+            "if: always() && steps.foundation_fetch.outcome == 'failure'",
+            preserve_step,
+        )
+        self.assertLess(
+            source.index('- name: Preserve pinned foundation fetch failure'),
+            source.index('- name: Fetch reviewed OKH foundation revision'),
+            'failed fetch preflight must be preserved before revision checkouts run',
+        )
+        self.assertIn('if: always()', upload_step)
+        self.assertIn('path: theme-control-revisions.txt', upload_step)
+        self.assertIn('retention-days: 30', upload_step)
+
     def test_theme_control_sites_use_all_reviewed_checkout_revisions(self):
         source = job(VALIDATE, 'validate')
         theme_step = step(source, 'Run shared theme-control regressions')

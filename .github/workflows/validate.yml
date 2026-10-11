@@ -62,6 +62,8 @@ jobs:
           cat theme-control-revisions.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify pinned theme-control foundation revisions are fetchable
+        id: foundation_fetch
+        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -80,6 +82,9 @@ jobs:
             if ! git -C "$probe_dir" fetch --no-tags --depth=1 --filter=tree:0 "$repository" "$revision"; then
               printf 'ERROR: %s (%s=%s) foundation revision could not be fetched from %s.\n' \
                 "$site" "$revision_variable" "$revision" "$repository" >&2
+              printf 'Fetch check: %s (%s=%s): FAILED; could not fetch from %s\n' \
+                "$site" "$revision_variable" "$revision" "$repository" \
+                | tee -a theme-control-revisions.txt
               return 1
             fi
 
@@ -88,25 +93,37 @@ jobs:
             if [[ "$fetched_revision" != "$revision" ]]; then
               printf 'ERROR: %s (%s=%s) fetched unexpected revision %s from %s.\n' \
                 "$site" "$revision_variable" "$revision" "$fetched_revision" "$repository" >&2
+              printf 'Fetch check: %s (%s=%s): FAILED; fetched unexpected revision %s from %s\n' \
+                "$site" "$revision_variable" "$revision" "$fetched_revision" "$repository" \
+                | tee -a theme-control-revisions.txt
               return 1
             fi
+            printf 'Fetch check: %s (%s=%s): PASS; fetched %s\n' \
+              "$site" "$revision_variable" "$revision" "$fetched_revision" \
+              | tee -a theme-control-revisions.txt
           }
 
+          fetch_status=0
           verify_revision \
             "OKH" \
             "THEME_CONTROL_OKH_REVISION" \
             "$(git remote get-url origin)" \
-            "$THEME_CONTROL_OKH_REVISION"
+            "$THEME_CONTROL_OKH_REVISION" || fetch_status=1
           verify_revision \
             "Glee" \
             "THEME_CONTROL_GLEE_REVISION" \
             "https://github.com/OKHP3/Glee-fullyTools.git" \
-            "$THEME_CONTROL_GLEE_REVISION"
+            "$THEME_CONTROL_GLEE_REVISION" || fetch_status=1
           verify_revision \
             "AskJamie" \
             "THEME_CONTROL_ASKJAMIE_REVISION" \
             "https://github.com/OKHP3/AskJamie.git" \
-            "$THEME_CONTROL_ASKJAMIE_REVISION"
+            "$THEME_CONTROL_ASKJAMIE_REVISION" || fetch_status=1
+          exit "$fetch_status"
+
+      - name: Preserve pinned foundation fetch failure
+        if: always() && steps.foundation_fetch.outcome == 'failure'
+        run: exit 1
 
       - name: Fetch reviewed OKH foundation revision
         run: git fetch --no-tags --depth=1 origin "$THEME_CONTROL_OKH_REVISION"
