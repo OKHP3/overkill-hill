@@ -30,6 +30,71 @@ REGIONAL_BUILDER_SPEC.loader.exec_module(REGIONAL_BUILDER_MODULE)
 
 
 class I18nReleaseTests(unittest.TestCase):
+    def test_advisory_review_audit_reports_missing_duplicate_and_superseded_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pilot = root / "i18n" / "pilot" / "de"
+            pilot.mkdir(parents=True)
+            state = {
+                "schema_version": "1.0",
+                "pages": {
+                    "/": {"targets": {"de": {
+                        "synced_source_sha256": "a" * 64,
+                        "target_sha256": "b" * 64,
+                    }}},
+                    "/about/": {"targets": {"de": {
+                        "synced_source_sha256": "e" * 64,
+                        "target_sha256": "f" * 64,
+                    }}},
+                },
+            }
+            (root / "i18n" / "sync-state.json").write_text(json.dumps(state), encoding="utf-8")
+            current = {
+                "route": "/", "target_path": "de/index.html",
+                "source_sha256": "a" * 64, "target_sha256": "b" * 64,
+            }
+            record_base = {
+                "language_pair": "en-US -> de-DE",
+                "review_status": "ai-reviewed",
+            }
+            (pilot / "current-review-2026-10-10.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-10", "routes": [current, current],
+            }), encoding="utf-8")
+            (pilot / "old-review-2026-10-01.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-01",
+                "routes": [{
+                    **current, "source_sha256": "c" * 64, "target_sha256": "d" * 64,
+                }],
+            }), encoding="utf-8")
+            (pilot / "about-review-2026-10-02.json").write_text(json.dumps({
+                **record_base, "reviewed_on": "2026-10-02",
+                "routes": [{
+                    "route": "/about/", "target_path": "de/about/index.html",
+                    "source_sha256": "c" * 64, "target_sha256": "d" * 64,
+                }],
+            }), encoding="utf-8")
+            config = {
+                "state_file": "i18n/sync-state.json",
+                "in_scope_routes": ["/", "/about/"],
+                "advisory_content_coverage_locales": ["de"],
+                "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+            }
+            with patch.object(MODULE, "ROOT", root):
+                report = MODULE.audit_advisory_review_evidence(config)
+
+        self.assertEqual([{"locale": "de", "route": "/about/"}], report["missing"])
+        self.assertTrue(any(item.get("entry_count") == 2 for item in report["duplicates"]))
+        self.assertEqual("old-review-2026-10-01.json", Path(
+            report["superseded"][0]["record"]
+        ).name)
+        self.assertEqual("current-review-2026-10-10.json", Path(
+            report["superseded"][0]["superseded_by"][0]
+        ).name)
+        self.assertEqual(
+            "about-review-2026-10-02.json",
+            Path(report["unmatched"][0]["record"]).name,
+        )
+
     def test_content_coverage_names_missing_sections_blocks_and_protected_links(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

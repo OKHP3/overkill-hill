@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 from html.parser import HTMLParser
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -148,6 +150,156 @@ def collect_source_coverage(
     return gaps
 
 
+def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
+    """Cross-check dated advisory review route hashes against the shared ledger."""
+    locales = config.get("advisory_content_coverage_locales", [])
+    routes = config.get("in_scope_routes", [])
+    ledger = load_state(config)
+    route_evidence: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    report: dict[str, Any] = {
+        "records_checked": 0,
+        "current_pairs": [],
+        "missing": [],
+        "duplicates": [],
+        "superseded": [],
+        "unmatched": [],
+        "invalid_records": [],
+    }
+    target_locales = config.get("target_locales", {})
+
+    for locale in locales:
+        locale_config = target_locales.get(locale)
+        if not isinstance(locale_config, dict):
+            report["invalid_records"].append({
+                "locale": locale, "reason": "advisory locale has no target configuration",
+            })
+            continue
+        expected_root = locale_config["root"].strip("/")
+        expected_pair = f"en-US -> {locale_config['locale']}"
+        for path in sorted((ROOT / "i18n" / "pilot" / locale).glob("*-????-??-??.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                report["invalid_records"].append({
+                    "locale": locale, "record": path.relative_to(ROOT).as_posix(),
+                    "reason": f"invalid JSON: {exc}",
+                })
+                continue
+            if not isinstance(record, dict) or not isinstance(record.get("routes"), list):
+                report["invalid_records"].append({
+                    "locale": locale, "record": path.relative_to(ROOT).as_posix(),
+                    "reason": "dated record must contain a routes list",
+                })
+                continue
+            report["records_checked"] += 1
+            record_name = path.relative_to(ROOT).as_posix()
+            reviewed_on = record.get("reviewed_on", "")
+            entries: dict[str, list[dict[str, Any]]] = {}
+            review_status = record.get("review_status")
+            if (
+                record.get("language_pair") != expected_pair
+                or not isinstance(review_status, str)
+                or review_status not in {"ai-reviewed", "approved"}
+            ):
+                report["invalid_records"].append({
+                    "locale": locale, "record": record_name,
+                    "reason": "review status or language pair is not valid for this advisory locale",
+                })
+            if not isinstance(reviewed_on, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_on):
+                report["invalid_records"].append({
+                    "locale": locale, "record": record_name,
+                    "reason": "reviewed_on must be an ISO calendar date",
+                })
+                reviewed_on = ""
+            else:
+                try:
+                    date.fromisoformat(reviewed_on)
+                except ValueError:
+                    report["invalid_records"].append({
+                        "locale": locale, "record": record_name,
+                        "reason": "reviewed_on must be a real ISO calendar date",
+                    })
+                    reviewed_on = ""
+            for entry in record["routes"]:
+                if not isinstance(entry, dict) or not isinstance(entry.get("route"), str):
+                    report["invalid_records"].append({
+                        "locale": locale, "record": record_name,
+                        "reason": "route entries must include a string route",
+                    })
+                    continue
+                route = entry["route"]
+                entries.setdefault(route, []).append(entry)
+                expected_target = (
+                    f"{expected_root}/{route.strip('/')}/index.html"
+                    if route.strip("/") else f"{expected_root}/index.html"
+                )
+                if route not in routes or entry.get("target_path") != expected_target:
+                    report["invalid_records"].append({
+                        "locale": locale, "route": route, "record": record_name,
+                        "reason": "route is out of scope or target_path does not match the configured locale",
+                    })
+                for field in ("source_sha256", "target_sha256"):
+                    if not isinstance(entry.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", entry[field]):
+                        report["invalid_records"].append({
+                            "locale": locale, "route": route, "record": record_name,
+                            "reason": f"{field} is missing or malformed",
+                        })
+            for route, route_entries in entries.items():
+                if len(route_entries) != 1:
+                    report["duplicates"].append({
+                        "locale": locale, "route": route, "record": record_name,
+                        "entry_count": len(route_entries),
+                    })
+                for entry in route_entries:
+                    ledger_target = ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
+                    is_current = (
+                        entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
+                        and entry.get("target_sha256") == ledger_target.get("target_sha256")
+                    )
+                    evidence = {
+                        "locale": locale,
+                        "route": route,
+                        "record": record_name,
+                        "reviewed_on": reviewed_on,
+                        "source_sha256": entry.get("source_sha256"),
+                        "target_sha256": entry.get("target_sha256"),
+                        "ledger_match": is_current,
+                    }
+                    route_evidence.setdefault((locale, route), []).append(evidence)
+
+    for locale in locales:
+        for route in routes:
+            entries = route_evidence.get((locale, route), [])
+            current = [item for item in entries if item["ledger_match"]]
+            if not current:
+                report["missing"].append({"locale": locale, "route": route})
+            else:
+                report["current_pairs"].append({
+                    "locale": locale, "route": route,
+                    "records": [item["record"] for item in current],
+                })
+                if len(current) > 1:
+                    report["duplicates"].append({
+                        "locale": locale, "route": route,
+                        "records": [item["record"] for item in current],
+                    })
+            for item in entries:
+                if item["ledger_match"]:
+                    continue
+                replacements = [
+                    candidate for candidate in current
+                    if candidate["reviewed_on"] > item["reviewed_on"]
+                ]
+                if replacements:
+                    report["superseded"].append({
+                        **item,
+                        "superseded_by": [candidate["record"] for candidate in replacements],
+                    })
+                else:
+                    report["unmatched"].append(item)
+    return report
+
+
 def load_site_config() -> Dict[str, Any]:
     path = ROOT / "i18n" / "sync.config.json"
     if not path.is_file():
@@ -237,6 +389,7 @@ def load_results(config: Dict[str, Any]) -> Dict[str, Any]:
         coverage_items,
         config,
     )
+    results["advisory_review_evidence"] = audit_advisory_review_evidence(config)
     blocking = set(config["blocking_locales"])
     blocking_items: List[Dict[str, Any]] = []
     advisory_items: List[Dict[str, Any]] = []
@@ -407,6 +560,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"ADVISORY  source_coverage_gap {item['route']:20} -> "
                     f"{item['locale']}: {detail}"
                 )
+            audit = results["advisory_review_evidence"]
+            print(
+                "Advisory review evidence: "
+                f"{len(audit['current_pairs'])} current route pairs, "
+                f"{len(audit['missing'])} missing, "
+                f"{len(audit['duplicates'])} duplicate, "
+                f"{len(audit['superseded'])} superseded, "
+                f"{len(audit['unmatched'])} unmatched, "
+                f"{len(audit['invalid_records'])} invalid"
+            )
         if args.mode == "check" and results["policy"]["blocking_items"]:
             return 1
         return 0
