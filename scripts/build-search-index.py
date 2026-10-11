@@ -19,6 +19,7 @@ Verify that the committed index is current without writing it:
 
 from __future__ import annotations
 
+import argparse
 import json
 import runpy
 import os
@@ -561,28 +562,64 @@ def print_summary(payload: dict, action: str, output: Path = OUT) -> None:
         print(f"  {cat}: {n}")
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    check = "--check" in args
-    locale_args = [arg for arg in args if arg.startswith("--locale=")]
-    unknown_args = [
-        arg for arg in args
-        if arg != "--check" and not arg.startswith("--locale=")
-    ]
-    if unknown_args:
-        print(
-        "Usage: python3 scripts/build-search-index.py [--check] [--locale=fr|en-gb|es-mx]",
-            file=sys.stderr,
-        )
-        return 2
+def write_check_report(report: dict, report_path: Path) -> None:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
-    locale = locale_args[0].split("=", 1)[1].strip() if locale_args else ""
-    if len(locale_args) > 1 or (locale and not re.fullmatch(r"[a-z]{2}(?:-[a-z]{2})?", locale)):
+
+def affected_routes(committed: dict, generated: dict) -> list[str]:
+    """Return routes whose indexed entries differ between the two payloads."""
+    committed_entries = {entry["url"]: entry for entry in committed["entries"]}
+    generated_entries = {entry["url"]: entry for entry in generated["entries"]}
+    return sorted(
+        route
+        for route in committed_entries.keys() | generated_entries.keys()
+        if committed_entries.get(route) != generated_entries.get(route)
+    )
+
+
+def validate_committed_index(index: object) -> str | None:
+    """Return a readable problem for malformed index structure, if any."""
+    if not isinstance(index, dict):
+        return f"expected a JSON object, found {type(index).__name__}"
+    entries = index.get("entries")
+    if not isinstance(entries, list):
+        return "expected an 'entries' array"
+    for position, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict) or not isinstance(entry.get("url"), str):
+            return f"entry {position} must be an object with a string 'url'"
+    return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        usage="%(prog)s [--check] [--locale=fr|en-gb|es-mx] [--report PATH]",
+    )
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--locale", default="")
+    parser.add_argument(
+        "--report",
+        type=Path,
+        help="write a JSON freshness report (requires --check)",
+    )
+    parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
+
+    if parsed.report is not None and not parsed.check:
+        parser.error("--report requires --check")
+
+    locale = parsed.locale.strip()
+    if locale and not re.fullmatch(r"[a-z]{2}(?:-[a-z]{2})?", locale):
         print("Locale must be a lowercase language tag, such as fr, en-gb, or es-mx.", file=sys.stderr)
         return 2
     output = ROOT / "assets" / "data" / (
         f"search-index.{locale}.json" if locale else "search-index.json"
     )
+    if parsed.report is not None and parsed.report.resolve() == output.resolve():
+        parser.error("--report must not overwrite the committed search index")
     scan_root = ROOT / locale if locale else ROOT
     if locale and not scan_root.exists():
         print(
@@ -592,28 +629,102 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    if not check and not locale:
+    if not parsed.check and not locale:
         subprocess.run([sys.executable, str(ROOT / "scripts/build-site.py")], check=True)
     payload = build_payload(scan_root=scan_root, locale=locale)
     rendered = json.dumps(payload, ensure_ascii=False, indent=2)
 
-    if check:
-        if not output.exists():
-            print(
-                f"Search index is missing: {output.relative_to(ROOT)}. "
-                "Run the matching build-search-index command.",
-                file=sys.stderr,
+    if parsed.check:
+        input_name = output.relative_to(ROOT).as_posix()
+
+        def finish_check(
+            status: str,
+            exit_status: int,
+            *,
+            problem: dict | None = None,
+            routes: list[str] | None = None,
+            diagnostic: str | None = None,
+        ) -> int:
+            report = {
+                "status": status,
+                "input": input_name,
+                "inputProblem": problem,
+                "affectedRoutes": routes if routes is not None else [],
+            }
+            if parsed.report is not None:
+                try:
+                    write_check_report(report, parsed.report)
+                except OSError as exc:
+                    print(
+                        f"Could not write search-index report "
+                        f"{parsed.report}: {exc}",
+                        file=sys.stderr,
+                    )
+                    return 1
+            if diagnostic:
+                print(diagnostic, file=sys.stderr)
+            return exit_status
+
+        try:
+            current = output.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return finish_check(
+                "error",
+                1,
+                problem={"kind": "missing", "message": "file does not exist"},
+                diagnostic=(
+                    f"Search index is missing: {input_name}. "
+                    "Run the matching build-search-index command."
+                ),
             )
-            return 1
-        current = output.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            return finish_check(
+                "error",
+                1,
+                problem={"kind": "unreadable", "message": str(exc)},
+                diagnostic=f"Search index is unreadable: {input_name}: {exc}",
+            )
+
+        try:
+            committed = json.loads(current)
+        except json.JSONDecodeError as exc:
+            detail = (
+                f"invalid JSON at line {exc.lineno}, column {exc.colno}: "
+                f"{exc.msg}"
+            )
+            return finish_check(
+                "error",
+                1,
+                problem={"kind": "invalid_json", "message": detail},
+                diagnostic=f"Search index is malformed: {input_name}: {detail}",
+            )
+
+        structure_problem = validate_committed_index(committed)
+        if structure_problem:
+            return finish_check(
+                "error",
+                1,
+                problem={"kind": "invalid_structure", "message": structure_problem},
+                diagnostic=(
+                    f"Search index is malformed: {input_name}: "
+                    f"{structure_problem}"
+                ),
+            )
+
         if current != rendered:
-            print(
-                f"Search index is stale: {output.relative_to(ROOT)}. "
-                "Run the matching build-search-index command, review the diff, "
-                "then run this command again.",
-                file=sys.stderr,
+            return finish_check(
+                "stale",
+                1,
+                routes=affected_routes(committed, payload),
+                diagnostic=(
+                    f"Search index is stale: {input_name}. "
+                    "Run the matching build-search-index command, review the diff, "
+                    "then run this command again."
+                ),
             )
-            return 1
+        result = finish_check("current", 0)
+        if result != 0:
+            return result
         print_summary(payload, "Search index is current:", output)
         return 0
 
