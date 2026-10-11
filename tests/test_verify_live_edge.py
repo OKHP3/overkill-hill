@@ -1439,10 +1439,10 @@ import(bareSpecifier);
             "js": "/assets/js/app.js",
             "module": "/assets/js/mermaid-init.js",
         }
-        expected_types = {
-            "css": "text/css",
-            "js": "text/javascript",
-            "module": "text/javascript",
+        accepted_types = {
+            "css": ("text/css",),
+            "js": ("application/javascript", "text/javascript"),
+            "module": ("application/javascript", "text/javascript"),
         }
 
         for kind, path in asset_paths.items():
@@ -1459,7 +1459,13 @@ import(bareSpecifier);
                     content_type_check = checks[f"asset {path} content type"]
                     self.assertEqual(content_type_check["status"], "FAIL")
                     self.assertIn("received ''", content_type_check["evidence"])
-                    self.assertIn(expected_types[kind], content_type_check["evidence"])
+                    for accepted_type in accepted_types[kind]:
+                        self.assertIn(accepted_type, content_type_check["evidence"])
+                    self.assertEqual(
+                        content_type_check["accepted_content_types"],
+                        sorted(accepted_types[kind]),
+                    )
+                    self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
 
                     for unaffected_kind, unaffected_path in asset_paths.items():
                         if unaffected_kind == kind:
