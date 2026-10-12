@@ -53,7 +53,60 @@ function makeSearchEntries() {
   return entries;
 }
 
+for (const width of [1280, 320]) {
+  for (const overlayMode of [true, false]) {
+    test(`FoundRy joined name finds its published project (${width}px, ${overlayMode ? "overlay" : "page"})`, async () => {
+      const browser = await chromium.launch({ headless: true });
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      try {
+        await page.goto(`${baseUrl}${overlayMode ? "/prompt-forge/" : "/search/"}`);
+        await dismissAnnouncement(page);
+        if (overlayMode) await page.locator(".okh-search-trigger").click();
+        const input = page.locator(overlayMode ? ".okh-search-input" : "#search-page-input");
+        const results = page.locator(overlayMode ? ".okh-search-results" : "#search-results");
+        const first = results.locator(".okh-search-result").first();
+        for (const query of ["FoundRy", "FOUNDRY", "found-ry", "Found‑Rᵧ"]) {
+          await input.fill(query);
+          await page.waitForFunction(({ selector, query }) => document.querySelector(selector).textContent.includes(query), { selector: overlayMode ? ".okh-search-status" : "#search-stats", query });
+          const href = await first.getAttribute("href");
+          if (query === "Found‑Rᵧ") assert(href.startsWith("/projects/found-ry/"), query);
+          else assert.equal(href, "/projects/found-ry/", query);
+          assert.match(await first.textContent(), /Found‑Rᵧ/);
+        }
+        await input.fill("FoundRy");
+        await page.waitForFunction(selector => document.querySelector(selector).textContent.includes("FoundRy"), overlayMode ? ".okh-search-status" : "#search-stats");
+        await first.click();
+        await page.waitForURL(`${baseUrl}/projects/found-ry/`);
+        assert.match(await page.locator("h1").textContent(), /Found/);
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      } finally { await browser.close(); }
+    });
+  }
+}
+
 for (const overlayMode of [true, false]) {
+  test(`joined route names exclude fragments and partial names (${overlayMode ? "overlay" : "page"})`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    try {
+      const entries = [
+        { url: "/unrelated/#found-ry", title: "Unrelated anchor" },
+        { url: "/other/?found-ry", title: "Unrelated query" },
+        { url: "/projects/found-ry-extra/", title: "Longer name" },
+        { url: "/projects/found-ry/", title: "Found‑Rᵧ" },
+      ];
+      await page.route("**/assets/data/search-index.json", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ entries }) }));
+      await page.goto(`${baseUrl}${overlayMode ? "/prompt-forge/" : "/search/"}`);
+      await dismissAnnouncement(page);
+      if (overlayMode) await page.locator(".okh-search-trigger").click();
+      await page.locator(overlayMode ? ".okh-search-input" : "#search-page-input").fill("FoundRy");
+      const links = page.locator(overlayMode ? ".okh-search-results .okh-search-result" : "#search-results .okh-search-result");
+      await links.first().waitFor();
+      assert.equal(await links.count(), 1);
+      assert.equal(await links.first().getAttribute("href"), "/projects/found-ry/");
+    } finally { await browser.close(); }
+  });
+
   test(`search distinguishes loading and an empty index (${overlayMode ? "overlay" : "page"})`, async () => {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
