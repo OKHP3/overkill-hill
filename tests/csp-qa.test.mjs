@@ -884,13 +884,23 @@ test("keeps every browser diagnostic category visible in the focused summary", a
       combinedRow,
       "| /combined.html | FAIL | CSP, PAGEERROR, CONSOLE, LOCAL REQUEST FAILED, " +
       "LOCAL HTTP ERROR, MERMAID | " +
-      "CSP: blocked \\| policy with a second line / " +
+      "CSP: blocked \\| policy with a second line (2 occurrences) / " +
       "PAGEERROR: Error: page exploded / " +
       "CONSOLE: ERROR: console exploded / " +
-      "LOCAL REQUEST FAILED: /app.js (net::ERR_FAILED) / " +
+      "LOCAL REQUEST FAILED: /app.js (net::ERR_FAILED) (2 occurrences) / " +
       "LOCAL HTTP ERROR: 404 /missing.png / " +
       "MERMAID: ERROR: render failed |",
-      "combined browser diagnostics were not retained in one focused summary row",
+      "combined browser diagnostics were not retained once per message with occurrence counts",
+    );
+    assert.equal(
+      (combinedRow.match(/CSP: blocked/g) || []).length,
+      1,
+      "repeated CSP evidence should keep one representative message",
+    );
+    assert.equal(
+      (combinedRow.match(/LOCAL REQUEST FAILED: \/app\.js/g) || []).length,
+      1,
+      "repeated local-request evidence should keep one representative message",
     );
     assert.match(
       summary,
