@@ -148,7 +148,7 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --no-input -r requirements-qa.txt
 
       - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -230,7 +230,7 @@ jobs:
 
       - name: Upload shared-foundation fingerprint report
         if: always() && steps.foundation_verification.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: foundation-fingerprints-${{ github.run_id }}-${{ github.run_attempt }}
           path: foundation-fingerprint-report.json
@@ -348,7 +348,7 @@ jobs:
       - name: Upload local QA reports
         id: upload-local-qa-reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: local-qa-${{ github.sha }}-${{ github.run_attempt }}
           path: |
@@ -418,7 +418,7 @@ jobs:
       - name: Upload failed CSP fixture report
         if: always() && steps.csp-fixtures.outcome == 'failure'
         id: upload-csp-fixture-report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: csp-fixture-regressions-${{ github.run_id }}-${{ github.run_attempt }}
           path: csp-fixture-report.json
@@ -446,7 +446,7 @@ jobs:
 
       - name: Upload theme-control revision evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: theme-control-revisions-${{ github.run_id }}
           path: theme-control-revisions.txt
@@ -499,7 +499,7 @@ jobs:
 
       - name: Upload contrast audit report for fork pull requests
         if: always() && github.event_name == 'pull_request' && steps.contrast.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: contrast-audit-${{ github.run_id }}
           path: |
@@ -521,7 +521,7 @@ jobs:
 
       - name: Upload the validated Pages release artifact
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: validated-site-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: site-release
@@ -544,7 +544,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -565,7 +565,7 @@ jobs:
       - name: Upload third-party runtime inventory
         if: always()
         id: upload-third-party-runtime-report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: third-party-runtime-${{ github.run_id }}-${{ github.run_attempt }}
           path: third-party-runtime-report.json
@@ -608,7 +608,7 @@ jobs:
       - name: Upload live-edge monitoring report
         if: always()
         id: upload-live-edge-report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: live-edge-monitor-${{ github.run_id }}-${{ github.run_attempt }}
           path: assets/audit/live-edge-report.json
