@@ -1579,6 +1579,73 @@ class SEOFixtureTests(unittest.TestCase):
                     findings_text(findings),
                 )
 
+    def test_locale_robots_use_loaded_page_indexability_override(self) -> None:
+        manifest = {
+            "locales": {
+                "fr": {
+                    "indexable": True,
+                    "metadata_source": "localized-page",
+                    "pages": [
+                        {"target_path": "fr/index.html"},
+                        {
+                            "target_path": "fr/contact/index.html",
+                            "indexable": False,
+                        },
+                    ],
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "locale-manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with patch.object(validator, "LOCALE_MANIFEST", manifest_path):
+                contract, load_findings = validator.load_locale_seo_contract()
+
+        self.assertFalse(load_findings, findings_text(load_findings))
+        self.assertTrue(contract["fr/index.html"]["indexable"])
+        self.assertFalse(contract["fr/contact/index.html"]["indexable"])
+
+        cases = (
+            (
+                "fr/index.html",
+                True,
+                "index, follow",
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                "fr/contact/index.html",
+                False,
+                "noindex, follow",
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+        for relative_path, indexable, valid_robots, invalid_robots, boundary in cases:
+            with self.subTest(relative_path=relative_path):
+                path = ROOT / relative_path
+                page_contract = contract[relative_path]
+                self.assertEqual(page_contract["indexable"], indexable)
+
+                raw = path.read_text(encoding="utf-8")
+                valid_page = parse_html(mutate_meta(raw, "meta:robots", valid_robots))
+                self.assertFalse(
+                    validator.validate_generated_seo(path, valid_page, None, page_contract),
+                    f"robots metadata should match the loaded page contract: {relative_path}",
+                )
+
+                invalid_page = parse_html(mutate_meta(raw, "meta:robots", invalid_robots))
+                findings = validator.validate_generated_seo(
+                    path,
+                    invalid_page,
+                    None,
+                    page_contract,
+                )
+                expected_finding = (
+                    f"{relative_path}: robots indexing boundary mismatch: {boundary}"
+                )
+                self.assertIn(expected_finding, findings_text(findings))
+
     def test_indexable_locale_keeps_localized_metadata_ownership(self) -> None:
         relative_path = "fr/index.html"
         path = ROOT / relative_path
