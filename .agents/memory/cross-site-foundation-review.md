@@ -14,3 +14,19 @@ The shared `app.js` search-index URL must remain stable across sites; cache-bust
 **Why:** Glee's site-specific cache-buster and the cross-site browser fixtures otherwise disagree about the runtime URL, creating either foundation drift or false loading failures.
 
 **How to apply:** Keep the shared runtime URL unversioned, version generated page/worker references, and test both the stable runtime contract and the site-specific generated references.
+
+Treat OKH's self-hosted Mermaid 12.1.0 as an explicit trust decision during
+cross-site foundation alignment. Do not downgrade it or replace it with a
+remote CDN merely to match siblings; reconcile each sibling's local vendor
+bundle, license, version, and reviewed runtime behavior together. Keep the
+release record and CI pins unchanged until scoped site changes pass validation,
+immutable cross-site verification succeeds, and the owner separately approves
+the baseline.
+
+**Why:** The sites can carry materially different Mermaid versions and
+site-specific behavior, so matching the initializer alone can change trust or
+break local module compatibility.
+
+**How to apply:** When reviewing `mermaid-init.js`, inspect the exact local
+vendor version and page-level opt-ins at every pinned revision; do not infer
+that the source click allowlist governs every rendered SVG link path.

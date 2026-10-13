@@ -211,7 +211,8 @@ class SyncFoundationSafetyTests(unittest.TestCase):
             name: git(repo, "rev-parse", "HEAD")
             for name, repo in self.repos.items()
         }
-        record_path = self.write_release_record(self.source_revision(), pins)
+        approved_revision = self.source_revision()
+        record_path = self.write_release_record(approved_revision, pins)
 
         baseline_file = self.root / "baseline-report.json"
         baseline = self.verify_release_record(record_path, baseline_file)
@@ -222,6 +223,23 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         self.assertEqual(json.loads(baseline_file.read_text()), json.loads(baseline.stdout))
 
         source = self.repos["overkill-hill"]
+        (source / "index.html").write_text(
+            "<main>Updated page content</main>\n", encoding="utf-8"
+        )
+        git(source, "add", "index.html")
+        git(source, "commit", "-m", "update page content")
+
+        content_file = self.root / "content-only-report.json"
+        content_only = self.verify_release_record(record_path, content_file)
+        self.assertEqual(content_only.returncode, 0, content_only.stdout + content_only.stderr)
+        content_report = json.loads(content_only.stdout)
+        self.assertEqual(json.loads(content_file.read_text()), content_report)
+        content_review = content_report["verification"]["current_source_review"]
+        self.assertEqual(content_review["candidate_revision"], self.source_revision())
+        self.assertEqual(content_review["approved_revision"], approved_revision)
+        self.assertEqual(content_review["status"], "current")
+        self.assertEqual(content_review["changed_assets"], [])
+
         (source / FILES[0]).write_text("proposed foundation change\n", encoding="utf-8")
         git(source, "add", FILES[0])
         git(source, "commit", "-m", "proposed unreviewed foundation change")
