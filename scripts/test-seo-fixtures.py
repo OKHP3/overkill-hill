@@ -147,6 +147,44 @@ def duplicate_article_jsonld_root_url(raw: str, value: str) -> str:
     raise AssertionError("top-level Article JSON-LD block not found")
 
 
+def article_graph_with_conflicting_modified_date(raw: str, value: str) -> str:
+    pattern = re.compile(
+        r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>.*?</script>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(raw):
+        block = match.group(0)
+        open_end = block.find(">")
+        close_start = block.lower().rfind("</script>")
+        if open_end == -1 or close_start == -1:
+            continue
+        try:
+            payload = json.loads(block[open_end + 1:close_start])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or payload.get("@type") != "Article":
+            continue
+
+        first = copy.deepcopy(payload)
+        article_id = first.get("@id") or f'{first["url"]}#article'
+        first["@id"] = article_id
+        second = copy.deepcopy(first)
+        second["dateModified"] = value
+        graph_payload = {
+            "@context": payload.get("@context", "https://schema.org"),
+            "@graph": [first, second],
+        }
+        graph_block = (
+            block[:open_end + 1]
+            + "\n"
+            + json.dumps(graph_payload, ensure_ascii=False, indent=2)
+            + "\n"
+            + block[close_start:]
+        )
+        return raw[:match.start()] + graph_block + raw[match.end():]
+    raise AssertionError("top-level Article JSON-LD block not found")
+
+
 def mutate_navigation(raw: str, key: str, value: str) -> str:
     pattern = re.compile(
         rf'<link\b(?=[^>]*\brel=["\'][^"\']*\b{key}\b[^"\']*["\'])[^>]*>',
@@ -2173,6 +2211,70 @@ class SEOFixtureTests(unittest.TestCase):
             parse_html(mutated_raw),
             page["meta:article:published_time"],
         )
+        self.assert_rejected(findings, mutation["expected"])
+
+    def test_graph_duplicate_article_modified_date_rejected_in_source_extras(self) -> None:
+        mutation = self.fixture_data["duplicate_article_modified_date_mismatch"]
+        page = self.pages_by_route[mutation["route"]]
+        path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        original_raw = path.read_text(encoding="utf-8")
+        original_articles = article_jsonld_nodes(original_raw)
+        self.assertEqual(len(original_articles), 1)
+
+        mutated_raw = article_graph_with_conflicting_modified_date(
+            original_raw,
+            mutation["value"],
+        )
+        mutated_articles = article_jsonld_nodes(mutated_raw)
+        self.assertEqual(len(mutated_articles), 2)
+        self.assertEqual(
+            mutated_articles[0]["@id"],
+            mutated_articles[1]["@id"],
+            "source graph fixture must duplicate the Article identity",
+        )
+        self.assertEqual(
+            {article["dateModified"] for article in mutated_articles},
+            {original_articles[0]["dateModified"], mutation["value"]},
+        )
+        for article in mutated_articles:
+            self.assertEqual(
+                article["headline"],
+                original_articles[0]["headline"],
+                "source graph fixture changed Article headline prose",
+            )
+            self.assertEqual(
+                article["description"],
+                original_articles[0]["description"],
+                "source graph fixture changed Article description prose",
+            )
+
+        indexing_fields = {
+            key: value
+            for key, value in page.items()
+            if key in ("meta:robots", "meta:googlebot", "meta:bingbot")
+        }
+        self.assertEqual(
+            indexing_fields,
+            {
+                "meta:robots": (
+                    "index, follow, max-image-preview:large, max-snippet:-1, "
+                    "max-video-preview:-1"
+                ),
+                "meta:googlebot": "index, follow",
+                "meta:bingbot": "index, follow",
+            },
+            "source graph fixture changed the manifest robots/indexing fields",
+        )
+
+        original_read_text = Path.read_text
+
+        def read_source(path_to_read, *args, **kwargs):
+            if path_to_read == path:
+                return mutated_raw
+            return original_read_text(path_to_read, *args, **kwargs)
+
+        with patch.object(Path, "read_text", read_source):
+            findings = validator.validate_article_jsonld_source([page])
         self.assert_rejected(findings, mutation["expected"])
 
     def test_duplicate_article_jsonld_root_url_rejected_in_source_extras(self) -> None:
