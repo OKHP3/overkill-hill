@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the Pages freshness dependency and its actual command in copied sites."""
 
+import hashlib
 import json
 import re
 import shlex
@@ -61,6 +62,7 @@ class I18nWorkflowTests(unittest.TestCase):
         stale_locales=(),
         mutate_target=None,
         mutate_targets=(),
+        change_target_line_endings=None,
         blocking_locales=None,
     ):
         # Copy only the detector's real inputs. No source, review, or ledger writes
@@ -89,6 +91,14 @@ class I18nWorkflowTests(unittest.TestCase):
             state = json.loads(ledger.read_text())
             for locale in stale_locales:
                 state["pages"]["/about/"]["targets"][locale]["synced_source_sha256"] = "0" * 64
+            if change_target_line_endings is not None:
+                locale, route = change_target_line_endings
+                page = (route.strip("/") + "/index.html").lstrip("/")
+                target = root / f"{config['target_locales'][locale]['root']}/{page}"
+                normalized = target.read_bytes().replace(b"\r\n", b"\n")
+                state["pages"][route]["targets"][locale]["target_sha256"] = (
+                    hashlib.sha256(normalized).hexdigest()
+                )
             ledger.write_text(json.dumps(state))
             targets = list(mutate_targets)
             if mutate_target is not None:
@@ -97,6 +107,21 @@ class I18nWorkflowTests(unittest.TestCase):
                 page = (route.strip("/") + "/index.html").lstrip("/")
                 target = root / f"{config['target_locales'][locale]['root']}/{page}"
                 target.write_bytes(target.read_bytes() + b"\n<!-- reviewed target drift -->\n")
+            if change_target_line_endings is not None:
+                locale, route = change_target_line_endings
+                page = (route.strip("/") + "/index.html").lstrip("/")
+                target = root / f"{config['target_locales'][locale]['root']}/{page}"
+                original = target.read_bytes()
+                if b"\r\n" in original:
+                    changed = original.replace(b"\r\n", b"\n")
+                else:
+                    changed = original.replace(b"\n", b"\r\n")
+                self.assertNotEqual(original, changed)
+                self.assertEqual(
+                    original.replace(b"\r\n", b"\n"),
+                    changed.replace(b"\r\n", b"\n"),
+                )
+                target.write_bytes(changed)
             ledger_before = ledger.read_bytes()
             before = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
             result = subprocess.run(shlex.split(gate_command()), cwd=root,
@@ -139,6 +164,23 @@ class I18nWorkflowTests(unittest.TestCase):
                     and item["status"] == "target_changed"
                     for item in report["policy"]["blocking_items"]
                 ))
+
+    def test_french_line_ending_only_change_does_not_count_as_target_drift(self):
+        code, report = self.run_copied_site(
+            change_target_line_endings=("fr", "/about/"),
+        )
+
+        self.assertEqual(0, code)
+        self.assertFalse(any(
+            item["locale"] == "fr" and item["route"] == "/about/"
+            for item in report["target_changed"]
+        ))
+        self.assertFalse(any(
+            item["locale"] == "fr"
+            and item["route"] == "/about/"
+            and item["status"] == "target_changed"
+            for item in report["policy"]["blocking_items"]
+        ))
 
     def test_multiple_reviewed_french_target_changes_block_in_one_report(self):
         config = json.loads((ROOT / "i18n/sync.config.json").read_text())
