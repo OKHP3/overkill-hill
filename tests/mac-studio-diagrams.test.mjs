@@ -33,9 +33,8 @@ test('Mac Studio token routing renders the authored seven-node graph', async () 
     browser = await chromium.launch();
     const page = await browser.newPage();
     const warnings = [];
-    page.on('console', async message => {
-      if (message.type() === 'warning') warnings.push(await Promise.all(message.args().map(arg =>
-        arg.evaluate(value => typeof value === 'object' ? { message: value?.message, hash: value?.hash } : value))));
+    page.on('console', message => {
+      if (message.type() === 'warning') warnings.push(message.text());
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/projects/mac-studio-local-ai-workbench/#how-its-built`);
     const diagram = page.locator('#how-its-built .mermaid').first();
