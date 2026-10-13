@@ -1303,6 +1303,10 @@ class SEOFixtureTests(unittest.TestCase):
             parser,
         )
         self.assert_rejected(findings, mutation["expected"])
+        diagnostic = findings_text(findings)
+        self.assertIn(articles[0]["@id"], diagnostic)
+        self.assertIn(articles[0]["url"], diagnostic)
+        self.assertIn(mutation["value"], diagnostic)
 
     def test_noindex_duplicate_article_url_conflict_remains_exempt(self) -> None:
         page = self.pages_by_route["/writings/biases-as-constants/"]

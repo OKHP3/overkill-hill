@@ -1075,12 +1075,18 @@ def validate_duplicate_article_jsonld_urls(
         urls_by_identity.setdefault(identity, []).append(url)
 
     findings: list[Finding] = []
-    for urls in urls_by_identity.values():
+    for identity, urls in urls_by_identity.items():
         if len(set(urls)) > 1:
+            identity_detail = (
+                f" for shared Article @id {identity[1]!r}"
+                if identity[0] == "@id"
+                else ""
+            )
             findings.append(Finding(
                 "ERROR",
                 location,
-                f"conflicting duplicate Article JSON-LD url values: {urls!r}",
+                f"conflicting duplicate Article JSON-LD url values"
+                f"{identity_detail}: {urls!r}",
             ))
     return findings
 
