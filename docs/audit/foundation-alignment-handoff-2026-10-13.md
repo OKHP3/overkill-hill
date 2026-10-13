@@ -1,4 +1,4 @@
-# Shared foundation alignment handoff — 2026-10-13
+# Shared foundation alignment handoff: 2026-10-13
 
 ## Status and boundary
 
