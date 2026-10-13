@@ -1666,16 +1666,19 @@ def validate_robots_indexing_directives(
     robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
     if not {"index", "noindex"}.issubset(set().union(*robots_tokens)):
         return []
-    conflicting_values = [
-        value
-        for value, tokens in zip(robots_values, robots_tokens)
+    conflicting_tags = [
+        f"robots tag #{position}={value!r}"
+        for position, (value, tokens) in enumerate(
+            zip(robots_values, robots_tokens),
+            start=1,
+        )
         if tokens.intersection(ROBOTS_INDEXING_TOKENS)
     ]
     return [Finding(
         "ERROR",
         location,
-        "conflicting robots index/noindex directives in rendered content values: "
-        f"{conflicting_values!r}",
+        "conflicting robots index/noindex directives in rendered content tags: "
+        + ", ".join(conflicting_tags),
     )]
 
 

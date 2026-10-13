@@ -231,7 +231,7 @@
   "robots_directive_conflicts": {
     "index": "index, follow",
     "noindex": "noindex, follow",
-    "expected": "conflicting robots index/noindex directives in rendered content values"
+    "expected": "conflicting robots index/noindex directives in rendered content tags"
   },
   "organization_same_as_drift": {
     "from": "https://www.linkedin.com/company/overkillhillp3",

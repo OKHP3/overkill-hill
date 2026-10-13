@@ -1900,6 +1900,15 @@ class SEOFixtureTests(unittest.TestCase):
             f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
             1,
         )
+        unrelated_meta_across_tags_conflict = across_tags_conflict.replace(
+            '<meta name="robots" content="index, follow">',
+            (
+                '<meta name="description" content="Unrelated metadata">\n'
+                '<meta property="og:title" content="Unrelated title">\n'
+                '<meta name="robots" content="index, follow">'
+            ),
+            1,
+        )
         conflict_cases = (
             (
                 "across tags on a noindex page",
@@ -1926,6 +1935,13 @@ class SEOFixtureTests(unittest.TestCase):
                 across_tags_conflict,
                 (robots_fixture["index"], robots_fixture["noindex"]),
             ),
+            (
+                "robots tag positions ignore unrelated metadata",
+                index_path,
+                index_page,
+                unrelated_meta_across_tags_conflict,
+                (robots_fixture["index"], robots_fixture["noindex"]),
+            ),
         )
         for case, path, page, raw, expected_values in conflict_cases:
             with self.subTest(case=case):
@@ -1944,7 +1960,8 @@ class SEOFixtureTests(unittest.TestCase):
                     conflict.page,
                     path.relative_to(ROOT).as_posix(),
                 )
-                for value in expected_values:
+                for position, value in enumerate(expected_values, start=1):
+                    self.assertIn(f"robots tag #{position}=", conflict.msg)
                     self.assertIn(value, conflict.msg)
 
         consistent_cases = (
