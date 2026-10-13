@@ -29,8 +29,11 @@ class ContentCoverageParser(HTMLParser):
         self.headings: list[dict[str, str]] = []
         self.heading_counts: dict[str, int] = {}
         self.content_blocks: dict[str, int] = {}
+        self.section_headings: dict[str, dict[str, str]] = {}
+        self.section_content_blocks: dict[str, dict[str, int]] = {}
         self.protected_links: set[str] = set()
         self.current_heading: dict[str, str] | None = None
+        self.active_section_id = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -46,8 +49,14 @@ class ContentCoverageParser(HTMLParser):
                 "ordinal": str(self.heading_counts[tag]),
                 "text": "",
             }
+            if self.current_heading["id"]:
+                self.active_section_id = self.current_heading["id"]
+                self.section_headings[self.active_section_id] = self.current_heading
         elif tag in {"p", "li", "blockquote", "figure", "table"}:
             self.content_blocks[tag] = self.content_blocks.get(tag, 0) + 1
+            if self.active_section_id:
+                section_blocks = self.section_content_blocks.setdefault(self.active_section_id, {})
+                section_blocks[tag] = section_blocks.get(tag, 0) + 1
         elif tag == "a":
             href = (attributes.get("href") or "").strip()
             if urlsplit(href).scheme.lower() in {"http", "https", "mailto", "tel"}:
@@ -101,13 +110,32 @@ def compare_content_coverage(
     for block, source_count in source.content_blocks.items():
         target_count = target.content_blocks.get(block, 0)
         if source_count > target_count:
-            omissions.append({
+            omission = {
                 "kind": "content_block",
                 "block": block,
                 "source_count": source_count,
                 "target_count": target_count,
                 "omitted_count": source_count - target_count,
-            })
+            }
+            section_deficits = []
+            for heading_id, heading in source.section_headings.items():
+                section_source_count = source.section_content_blocks.get(
+                    heading_id, {}
+                ).get(block, 0)
+                section_target_count = target.section_content_blocks.get(
+                    heading_id, {}
+                ).get(block, 0)
+                if section_source_count > section_target_count:
+                    section_deficits.append({
+                        "heading": heading["text"],
+                        "heading_id": heading_id,
+                        "source_count": section_source_count,
+                        "target_count": section_target_count,
+                        "omitted_count": section_source_count - section_target_count,
+                    })
+            if section_deficits:
+                omission["sections"] = section_deficits
+            omissions.append(omission)
     for href in sorted(source.protected_links - target.protected_links):
         omissions.append({"kind": "protected_link", "href": href})
     if not omissions:
@@ -148,6 +176,27 @@ def collect_source_coverage(
         if gap is not None:
             gaps.append(gap)
     return gaps
+
+
+def format_coverage_omission(omission: dict[str, Any]) -> str:
+    """Format a structural coverage finding for the human-readable report."""
+    if omission.get("heading"):
+        return omission["heading"]
+    if omission.get("href"):
+        return omission["href"]
+    detail = (
+        f"{omission.get('kind')}: {omission.get('block') or omission.get('level') or ''} "
+        f"({omission.get('source_count')} source / {omission.get('target_count')} target)"
+    )
+    sections = omission.get("sections", [])
+    if sections:
+        section_details = ", ".join(
+            f"{section.get('heading') or section.get('heading_id')} "
+            f"({section.get('source_count')} source / {section.get('target_count')} target)"
+            for section in sections
+        )
+        detail += f"; sections: {section_details}"
+    return detail
 
 
 def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
@@ -550,10 +599,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(f"{label:9} {status:14} {item['route']:20} -> {item['locale']}")
             for item in results["source_coverage_gaps"]:
                 detail = "; ".join(
-                    gap.get("heading")
-                    or gap.get("href")
-                    or f"{gap.get('kind')}: {gap.get('block') or gap.get('level') or ''} "
-                    f"({gap.get('source_count')} source / {gap.get('target_count')} target)"
+                    format_coverage_omission(gap)
                     for gap in item["omissions"][:3]
                 )
                 print(

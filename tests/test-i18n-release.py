@@ -134,6 +134,54 @@ class I18nReleaseTests(unittest.TestCase):
             [(item["kind"], item.get("href")) for item in result["omissions"]],
         )
 
+    def test_content_block_deficits_name_retained_shortened_sections_for_advisory_locales(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>First paragraph.</p>'
+                '<p>Second paragraph.</p><h2 id="evidence">Evidence</h2>'
+                '<p>Evidence paragraph.</p></main>',
+                encoding="utf-8",
+            )
+            target.write_text(
+                '<main><h2 id="overview">Übersicht</h2><p>Erster Absatz.</p>'
+                '<h2 id="evidence">Evidenz</h2><p>Beleg.</p></main>',
+                encoding="utf-8",
+            )
+            results = {}
+            with patch.object(MODULE, "ROOT", root):
+                for locale in ("de", "es"):
+                    results[locale] = MODULE.compare_content_coverage(
+                        source,
+                        target,
+                        locale,
+                        "/about/",
+                    )
+
+        for locale, result in results.items():
+            with self.subTest(locale=locale):
+                self.assertIsNotNone(result)
+                assert result is not None
+                self.assertEqual(locale, result["locale"])
+                paragraph_gap = next(
+                    item for item in result["omissions"]
+                    if item["kind"] == "content_block" and item["block"] == "p"
+                )
+                self.assertEqual(1, paragraph_gap["omitted_count"])
+                self.assertEqual([{
+                    "heading": "Overview",
+                    "heading_id": "overview",
+                    "source_count": 2,
+                    "target_count": 1,
+                    "omitted_count": 1,
+                }], paragraph_gap["sections"])
+                self.assertIn(
+                    "sections: Overview (2 source / 1 target)",
+                    MODULE.format_coverage_omission(paragraph_gap),
+                )
+
     def test_advisory_content_gaps_are_reported_without_changing_noindex_target(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -181,6 +229,61 @@ class I18nReleaseTests(unittest.TestCase):
                 for item in result["policy"]["advisory_items"]
             ))
             self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+
+    def test_shortened_sections_in_german_and_spanish_remain_advisory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "about" / "index.html"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>First.</p><p>Second.</p></main>',
+                encoding="utf-8",
+            )
+            items = []
+            for locale, heading in (("de", "Übersicht"), ("es", "Resumen")):
+                target = root / locale / "about" / "index.html"
+                target.parent.mkdir(parents=True)
+                target.write_text(
+                    f'<main><h2 id="overview">{heading}</h2><p>Translated.</p></main>',
+                    encoding="utf-8",
+                )
+                items.append({
+                    "route": "/about/",
+                    "locale": locale,
+                    "source_path": "about/index.html",
+                    "target_path": f"{locale}/about/index.html",
+                })
+            config = {
+                "blocking_locales": ["fr"],
+                "advisory_content_coverage_locales": ["de", "es"],
+                "state_file": "i18n/sync-state.json",
+                "in_scope_routes": ["/about/"],
+                "target_locales": {
+                    "de": {"locale": "de-DE", "root": "de"},
+                    "es": {"locale": "es-ES", "root": "es"},
+                    "fr": {"locale": "fr-FR", "root": "fr"},
+                },
+            }
+            detector_report = {
+                "missing": [],
+                "stale": [],
+                "needs_baseline": [],
+                "in_sync": items,
+                "orphan": [],
+            }
+            with patch.object(MODULE, "ROOT", root), patch.object(
+                MODULE, "run_detector", return_value=detector_report
+            ):
+                result = MODULE.load_results(config)
+
+        self.assertEqual([], result["policy"]["blocking_items"])
+        self.assertEqual(
+            {"de", "es"},
+            {
+                item["locale"] for item in result["policy"]["advisory_items"]
+                if item["status"] == "source_coverage_gap"
+            },
+        )
 
     def test_detector_hash_is_stable_across_checkout_line_endings(self):
         with tempfile.TemporaryDirectory() as directory:
