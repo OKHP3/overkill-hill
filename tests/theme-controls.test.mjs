@@ -458,6 +458,73 @@ test("brand runtime audit names site, revision, and changed contract values", ()
   assert.match(pinnedDrift[0], new RegExp(`Glee revision b{40}; contract revision ${contractRevision}`));
 });
 
+test("brand runtime audit reports missing and malformed generated blocks with site and immutable revision", () => {
+  const siteName = "Glee";
+  const revision = "d".repeat(40);
+  const declarationPattern = /(const BRAND_THEME_CONFIG = Object\.freeze\()[\s\S]*?(\);)/;
+  const declaration = appScript.match(declarationPattern);
+  assert.ok(declaration, "fixture must contain a generated brand configuration");
+  const originalBrands = JSON.parse(declaration[0].match(/\(([\s\S]*?)\);/)[1]);
+  const scriptWithBrands = (brands) => appScript.replace(
+    declarationPattern,
+    `$1${JSON.stringify(brands)}$2`,
+  );
+  const missingBrand = { ...originalBrands };
+  delete missingBrand.glee;
+  const unexpectedBrand = {
+    ...originalBrands,
+    unreviewed: { name: "Unreviewed" },
+  };
+  const cases = [
+    {
+      name: "missing marker",
+      script: appScript.replace(
+        "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.",
+        "",
+      ),
+      expectedDiagnostic: /generated brand theme block is missing or incomplete/,
+    },
+    {
+      name: "invalid generated JSON",
+      script: appScript.replace(
+        declarationPattern,
+        "$1{ invalid JSON }$2",
+      ),
+      expectedDiagnostic: /generated BRAND_THEME_CONFIG is not valid JSON/,
+    },
+    {
+      name: "missing brand",
+      script: scriptWithBrands(missingBrand),
+      expectedDiagnostic: /glee is missing or is not an object/,
+    },
+    {
+      name: "unexpected brand",
+      script: scriptWithBrands(unexpectedBrand),
+      expectedDiagnostic: /unexpected generated brand unreviewed/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const diagnostics = brandThemeContractDrift({
+      name: siteName,
+      revision,
+      script: testCase.script,
+    });
+    assert.ok(diagnostics.length > 0, `${testCase.name} must produce a diagnostic`);
+    assert.ok(
+      diagnostics.some((diagnostic) => testCase.expectedDiagnostic.test(diagnostic)),
+      `${testCase.name} diagnostic should describe the drift`,
+    );
+    for (const diagnostic of diagnostics) {
+      assert.match(
+        diagnostic,
+        new RegExp(`${siteName} revision ${revision}`),
+        `${testCase.name} diagnostic should name the site and immutable revision`,
+      );
+    }
+  }
+});
+
 test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "brand-theme-release-"));
   const source = join(temporary, "source");
