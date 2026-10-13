@@ -30,6 +30,81 @@ REGIONAL_BUILDER_SPEC.loader.exec_module(REGIONAL_BUILDER_MODULE)
 
 
 class I18nReleaseTests(unittest.TestCase):
+    def test_text_report_lists_current_duplicate_missing_and_superseded_records_by_route(self):
+        audit = {
+            "current_pairs": [
+                {"locale": "de", "route": "/", "records": ["i18n/pilot/de/current-home.json"]},
+                {"locale": "es", "route": "/", "records": ["i18n/pilot/es/current-home.json"]},
+            ],
+            "missing": [
+                {"locale": "de", "route": "/about/"},
+                {"locale": "es", "route": "/about/"},
+            ],
+            "duplicates": [
+                {
+                    "locale": "de", "route": "/",
+                    "records": ["i18n/pilot/de/current-home.json", "i18n/pilot/de/second-home.json"],
+                },
+                {
+                    "locale": "es", "route": "/about/",
+                    "record": "i18n/pilot/es/duplicate-about.json", "entry_count": 2,
+                },
+            ],
+            "superseded": [{
+                "locale": "de", "route": "/",
+                "record": "i18n/pilot/de/old-home.json",
+                "superseded_by": ["i18n/pilot/de/current-home.json"],
+            }],
+        }
+
+        lines = MODULE.format_advisory_review_routes(
+            audit, ["de", "es"], ["/", "/about/"],
+        )
+        output = "\n".join(lines)
+
+        self.assertIn(
+            "/: de: i18n/pilot/de/current-home.json; duplicate: current records: "
+            "i18n/pilot/de/current-home.json, i18n/pilot/de/second-home.json; "
+            "superseded: i18n/pilot/de/old-home.json -> i18n/pilot/de/current-home.json "
+            "| es: i18n/pilot/es/current-home.json",
+            output,
+        )
+        self.assertIn("de: MISSING (no current review record)", output)
+        self.assertIn(
+            "es: MISSING (no current review record); duplicate: repeated entries in "
+            "i18n/pilot/es/duplicate-about.json (2 entries)",
+            output,
+        )
+
+    def test_text_report_does_not_change_check_exit_status(self):
+        config = {
+            "blocking_locales": ["fr"],
+            "advisory_content_coverage_locales": ["de", "es"],
+            "in_scope_routes": ["/"],
+        }
+        results = {
+            "missing": [], "stale": [], "needs_baseline": [], "target_changed": [],
+            "source_coverage_gaps": [],
+            "advisory_review_evidence": {
+                "current_pairs": [],
+                "missing": [{"locale": "de", "route": "/"}, {"locale": "es", "route": "/"}],
+                "duplicates": [],
+                "superseded": [], "unmatched": [], "invalid_records": [],
+            },
+            "policy": {
+                "blocking_locales": ["fr"],
+                "blocking_items": [{"locale": "fr", "route": "/"}],
+            },
+        }
+        output = io.StringIO()
+        with patch.object(MODULE, "load_site_config", return_value=config), patch.object(
+            MODULE, "load_results", return_value=results
+        ), contextlib.redirect_stdout(output):
+            status = MODULE.main(["--mode", "check", "--format", "text"])
+
+        self.assertEqual(1, status)
+        self.assertIn("/: de: MISSING (no current review record) | es: MISSING", output.getvalue())
+
     def test_advisory_review_audit_reports_missing_duplicate_and_superseded_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

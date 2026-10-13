@@ -774,6 +774,61 @@ def adopt(locales: List[str], routes: List[str], provenance: Path, config: Dict[
     return 0
 
 
+def format_advisory_review_routes(
+    audit: Dict[str, Any], locales: List[str], routes: List[str],
+) -> List[str]:
+    """Format route-level current, missing, duplicate, and superseded review evidence."""
+    current_by_route = {
+        (item["locale"], item["route"]): item["records"]
+        for item in audit.get("current_pairs", [])
+    }
+    missing_routes = {
+        (item["locale"], item["route"])
+        for item in audit.get("missing", [])
+    }
+    duplicate_details: dict[tuple[str, str], list[str]] = {}
+    for item in audit.get("duplicates", []):
+        key = (item["locale"], item["route"])
+        if "records" in item:
+            detail = f"current records: {', '.join(dict.fromkeys(item['records']))}"
+        else:
+            detail = (
+                f"repeated entries in {item['record']} "
+                f"({item.get('entry_count', 0)} entries)"
+            )
+        duplicate_details.setdefault(key, [])
+        if detail not in duplicate_details[key]:
+            duplicate_details[key].append(detail)
+
+    superseded_by_route: dict[tuple[str, str], list[str]] = {}
+    for item in audit.get("superseded", []):
+        key = (item["locale"], item["route"])
+        detail = f"{item['record']} -> {', '.join(item['superseded_by'])}"
+        superseded_by_route.setdefault(key, [])
+        if detail not in superseded_by_route[key]:
+            superseded_by_route[key].append(detail)
+
+    lines = ["Advisory review records by route:"]
+    for route in routes:
+        locale_details = []
+        for locale in locales:
+            key = (locale, route)
+            records = list(dict.fromkeys(current_by_route.get(key, [])))
+            details = [f"{locale}: " + (
+                ", ".join(records) if records else (
+                    "MISSING (no current review record)"
+                    if key in missing_routes else "no current record reported"
+                )
+            )]
+            if duplicate_details.get(key):
+                details.append("duplicate: " + "; ".join(duplicate_details[key]))
+            if superseded_by_route.get(key):
+                details.append("superseded: " + "; ".join(superseded_by_route[key]))
+            locale_details.append("; ".join(details))
+        lines.append(f"  {route}: " + " | ".join(locale_details))
+    return lines
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("report", "check", "adopt"), default="report")
@@ -817,6 +872,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"{len(audit['unmatched'])} unmatched, "
                 f"{len(audit['invalid_records'])} invalid"
             )
+            for line in format_advisory_review_routes(
+                audit,
+                config["advisory_content_coverage_locales"],
+                config["in_scope_routes"],
+            ):
+                print(line)
         if args.mode == "check" and results["policy"]["blocking_items"]:
             return 1
         return 0
