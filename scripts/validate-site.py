@@ -1052,7 +1052,8 @@ def validate_article_social_image(
             findings.append(Finding(
                 "ERROR",
                 location,
-                f"indexable {page_label} Article uses shared brand social image: {key}",
+                f"indexable {page_label} Article uses shared brand social image: "
+                f"{key} ({values.get(key, '')})",
             ))
     return findings
 

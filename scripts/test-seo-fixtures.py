@@ -2053,7 +2053,8 @@ class SEOFixtureTests(unittest.TestCase):
                     )
                     self.assert_rejected(
                         findings,
-                        f"{fixture['expected_source']}: {field}",
+                        f"{fixture['expected_source']}: {field} "
+                        f"({fixture[url_kind]})",
                     )
 
     def test_promoted_article_shared_brand_image_rejected_in_generated_html(self) -> None:
@@ -2075,7 +2076,8 @@ class SEOFixtureTests(unittest.TestCase):
                     )
                     self.assert_rejected(
                         findings,
-                        f"{fixture['expected_generated']}: {field}",
+                        f"{fixture['expected_generated']}: {field} "
+                        f"({fixture[url_kind]})",
                     )
 
     def assert_rejected(self, findings: list, expected: str) -> None:
