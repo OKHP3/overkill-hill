@@ -55,6 +55,53 @@ const embeds = [
   ["/skillz-forge/skillz-shield/", "tool-iframe", "reload-btn", "https://okhp3.github.io/skillz-shield/"],
 ];
 
+async function waitForEmbeddedReload(page, iframeId, reloadId, childUrl, timeout = 10_000) {
+  // Settle the lazy iframe's first load so it cannot satisfy the reload check.
+  await page.locator(`#${iframeId}`).scrollIntoViewIfNeeded();
+  await page.frameLocator(`#${iframeId}`).locator("main").waitFor({ state: "visible", timeout });
+  const [request] = await Promise.all([
+    page.waitForRequest((candidate) => candidate.url() === childUrl
+      && candidate.isNavigationRequest()
+      && candidate.frame().parentFrame() === page.mainFrame(), { timeout }),
+    page.locator(`#${reloadId}`).click({ timeout }),
+  ]);
+  const response = await request.response();
+  assert.ok(response, `${iframeId}: reload did not receive a response`);
+  assert.equal(response.status(), 200, `${iframeId}: reload response failed`);
+  assert.equal(await response.finished(), null, `${iframeId}: reload response did not finish`);
+}
+
+test("reload observation waits for delayed navigation and rejects a broken button", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const childUrl = embeds[2][3];
+  try {
+    for (const delay of [250, null]) {
+      const page = await browser.newPage();
+      await page.route(childUrl, (route) => route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><main>Reload fixture</main>",
+      }));
+      // Only this disposable fixture delays or disables the button; site code is unchanged.
+      const action = delay === null ? "" : `setTimeout(() => { document.getElementById('fixture-frame').src = '${childUrl}'; }, ${delay})`;
+      await page.setContent(`<iframe id="fixture-frame" src="${childUrl}"></iframe>
+        <button id="fixture-reload" onclick="${action}">Reload</button>`);
+      await page.frameLocator("#fixture-frame").locator("main").waitFor({ state: "visible" });
+      if (delay === null) {
+        await assert.rejects(
+          waitForEmbeddedReload(page, "fixture-frame", "fixture-reload", childUrl, 500),
+          (error) => error.message.includes('waiting for event "request"') && error.message.includes("Timeout"),
+        );
+      } else {
+        await waitForEmbeddedReload(page, "fixture-frame", "fixture-reload", childUrl);
+      }
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+});
+
 test("legacy Skillz links preserve the destination section and query", async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -82,9 +129,7 @@ test("embedded parent pages preserve the security contract and reload fallback",
   const page = await browser.newPage();
   try {
     for (const [path, iframeId, reloadId, childUrl] of embeds) {
-      let childRequests = 0;
       await page.route("https://okhp3.github.io/**", async (route) => {
-        childRequests += 1;
         await route.fulfill({
           status: 200,
           contentType: "text/html",
@@ -99,9 +144,7 @@ test("embedded parent pages preserve the security contract and reload fallback",
       await assert.equal(await iframe.getAttribute("src"), childUrl);
       const directLaunch = page.locator(`a[target="_blank"][href^="${new URL(childUrl).origin}"]`);
       await assert.equal(await directLaunch.count() > 0, true);
-      await page.locator(`#${reloadId}`).click();
-      await page.waitForTimeout(100);
-      await assert.equal(childRequests >= 2, true);
+      await waitForEmbeddedReload(page, iframeId, reloadId, childUrl);
     }
   } finally {
     await browser.close();
