@@ -1199,6 +1199,91 @@ class SEOFixtureTests(unittest.TestCase):
                 "an unclosed final URL block must not enter the usable inventory",
             )
 
+    def test_broken_sitemap_document_boundaries_are_reported(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        cases = (
+            (
+                "missing-opening-urlset",
+                f"<url><loc>{valid}</loc></url></urlset>",
+                "found 0 opening and 1 closing",
+            ),
+            (
+                "missing-closing-urlset",
+                f"<urlset><url><loc>{valid}</loc></url>",
+                "found 1 opening and 0 closing",
+            ),
+            (
+                "multiple-urlset-roots",
+                (
+                    f"<urlset><url><loc>{valid}</loc></url></urlset>"
+                    "<urlset></urlset>"
+                ),
+                "found 2 opening and 2 closing",
+            ),
+            (
+                "url-entry-outside-urlset",
+                (
+                    f"<urlset></urlset><url><loc>{valid}</loc></url>"
+                ),
+                "sitemap URL entries must be inside the <urlset> document boundaries",
+            ),
+            (
+                "mismatched-urlset-prefixes",
+                (
+                    '<a:urlset xmlns:a="urn:a" xmlns:b="urn:b">'
+                    f"<url><loc>{valid}</loc></url></b:urlset>"
+                ),
+                "sitemap document has malformed <urlset> boundaries",
+            ),
+            (
+                "wrong-document-root",
+                f"<sitemap><url><loc>{valid}</loc></url></sitemap>",
+                "sitemap document root must be <urlset>",
+            ),
+        )
+
+        for case, sitemap, expected_error in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                sitemap_path = Path(directory) / "sitemap.xml"
+                sitemap_path.write_text(sitemap, encoding="utf-8")
+
+                entries, findings = (
+                    validator._sitemap_entries_with_positions_and_findings_from_path(
+                        sitemap_path
+                    )
+                )
+                text = findings_text(findings)
+                self.assertIn(expected_error, text)
+                self.assertTrue(
+                    entries,
+                    "the fixture should retain any recoverable entry to prove "
+                    "a partial inventory cannot hide the wrapper failure",
+                )
+                self.assertIn(
+                    expected_error,
+                    findings_text(validator.validate_sitemap_duplicates(sitemap_path)),
+                )
+
+    def test_urlset_markup_in_comments_does_not_satisfy_document_boundaries(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                f"<!-- <urlset> --><url><loc>{valid}</loc></url></urlset>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertIn(
+                "found 0 opening and 1 closing",
+                findings_text(findings),
+            )
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid, None)],
+                "recoverable URLs must not make a missing document wrapper pass",
+            )
+
     def test_public_inventory_excludes_test_fixtures(self) -> None:
         pages = validator.find_html_files()
         self.assertIn(ROOT / "index.html", pages)

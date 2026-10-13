@@ -389,6 +389,93 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
     return blocks
 
 
+def _sitemap_document_boundary_findings(
+    text: str,
+    *,
+    well_formed: bool,
+) -> list[Finding]:
+    """Report broken urlset document boundaries independently of URL blocks."""
+    # Ignore text that only resembles markup inside comments, CDATA, or an XML
+    # declaration so those strings cannot satisfy the document-boundary check.
+    markup = re.sub(
+        r"<!--.*?-->|<!\[CDATA\[.*?\]\]>|<\?.*?\?>",
+        lambda match: " " * len(match.group(0)),
+        text,
+        flags=re.DOTALL,
+    )
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    urlset_pattern = re.compile(
+        rf"<(?P<closing>/)?(?P<name>{qname_prefix}urlset)\b"
+        r"(?P<attributes>[^>]*)>"
+    )
+    urlset_tags = list(urlset_pattern.finditer(markup))
+    opening_tags = [
+        match for match in urlset_tags
+        if match.group("closing") is None
+    ]
+    closing_tags = [
+        match for match in urlset_tags
+        if match.group("closing") is not None
+    ]
+
+    findings: list[Finding] = []
+    if well_formed:
+        # A parsed XML document can still be well-formed but use the wrong
+        # document element; entries beneath that wrapper are not a sitemap.
+        first_element = re.search(
+            r"<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\b",
+            markup,
+        )
+        if first_element is not None and first_element.group(1).split(":")[-1] != "urlset":
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                "sitemap document root must be <urlset>",
+            ))
+
+    if len(opening_tags) != 1 or len(closing_tags) != 1:
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            (
+                "sitemap document must contain exactly one opening <urlset> "
+                "and one closing </urlset> boundary; found "
+                f"{len(opening_tags)} opening and {len(closing_tags)} closing"
+            ),
+        ))
+        return findings
+
+    opening = opening_tags[0]
+    closing = closing_tags[0]
+    if (
+        opening.group("attributes").rstrip().endswith("/")
+        or closing.group("attributes").strip()
+        or opening.group("name") != closing.group("name")
+        or closing.start() < opening.end()
+    ):
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            "sitemap document has malformed <urlset> boundaries",
+        ))
+        return findings
+
+    url_tag_pattern = re.compile(
+        rf"</?{qname_prefix}url\b[^>]*>",
+        flags=re.IGNORECASE,
+    )
+    if any(
+        match.start() < opening.end() or match.end() > closing.start()
+        for match in url_tag_pattern.finditer(markup)
+    ):
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            "sitemap URL entries must be inside the <urlset> document boundaries",
+        ))
+    return findings
+
+
 def _sitemap_entries_with_positions_and_findings_from_path(
     sitemap_path: Path,
 ) -> tuple[list[tuple[int, str, str | None]], list[Finding]]:
@@ -402,9 +489,12 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         # Keep the recovery parser for malformed XML so existing diagnostics
         # can identify and skip individual broken URL blocks.
         document = None
+    findings = _sitemap_document_boundary_findings(
+        text,
+        well_formed=document is not None,
+    )
     if document is not None:
         entries = []
-        findings = []
         for entry in document.entries:
             if entry.issue is not None:
                 findings.append(Finding(
@@ -418,7 +508,6 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         return entries, findings
 
     entries: list[tuple[int, str, str | None]] = []
-    findings: list[Finding] = []
     for position, block, boundary_error in _sitemap_url_blocks(text):
         if boundary_error is not None:
             findings.append(Finding(
