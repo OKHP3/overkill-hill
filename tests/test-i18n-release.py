@@ -170,6 +170,76 @@ class I18nReleaseTests(unittest.TestCase):
             Path(report["unmatched"][0]["record"]).name,
         )
 
+    def test_advisory_review_audit_excludes_malformed_records_from_current_pairs(self):
+        malformed_cases = [
+            (
+                "reviewed_on",
+                "2026-02-30",
+                "reviewed_on must be a real ISO calendar date",
+            ),
+            (
+                "source_sha256",
+                "not-a-sha256",
+                "source_sha256 is missing or malformed",
+            ),
+            (
+                "target_path",
+                "de/wrong/index.html",
+                "route is out of scope or target_path does not match the configured locale",
+            ),
+        ]
+
+        for field, malformed_value, expected_reason in malformed_cases:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                pilot = root / "i18n" / "pilot" / "de"
+                pilot.mkdir(parents=True)
+                source_hash = "a" * 64
+                target_hash = "b" * 64
+                (root / "i18n" / "sync-state.json").write_text(json.dumps({
+                    "schema_version": "1.0",
+                    "pages": {
+                        "/": {"targets": {"de": {
+                            "synced_source_sha256": source_hash,
+                            "target_sha256": target_hash,
+                        }}},
+                    },
+                }), encoding="utf-8")
+                record = {
+                    "language_pair": "en-US -> de-DE",
+                    "review_status": "ai-reviewed",
+                    "reviewed_on": "2026-10-13",
+                    "routes": [{
+                        "route": "/",
+                        "target_path": "de/index.html",
+                        "source_sha256": source_hash,
+                        "target_sha256": target_hash,
+                    }],
+                }
+                if field == "reviewed_on":
+                    record[field] = malformed_value
+                else:
+                    record["routes"][0][field] = malformed_value
+                record_path = pilot / "review-2026-10-13.json"
+                record_path.write_text(json.dumps(record), encoding="utf-8")
+                config = {
+                    "state_file": "i18n/sync-state.json",
+                    "in_scope_routes": ["/"],
+                    "advisory_content_coverage_locales": ["de"],
+                    "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+                }
+
+                with patch.object(MODULE, "ROOT", root):
+                    report = MODULE.audit_advisory_review_evidence(config)
+
+                self.assertEqual([], report["current_pairs"])
+                self.assertEqual([{"locale": "de", "route": "/"}], report["missing"])
+                self.assertTrue(any(
+                    item.get("record") == record_path.relative_to(root).as_posix()
+                    and expected_reason in item.get("reason", "")
+                    for item in report["invalid_records"]
+                ), report["invalid_records"])
+
     def test_content_coverage_names_missing_sections_blocks_and_protected_links(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

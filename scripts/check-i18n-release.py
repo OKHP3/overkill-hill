@@ -443,18 +443,21 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
             report["records_checked"] += 1
             record_name = path.relative_to(ROOT).as_posix()
             reviewed_on = record.get("reviewed_on", "")
-            entries: dict[str, list[dict[str, Any]]] = {}
+            entries: dict[str, list[tuple[dict[str, Any], bool]]] = {}
             review_status = record.get("review_status")
+            record_valid = True
             if (
                 record.get("language_pair") != expected_pair
                 or not isinstance(review_status, str)
                 or review_status not in {"ai-reviewed", "approved"}
             ):
+                record_valid = False
                 report["invalid_records"].append({
                     "locale": locale, "record": record_name,
                     "reason": "review status or language pair is not valid for this advisory locale",
                 })
             if not isinstance(reviewed_on, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_on):
+                record_valid = False
                 report["invalid_records"].append({
                     "locale": locale, "record": record_name,
                     "reason": "reviewed_on must be an ISO calendar date",
@@ -464,6 +467,7 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
                 try:
                     date.fromisoformat(reviewed_on)
                 except ValueError:
+                    record_valid = False
                     report["invalid_records"].append({
                         "locale": locale, "record": record_name,
                         "reason": "reviewed_on must be a real ISO calendar date",
@@ -477,32 +481,37 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
                     })
                     continue
                 route = entry["route"]
-                entries.setdefault(route, []).append(entry)
                 expected_target = (
                     f"{expected_root}/{route.strip('/')}/index.html"
                     if route.strip("/") else f"{expected_root}/index.html"
                 )
+                entry_valid = True
                 if route not in routes or entry.get("target_path") != expected_target:
+                    entry_valid = False
                     report["invalid_records"].append({
                         "locale": locale, "route": route, "record": record_name,
                         "reason": "route is out of scope or target_path does not match the configured locale",
                     })
                 for field in ("source_sha256", "target_sha256"):
                     if not isinstance(entry.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", entry[field]):
+                        entry_valid = False
                         report["invalid_records"].append({
                             "locale": locale, "route": route, "record": record_name,
                             "reason": f"{field} is missing or malformed",
                         })
+                entries.setdefault(route, []).append((entry, entry_valid))
             for route, route_entries in entries.items():
                 if len(route_entries) != 1:
                     report["duplicates"].append({
                         "locale": locale, "route": route, "record": record_name,
                         "entry_count": len(route_entries),
                     })
-                for entry in route_entries:
+                for entry, entry_valid in route_entries:
                     ledger_target = ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
                     is_current = (
-                        entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
+                        record_valid
+                        and entry_valid
+                        and entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
                         and entry.get("target_sha256") == ledger_target.get("target_sha256")
                     )
                     evidence = {
