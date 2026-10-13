@@ -39,7 +39,13 @@ test('Mac Studio token routing renders the authored seven-node graph', async () 
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/projects/mac-studio-local-ai-workbench/#how-its-built`);
     const diagram = page.locator('#how-its-built .mermaid').first();
-    await diagram.locator('svg').waitFor();
+    // Mermaid inserts a temporary SVG before layout finishes. Wait for either
+    // the authored graph or its error graphic rather than that partial SVG.
+    await page.waitForFunction(() => {
+      const node = document.querySelector('#how-its-built .mermaid');
+      return node.querySelector('.error-text') ||
+        (node.querySelectorAll('g.node').length === 7 && node.querySelectorAll('path.flowchart-link').length === 9);
+    });
     const errors = await diagram.locator('.error-text').allTextContents();
     assert.deepEqual(errors, [], JSON.stringify(warnings));
     assert.equal(await diagram.locator('g.node').count(), 7);
