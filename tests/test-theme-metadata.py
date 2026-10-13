@@ -55,26 +55,39 @@ class BrandThemeMetadataTests(unittest.TestCase):
 
     def test_contract_loader_rejects_duplicate_brand_object_key(self) -> None:
         glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = f'{{\n  "brands": {{\n    "glee": {glee},\n    "glee": {glee}\n  }}\n}}'
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brand-theme-contract.json"
-            path.write_text(
-                f'{{"brands":{{"glee":{glee},"glee":{glee}}}}}',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(ValueError, r"duplicate brand entry 'glee'"):
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
                 validator.load_brand_theme_contract(path)
+        message = str(raised.exception)
+        duplicate_key_offset = source.rfind('"glee"')
+        duplicate_key_column = duplicate_key_offset - source.rfind(
+            "\n", 0, duplicate_key_offset
+        )
+        self.assertIn("duplicate brand entry 'glee'", message)
+        self.assertIn("JSON path /brands/glee", message)
+        self.assertIn(f"line 4, column {duplicate_key_column}", message)
 
     def test_contract_loader_names_brand_with_duplicate_property_key(self) -> None:
+        source = (
+            '{\n  "brands": {\n    "glee": {\n      "name": "Glee",\n'
+            '      "name": "Hidden"\n    }\n  }\n}'
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brand-theme-contract.json"
-            path.write_text(
-                '{"brands":{"glee":{"name":"Glee","name":"Hidden"}}}',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(
-                ValueError, r"brand 'glee' has duplicate JSON key 'name'"
-            ):
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
                 validator.load_brand_theme_contract(path)
+        duplicate_key_offset = source.rfind('"name"')
+        duplicate_key_column = duplicate_key_offset - source.rfind(
+            "\n", 0, duplicate_key_offset
+        )
+        message = str(raised.exception)
+        self.assertIn("brand 'glee' has duplicate JSON key 'name'", message)
+        self.assertIn("JSON path /brands/glee/name", message)
+        self.assertIn(f"line 5, column {duplicate_key_column}", message)
 
     def test_contract_reports_all_malformed_entries_and_fields_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)

@@ -25,6 +25,88 @@ class _JSONPairs(list[tuple[str, object]]):
     """Preserve JSON object pairs until duplicate keys have been checked."""
 
 
+def _find_duplicate_json_key(source: str) -> tuple[tuple[str, ...], str, int] | None:
+    """Return the first duplicate key's JSON path and source offset."""
+    decoder = json.JSONDecoder()
+
+    def skip_whitespace(offset: int) -> int:
+        while offset < len(source) and source[offset] in " \t\r\n":
+            offset += 1
+        return offset
+
+    def scan_value(
+        offset: int, path: tuple[str, ...]
+    ) -> tuple[int, tuple[tuple[str, ...], str, int] | None]:
+        offset = skip_whitespace(offset)
+        if source[offset] == "{":
+            offset = skip_whitespace(offset + 1)
+            seen: set[str] = set()
+            if source[offset] == "}":
+                return offset + 1, None
+            while True:
+                offset = skip_whitespace(offset)
+                key_start = offset
+                key, offset = decoder.raw_decode(source, offset)
+                if key in seen:
+                    return offset, (path + (key,), key, key_start)
+                seen.add(key)
+                offset = skip_whitespace(offset + 1)  # Skip the colon.
+                offset, duplicate = scan_value(offset, path + (key,))
+                if duplicate:
+                    return offset, duplicate
+                offset = skip_whitespace(offset)
+                if source[offset] == "}":
+                    return offset + 1, None
+                offset += 1  # Skip the comma.
+        elif source[offset] == "[":
+            offset = skip_whitespace(offset + 1)
+            if source[offset] == "]":
+                return offset + 1, None
+            index = 0
+            while True:
+                offset, duplicate = scan_value(offset, path + (str(index),))
+                if duplicate:
+                    return offset, duplicate
+                offset = skip_whitespace(offset)
+                if source[offset] == "]":
+                    return offset + 1, None
+                offset = skip_whitespace(offset + 1)  # Skip the comma.
+                index += 1
+        else:
+            _, offset = decoder.raw_decode(source, offset)
+        return offset, None
+
+    _, duplicate = scan_value(0, ())
+    return duplicate
+
+
+def _json_pointer(path: tuple[str, ...]) -> str:
+    return "/" + "/".join(
+        segment.replace("~", "~0").replace("/", "~1") for segment in path
+    )
+
+
+def _duplicate_key_message(
+    parent_path: tuple[str, ...],
+    key: str,
+    duplicate_path: tuple[str, ...],
+    source: str,
+    offset: int,
+) -> str:
+    line = source.count("\n", 0, offset) + 1
+    column = offset - source.rfind("\n", 0, offset)
+    location = f"JSON path {_json_pointer(duplicate_path)} (line {line}, column {column})"
+    if parent_path == ("brands",):
+        return f"duplicate brand entry {key!r} in brand theme contract at {location}"
+    if len(parent_path) >= 2 and parent_path[0] == "brands":
+        return f"brand {parent_path[1]!r} has duplicate JSON key {key!r} at {location}"
+    parent = ".".join(parent_path) if parent_path else "JSON root"
+    return (
+        f"duplicate JSON key {key!r} in brand theme contract at {parent}; "
+        f"{location}"
+    )
+
+
 def _materialize_json_pairs(value: object, path: tuple[str, ...] = ()) -> object:
     if isinstance(value, _JSONPairs):
         result: dict[str, object] = {}
@@ -134,10 +216,20 @@ def load_brand_theme_contract(
 ) -> dict[str, dict[str, str]]:
     """Load and validate the reviewed brand metadata contract."""
     try:
-        parsed = json.loads(
-            path.read_text(encoding="utf-8"),
-            object_pairs_hook=_JSONPairs,
-        )
+        source = path.read_text(encoding="utf-8")
+        parsed = json.loads(source, object_pairs_hook=_JSONPairs)
+        duplicate = _find_duplicate_json_key(source)
+        if duplicate:
+            duplicate_path, key, offset = duplicate
+            raise ValueError(
+                _duplicate_key_message(
+                    duplicate_path[:-1],
+                    key,
+                    duplicate_path,
+                    source,
+                    offset,
+                )
+            )
         raw_contract = _materialize_json_pairs(parsed)
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"Cannot read brand theme contract {path}: {exc}") from exc
