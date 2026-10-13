@@ -389,6 +389,32 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
     return blocks
 
 
+def _sitemap_lastmod_values_from_block(block: str) -> tuple[int, list[str]]:
+    """Count lastmod elements and return the plain-text values that can be read."""
+    markup = re.sub(
+        r"<!--.*?-->|<!\[CDATA\[.*?\]\]>",
+        lambda match: " " * len(match.group(0)),
+        block,
+        flags=re.DOTALL,
+    )
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    openings = list(re.finditer(
+        rf"<{qname_prefix}lastmod(?=[\s/>])[^>]*>",
+        markup,
+        flags=re.IGNORECASE,
+    ))
+    values = [
+        unescape(match.group(1).strip())
+        for match in re.finditer(
+            rf"<{qname_prefix}lastmod(?=[\s/>])[^>]*>([^<]*)"
+            rf"</{qname_prefix}lastmod(?=[\s>])\s*>",
+            markup,
+            flags=re.IGNORECASE,
+        )
+    ]
+    return len(openings), values
+
+
 def _sitemap_document_boundary_findings(
     text: str,
     *,
@@ -493,6 +519,25 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         text,
         well_formed=document is not None,
     )
+    url_blocks = _sitemap_url_blocks(text)
+    for position, block, boundary_error in url_blocks:
+        if block is None or boundary_error is not None:
+            continue
+        lastmod_count, lastmod_values = _sitemap_lastmod_values_from_block(block)
+        if lastmod_count > 1:
+            details = (
+                f" (values: {', '.join(repr(value) for value in lastmod_values)})"
+                if len(lastmod_values) == lastmod_count
+                else ""
+            )
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                (
+                    f"sitemap URL entry at position {position} must contain at "
+                    f"most one <lastmod> element; found {lastmod_count}{details}"
+                ),
+            ))
     if document is not None:
         entries = []
         for entry in document.entries:
@@ -508,7 +553,7 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         return entries, findings
 
     entries: list[tuple[int, str, str | None]] = []
-    for position, block, boundary_error in _sitemap_url_blocks(text):
+    for position, block, boundary_error in url_blocks:
         if boundary_error is not None:
             findings.append(Finding(
                 "ERROR",

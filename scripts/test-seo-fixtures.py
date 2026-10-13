@@ -1002,6 +1002,37 @@ class SEOFixtureTests(unittest.TestCase):
                 "duplicate parsing must not let a later lastmod silently win",
             )
 
+    def test_multiple_lastmod_values_in_one_sitemap_entry_are_reported(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        first_date = "2026-05-24"
+        second_date = "2026-05-28"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{location}</loc>"
+                f"<lastmod>{first_date}</lastmod>"
+                f"<lastmod>{second_date}</lastmod></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(location, first_date)],
+                "the fixture must exercise the parser's existing first-value behavior",
+            )
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertEqual(len(findings), 1, findings_text(findings))
+            self.assertIn(
+                (
+                    "sitemap URL entry at position 1 must contain at most one "
+                    f"<lastmod> element; found 2 (values: '{first_date}', "
+                    f"'{second_date}')"
+                ),
+                findings_text(findings),
+            )
+
     def test_namespace_prefixed_sitemap_tags_preserve_entries_and_diagnostics(self) -> None:
         location = f"{validator.SITE_ORIGIN}/about/"
         with tempfile.TemporaryDirectory() as directory:
