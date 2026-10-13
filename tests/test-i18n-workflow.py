@@ -60,6 +60,7 @@ class I18nWorkflowTests(unittest.TestCase):
         self,
         stale_locales=(),
         mutate_target=None,
+        mutate_targets=(),
         blocking_locales=None,
     ):
         # Copy only the detector's real inputs. No source, review, or ledger writes
@@ -89,8 +90,10 @@ class I18nWorkflowTests(unittest.TestCase):
             for locale in stale_locales:
                 state["pages"]["/about/"]["targets"][locale]["synced_source_sha256"] = "0" * 64
             ledger.write_text(json.dumps(state))
+            targets = list(mutate_targets)
             if mutate_target is not None:
-                locale, route = mutate_target
+                targets.append(mutate_target)
+            for locale, route in targets:
                 page = (route.strip("/") + "/index.html").lstrip("/")
                 target = root / f"{config['target_locales'][locale]['root']}/{page}"
                 target.write_bytes(target.read_bytes() + b"\n<!-- reviewed target drift -->\n")
@@ -128,6 +131,28 @@ class I18nWorkflowTests(unittest.TestCase):
                 self.assertTrue(any(
                     item["locale"] == "fr"
                     and item["route"] == route
+                    for item in report["target_changed"]
+                ))
+                self.assertTrue(any(
+                    item["locale"] == "fr"
+                    and item["route"] == route
+                    and item["status"] == "target_changed"
+                    for item in report["policy"]["blocking_items"]
+                ))
+
+    def test_multiple_reviewed_french_target_changes_block_in_one_report(self):
+        config = json.loads((ROOT / "i18n/sync.config.json").read_text())
+        routes = config["in_scope_routes"]
+        code, report = self.run_copied_site(
+            mutate_targets=[("fr", route) for route in routes],
+            blocking_locales=("fr",),
+        )
+
+        self.assertEqual(1, code)
+        for route in routes:
+            with self.subTest(route=route):
+                self.assertTrue(any(
+                    item["locale"] == "fr" and item["route"] == route
                     for item in report["target_changed"]
                 ))
                 self.assertTrue(any(
