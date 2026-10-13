@@ -303,6 +303,42 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         self.assertNotEqual(mismatch["actual_fingerprint"], mismatch["expected_fingerprint"])
         self.assertIn("AskJamie revision", result.stdout)
 
+    def test_verify_retains_unavailable_site_pin_in_failure_report(self):
+        unavailable_pin = "1" * 40
+        pins = [
+            f"{name}={unavailable_pin if name == 'glee-fullytools' else git(repo, 'rev-parse', 'HEAD')}"
+            for name, repo in self.repos.items()
+        ]
+        report_path = self.root / "unavailable-site-report.json"
+        result = self.invoke(
+            "--verify",
+            "--source-repo", "overkill-hill",
+            "--source-revision", self.source_revision(),
+            *sum((["--site-revision", pin] for pin in pins), []),
+            "--report-file", str(report_path),
+        )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(json.loads(report_path.read_text(encoding="utf-8")), report)
+        verification = report["verification"]
+        unavailable = verification["sites"]["glee-fullytools"]
+        self.assertEqual(unavailable["site"], "Glee")
+        self.assertEqual(unavailable["status"], "unavailable")
+        self.assertEqual(unavailable["revision"], None)
+        self.assertEqual(unavailable["pinned_revision"], unavailable_pin)
+        self.assertTrue(unavailable["error"])
+        self.assertIn("Glee revision " + unavailable_pin, " ".join(report["problems"]))
+
+        for fingerprint in verification["fingerprints"]:
+            site = fingerprint["sites"]["glee-fullytools"]
+            self.assertEqual(site["site"], "Glee")
+            self.assertEqual(site["status"], "unavailable")
+            self.assertEqual(site["pinned_revision"], unavailable_pin)
+            self.assertIsNone(site["sha256"])
+            self.assertIsNone(site["bytes"])
+            self.assertTrue(site["error"])
+
     def test_verify_saved_report_preserves_every_pinned_mismatch(self):
         drift = {
             ("glee-fullytools", FILES[1]): "Glee app drift\n",
