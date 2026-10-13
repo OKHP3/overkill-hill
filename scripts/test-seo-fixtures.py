@@ -1503,6 +1503,82 @@ class SEOFixtureTests(unittest.TestCase):
                     findings_text(findings),
                 )
 
+    def test_locale_robots_boundary_mismatches_are_reported_on_pilot_subpages(self) -> None:
+        manifest = json.loads(
+            (ROOT / "i18n" / "pilot" / "manifest.json").read_text(encoding="utf-8")
+        )
+        locales = manifest["locales"]
+        indexable_locale = next(
+            locale for locale, entry in locales.items() if entry["indexable"]
+        )
+        draft_locale = next(
+            locale for locale, entry in locales.items() if not entry["indexable"]
+        )
+
+        def non_home_page(locale: str) -> dict:
+            entry = locales[locale]
+            return next(
+                page
+                for page in entry["pages"]
+                if page["source_route"] != "/"
+                and page.get("indexable", entry["indexable"]) == entry["indexable"]
+            )
+
+        indexable_page = non_home_page(indexable_locale)
+        draft_page = non_home_page(draft_locale)
+        self.assertEqual(
+            indexable_page["source_route"],
+            draft_page["source_route"],
+            "pilot mismatch cases should exercise the same non-home source route",
+        )
+
+        cases = (
+            (
+                indexable_page,
+                True,
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                draft_page,
+                False,
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+        for page, declared_indexable, robots_value, expected_boundary in cases:
+            relative_path = page["target_path"]
+            with self.subTest(relative_path=relative_path):
+                path = ROOT / relative_path
+                contract = self.locale_contract[relative_path]
+                self.assertEqual(contract["indexable"], declared_indexable)
+
+                original_raw = path.read_text(encoding="utf-8")
+                original_parser = parse_html(original_raw)
+                self.assertEqual(not original_parser.is_noindex, declared_indexable)
+                self.assertFalse(
+                    validator.validate_generated_seo(path, original_parser, None, contract),
+                    f"valid pilot subpage boundary should pass: {relative_path}",
+                )
+
+                if not declared_indexable:
+                    self.assertTrue(
+                        original_parser.is_noindex,
+                        f"draft subpage control must remain noindex: {relative_path}",
+                    )
+
+                mutated_raw = mutate_meta(original_raw, "meta:robots", robots_value)
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(mutated_raw),
+                    None,
+                    contract,
+                )
+                self.assertIn(
+                    f"{relative_path}: robots indexing boundary mismatch: {expected_boundary}",
+                    findings_text(findings),
+                )
+
     def test_indexable_locale_keeps_localized_metadata_ownership(self) -> None:
         relative_path = "fr/index.html"
         path = ROOT / relative_path
