@@ -1002,6 +1002,69 @@ class SEOFixtureTests(unittest.TestCase):
                 "duplicate parsing must not let a later lastmod silently win",
             )
 
+    def test_namespace_prefixed_sitemap_tags_preserve_entries_and_diagnostics(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<sm:url><sm:loc>{location}</sm:loc>"
+                "<sm:lastmod>2026-05-24</sm:lastmod></sm:url>"
+                "<sm:url><sm:lastmod>2026-05-25</sm:lastmod></sm:url>"
+                f"<sm:url><sm:loc>{location}</sm:loc>"
+                "<sm:lastmod>2026-05-28</sm:lastmod></sm:url>"
+                "</sm:urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_with_positions_from_path(sitemap_path),
+                [(1, location, "2026-05-24"), (3, location, "2026-05-28")],
+            )
+            text = findings_text(validator.validate_sitemap_duplicates(sitemap_path))
+            self.assertIn(
+                "sitemap URL entry at position 2 must contain exactly one "
+                "<loc> element; found 0",
+                text,
+            )
+            self.assertIn(
+                f"duplicate sitemap location: {location} appears 2 times "
+                "at sitemap entry positions 1, 3",
+                text,
+            )
+            self.assertIn(
+                f"conflicting duplicate sitemap lastmod values for {location}: "
+                "position 1: '2026-05-24'; position 3: '2026-05-28'",
+                text,
+            )
+
+    def test_namespace_prefixed_sitemap_tags_survive_malformed_xml_recovery(self) -> None:
+        valid_before = f"{validator.SITE_ORIGIN}/about/"
+        valid_after = f"{validator.SITE_ORIGIN}/contact/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<sm:url><sm:loc>{valid_before}</sm:loc></sm:url>"
+                "<sm:url><sm:loc>https://overkillhill.com/broken/"
+                "</sm:url>"
+                f"<sm:url><sm:loc>{valid_after}</sm:loc>"
+                "<sm:lastmod>2026-05-29</sm:lastmod></sm:url>"
+                "</sm:urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid_before, None), (valid_after, "2026-05-29")],
+            )
+            text = findings_text(validator.validate_sitemap_duplicates(sitemap_path))
+            self.assertIn(
+                "sitemap URL entry at position 2 has malformed <loc> element structure",
+                text,
+            )
+            self.assertEqual(text.count("sitemap URL entry"), 1, text)
+
     def test_identical_duplicate_sitemap_locations_are_rejected(self) -> None:
         location = "https://overkillhill.com/about/"
         with tempfile.TemporaryDirectory() as directory:

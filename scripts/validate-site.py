@@ -319,8 +319,13 @@ def find_html_files() -> list[Path]:
 
 def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
     """Return one plain-text sitemap location or its structural problem."""
-    loc_openings = list(re.finditer(r"<loc\b[^>]*>", block, flags=re.IGNORECASE))
-    loc_closings = list(re.finditer(r"</loc\s*>", block, flags=re.IGNORECASE))
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    loc_openings = list(re.finditer(
+        rf"<{qname_prefix}loc\b[^>]*>", block, flags=re.IGNORECASE
+    ))
+    loc_closings = list(re.finditer(
+        rf"</{qname_prefix}loc\s*>", block, flags=re.IGNORECASE
+    ))
     if len(loc_openings) != 1:
         return None, f"must contain exactly one <loc> element; found {len(loc_openings)}"
     if len(loc_closings) != 1:
@@ -345,7 +350,10 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
     blocks: list[tuple[int, str | None, str | None]] = []
     position = 0
     active: tuple[int, int] | None = None
-    for match in re.finditer(r"</?url\b[^>]*>", text, flags=re.IGNORECASE):
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    for match in re.finditer(
+        rf"</?{qname_prefix}url\b[^>]*>", text, flags=re.IGNORECASE
+    ):
         token = match.group(0)
         if token.startswith("</"):
             if active is None:
@@ -432,7 +440,8 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         if loc is None:
             continue
         lastmod_match = re.search(
-            r"<lastmod\b[^>]*>([^<]*)</lastmod>",
+            r"<(?:[A-Za-z_][\w.-]*:)?lastmod\b[^>]*>([^<]*)"
+            r"</(?:[A-Za-z_][\w.-]*:)?lastmod>",
             block,
             flags=re.IGNORECASE,
         )
