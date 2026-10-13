@@ -2648,6 +2648,49 @@ class SEOFixtureTests(unittest.TestCase):
                 )
                 self.assert_rejected(findings, expected)
 
+    def test_sitemap_xml_timezone_offset_survives_generated_validation(self) -> None:
+        page = self.pages_by_route["/writings/first-diagram-is-a-liar/"]
+        path = GENERATED_FIXTURE / "article.html.fixture"
+        raw = path.read_text(encoding="utf-8")
+        sitemap_lastmod = "2026-05-24T05:30:00+05:30"
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            sitemap_path = Path(temporary_directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                "  <url>\n"
+                f"    <loc>{page['canonical']}</loc>\n"
+                f"    <lastmod>{sitemap_lastmod}</lastmod>\n"
+                "  </url>\n"
+                "</urlset>\n",
+                encoding="utf-8",
+            )
+            sitemap_entries = validator.load_sitemap_entries(sitemap_path)
+
+        self.assertEqual(sitemap_entries[page["canonical"]], sitemap_lastmod)
+        for date_modified, should_pass in (
+            ("2026-05-24T00:00:00Z", True),
+            ("2026-05-24T00:00:01Z", False),
+        ):
+            with self.subTest(date_modified=date_modified):
+                parser = parse_html(
+                    mutate_jsonld_field(raw, "dateModified", date_modified)
+                )
+                findings = validator.validate_generated_seo(
+                    path,
+                    parser,
+                    page,
+                    sitemap_entries=sitemap_entries,
+                )
+                if should_pass:
+                    self.assertFalse(findings, findings_text(findings))
+                else:
+                    self.assert_rejected(
+                        findings,
+                        "article JSON-LD dateModified does not match sitemap lastmod",
+                    )
+
     def test_article_sitemap_date_parity_in_generated_metadata(self) -> None:
         fixture = self.fixture_data["article_sitemap_date_parity"]
         page = self.pages_by_route[fixture["route"]]
