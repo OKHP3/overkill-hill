@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -204,6 +205,59 @@ runpy.run_path(sys.argv[3], run_name="__main__")
         self.assertNotIn("Traceback", result.stderr)
         self.assertIn("brand 'glee' has invalid light color 'orange'", result.stderr)
         self.assertIn("brand 'askjamie' has invalid dark color '#bad'", result.stderr)
+
+    def test_theme_generator_preserves_app_js_when_multi_brand_contract_is_invalid(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["glee"]["storageKey"] = ""
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["colorScheme"] = "solarized"
+        contract["askjamie"]["dark"] = "#bad"
+        contract["broken"] = "not an object"
+
+        with tempfile.TemporaryDirectory(prefix="theme-generator-invalid-contract-") as directory:
+            root = Path(directory)
+            scripts_dir = root / "scripts"
+            config_dir = root / "config"
+            app_path = root / "assets" / "js" / "app.js"
+            scripts_dir.mkdir()
+            config_dir.mkdir()
+            app_path.parent.mkdir(parents=True)
+            shutil.copy2(
+                ROOT / "scripts" / "generate-theme-controls.py",
+                scripts_dir / "generate-theme-controls.py",
+            )
+            shutil.copy2(
+                ROOT / "scripts" / "brand_theme.py",
+                scripts_dir / "brand_theme.py",
+            )
+            shutil.copy2(ROOT / "assets" / "js" / "app.js", app_path)
+            contract_path = config_dir / "brand-theme-contract.json"
+            contract_path.write_text(
+                json.dumps({"brands": contract}), encoding="utf-8"
+            )
+            app_before = app_path.read_bytes()
+
+            result = subprocess.run(
+                [sys.executable, str(scripts_dir / "generate-theme-controls.py")],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            expected_errors = (
+                "brand 'glee' has invalid 'storageKey'",
+                "brand 'glee' has invalid light color 'orange'",
+                "brand 'askjamie' has invalid dark color '#bad'",
+                "brand 'askjamie' has invalid 'colorScheme' value 'solarized'",
+                "brand 'broken' must be a JSON object",
+            )
+            for expected in expected_errors:
+                with self.subTest(error=expected):
+                    self.assertIn(expected, result.stderr)
+            self.assertEqual(app_path.read_bytes(), app_before)
 
     def test_contract_reports_missing_required_field_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
