@@ -31,6 +31,7 @@ jobs:
       THEME_CONTROL_OKH_REVISION: 0ee6bc875a183ca2e065448d01fe97da62fc1ff7
       THEME_CONTROL_GLEE_REVISION: f5689fe4852b72e5d584db9d8f87cac9121b87c4
       THEME_CONTROL_ASKJAMIE_REVISION: e800d4aebf0dc2543c5ced295ec78d10ba192473
+      THEME_CONTROL_CONTRACT_REVISION: 1817cc0498f5c64401c75a1f140f6dd382d137c9
     concurrency:
       group: site-validation-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: true
@@ -50,9 +51,10 @@ jobs:
         run: |
           cat <<EOF | tee theme-control-revisions.txt
           Theme-control audit foundation revisions
-          OKH       ${THEME_CONTROL_OKH_REVISION}  (OKHP3/OverKill-Hill)
-          Glee      ${THEME_CONTROL_GLEE_REVISION}  (OKHP3/Glee-fullyTools)
-          AskJamie  ${THEME_CONTROL_ASKJAMIE_REVISION}  (OKHP3/AskJamie)
+          Contract  ${THEME_CONTROL_CONTRACT_REVISION}  (config/brand-theme-contract.json)
+          OKH       ${THEME_CONTROL_OKH_REVISION}  (OKHP3/OverKill-Hill; contract ${THEME_CONTROL_CONTRACT_REVISION})
+          Glee      ${THEME_CONTROL_GLEE_REVISION}  (OKHP3/Glee-fullyTools; contract ${THEME_CONTROL_CONTRACT_REVISION})
+          AskJamie  ${THEME_CONTROL_ASKJAMIE_REVISION}  (OKHP3/AskJamie; contract ${THEME_CONTROL_CONTRACT_REVISION})
           EOF
           cat theme-control-revisions.txt >> "$GITHUB_STEP_SUMMARY"
 
@@ -442,7 +444,9 @@ jobs:
             [{"name":"OKH","root":".","revision":"0ee6bc875a183ca2e065448d01fe97da62fc1ff7"},
             {"name":"Glee","root":".ci/theme-sites/glee-fullytools","revision":"f5689fe4852b72e5d584db9d8f87cac9121b87c4"},
             {"name":"AskJamie","root":".ci/theme-sites/askjamie","revision":"e800d4aebf0dc2543c5ced295ec78d10ba192473"}]
-        run: npm run test:theme-controls
+        run: |
+          git fetch --no-tags --depth=1 origin "$THEME_CONTROL_CONTRACT_REVISION"
+          npm run test:theme-controls
 
       - name: Upload theme-control revision evidence
         if: always()

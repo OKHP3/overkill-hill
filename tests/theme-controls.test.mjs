@@ -304,8 +304,11 @@ test("browser theme constants are generated from the reviewed contract", async (
   );
 });
 
-function brandThemeContractDrift(site) {
-  const label = `${site.name} revision ${site.revision}`;
+function brandThemeContractDrift(site, brandExpectations = BRAND_EXPECTATIONS) {
+  const contractLabel = site.contractRevision
+    ? `; contract revision ${site.contractRevision}`
+    : "";
+  const label = `${site.name} revision ${site.revision}${contractLabel}`;
   const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
   const endMarker = "// END GENERATED BRAND THEME CONFIG.";
   const start = site.script.indexOf(beginMarker);
@@ -333,7 +336,7 @@ function brandThemeContractDrift(site) {
   }
 
   const drift = [];
-  for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+  for (const [brandId, expected] of Object.entries(brandExpectations)) {
     const actual = actualBrands[brandId];
     if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
       drift.push(`${label}: ${brandId} is missing or is not an object; expected ${JSON.stringify(expected)}`);
@@ -348,12 +351,79 @@ function brandThemeContractDrift(site) {
     }
   }
   for (const brandId of Object.keys(actualBrands)) {
-    if (!Object.hasOwn(BRAND_EXPECTATIONS, brandId)) {
+    if (!Object.hasOwn(brandExpectations, brandId)) {
       drift.push(`${label}: unexpected generated brand ${brandId}=${JSON.stringify(actualBrands[brandId])}`);
     }
   }
   return drift;
 }
+
+async function loadReviewedBrandThemeContract(revision, repoRoot = repositoryRoot) {
+  assert.match(
+    revision || "",
+    /^[0-9a-f]{40}$/,
+    "THEME_CONTROL_CONTRACT_REVISION must be an immutable full commit SHA",
+  );
+  const { stdout: resolvedRevision } = await execFileAsync(
+    "git",
+    ["-C", repoRoot, "rev-parse", "--verify", `${revision}^{commit}`],
+  );
+  assert.equal(
+    resolvedRevision.trim(),
+    revision,
+    "THEME_CONTROL_CONTRACT_REVISION must resolve to the exact reviewed commit",
+  );
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", repoRoot, "show", `${revision}:config/brand-theme-contract.json`],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+  const contract = JSON.parse(stdout);
+  assert.ok(
+    contract.brands && typeof contract.brands === "object" && !Array.isArray(contract.brands),
+    `brand theme contract at ${revision} must contain a brands object`,
+  );
+  return contract;
+}
+
+test("reviewed brand contract loading ignores changes in the working tree", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "reviewed-brand-contract-"));
+  try {
+    await execFileAsync("git", ["init", "--quiet"], { cwd: temporary });
+    await execFileAsync("git", ["config", "user.email", "theme-controls@example.test"], { cwd: temporary });
+    await execFileAsync("git", ["config", "user.name", "Theme Controls Test"], { cwd: temporary });
+    await mkdir(join(temporary, "config"));
+    const reviewed = {
+      brands: {
+        glee: {
+          name: "Glee",
+          bodyClass: "glee-main",
+          storageKey: "reviewed-storage-key",
+          light: "#123456",
+          dark: "#654321",
+          colorScheme: "dark light",
+        },
+      },
+    };
+    const contractPath = join(temporary, "config", "brand-theme-contract.json");
+    await writeFile(contractPath, JSON.stringify(reviewed));
+    await execFileAsync("git", ["add", "config/brand-theme-contract.json"], { cwd: temporary });
+    await execFileAsync("git", ["commit", "-m", "review contract"], { cwd: temporary });
+    const { stdout: revision } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: temporary });
+
+    await writeFile(contractPath, JSON.stringify({ brands: { glee: { light: "#000000" } } }));
+    assert.deepEqual(
+      await loadReviewedBrandThemeContract(revision.trim(), temporary),
+      reviewed,
+    );
+    await assert.rejects(
+      () => loadReviewedBrandThemeContract("not-a-full-sha", temporary),
+      /THEME_CONTROL_CONTRACT_REVISION must be an immutable full commit SHA/,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
 
 test("brand runtime audit names site, revision, and changed contract values", () => {
   assert.deepEqual(
@@ -377,6 +447,15 @@ test("brand runtime audit names site, revision, and changed contract values", ()
   });
   assert.equal(drift.length, 1);
   assert.match(drift[0], /Glee revision b{40}: glee\.light is "#000000"; expected "#d35b2d"/);
+
+  const contractRevision = "c".repeat(40);
+  const pinnedDrift = brandThemeContractDrift({
+    name: "Glee",
+    revision: "b".repeat(40),
+    contractRevision,
+    script: outdatedScript,
+  });
+  assert.match(pinnedDrift[0], new RegExp(`Glee revision b{40}; contract revision ${contractRevision}`));
 });
 
 test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
@@ -736,13 +815,18 @@ test("configured sites keep foundation bytes and run against actual markup hooks
     return;
   }
   assert.equal(inputs.length, 3, "exactly OKH, Glee, and AskJamie must be configured");
+  const contractRevision = process.env.THEME_CONTROL_CONTRACT_REVISION;
+  const reviewedContract = await loadReviewedBrandThemeContract(contractRevision);
 
   console.log(
     `Theme-control audit inputs: ${inputs.map(({ name, root, revision }) => (
-      `${name}@${revision} (${root})`
+      `${name}@${revision} (contract@${contractRevision}; ${root})`
     )).join(", ")}`,
   );
-  const sites = await Promise.all(inputs.map(loadConfiguredSite));
+  const sites = await Promise.all(inputs.map(async (site) => ({
+    ...await loadConfiguredSite(site),
+    contractRevision,
+  })));
   const byName = new Map(sites.map((site) => [site.name, site]));
   for (const expectedName of FOUNDATION_SITE_NAMES) {
     assert.ok(byName.has(expectedName), `missing configured site ${expectedName}`);
@@ -759,14 +843,19 @@ test("configured sites keep foundation bytes and run against actual markup hooks
       assert.deepEqual(
         site[file],
         baseline,
-        `${site.name} foundation drift at ${site.revision}: ${file} sha256 ${sha256(site[file])}, expected ${baselineHash}`,
+        `${site.name} foundation drift at ${site.revision} (contract ${contractRevision}): ${file} sha256 ${sha256(site[file])}, expected ${baselineHash}`,
       );
     }
   }
 
   for (const site of sites) {
     const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
-    assert.ok(expected, `unknown configured site ${site.name} at foundation revision ${site.revision}`);
+    assert.ok(expected, `unknown configured site ${site.name} at foundation revision ${site.revision} (contract ${contractRevision})`);
+    assert.deepEqual(
+      brandThemeContractDrift(site, reviewedContract.brands),
+      [],
+      `${site.name} brand runtime drift at site revision ${site.revision} (contract ${contractRevision})`,
+    );
     const page = await openFixture({
       markup: site.markup,
       css: site.css,
@@ -780,17 +869,17 @@ test("configured sites keep foundation bytes and run against actual markup hooks
             : !body.classList.contains("glee-main") && !body.classList.contains("askjamie-main")
         ), expected.bodyClass),
         true,
-        `${site.name} markup hook missing at foundation revision ${site.revision}`,
+        `${site.name} markup hook missing at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
       await assert.doesNotReject(
         () => page.locator(expected.selector).waitFor({ state: "attached", timeout: 2000 }),
-        `${site.name} theme control missing at foundation revision ${site.revision}`,
+        `${site.name} theme control missing at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
       const state = await readState(page, expected.selector);
       assert.equal(
         state.state,
         site.name === "OKH" ? "system" : "auto",
-        `${site.name} theme baseline at foundation revision ${site.revision}`,
+        `${site.name} theme baseline at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
     } finally {
       await page.close();
