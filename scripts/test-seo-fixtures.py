@@ -2806,6 +2806,55 @@ class SEOFixtureTests(unittest.TestCase):
             "conflicting duplicate Article JSON-LD dateModified values",
         )
 
+    def test_graph_duplicate_article_published_date_rejected_in_generated_metadata(self) -> None:
+        baseline_path = GENERATED_FIXTURE / "article.html.fixture"
+        path = GENERATED_FIXTURE / "article-graph-published-date-conflict.html.fixture"
+        baseline_raw = baseline_path.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
+        baseline_parser = parse_html(baseline_raw)
+        parser = parse_html(raw)
+        articles = article_jsonld_nodes(raw)
+
+        self.assertEqual(len(articles), 2)
+        self.assertEqual(
+            {article["@id"] for article in articles},
+            {"https://overkillhill.com/writings/first-diagram-is-a-liar/#article"},
+        )
+        self.assertEqual(
+            {article["datePublished"] for article in articles},
+            {"2026-04-07", "2026-04-08"},
+        )
+        self.assertEqual(
+            {article["dateModified"] for article in articles},
+            {"2026-05-24"},
+        )
+        self.assertEqual(
+            baseline_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            "graph fixture changed the generated article body",
+        )
+        self.assertEqual(
+            baseline_parser.meta,
+            parser.meta,
+            "graph fixture changed generated indexing or other metadata",
+        )
+        self.assertEqual(["index, follow"], parser.meta.get("robots"))
+        self.assertEqual(
+            baseline_parser.is_noindex,
+            parser.is_noindex,
+            "graph fixture changed the indexing boundary",
+        )
+
+        findings = validator.validate_generated_seo(
+            path,
+            parser,
+            self.pages_by_route["/writings/first-diagram-is-a-liar/"],
+        )
+        self.assert_rejected(
+            findings,
+            "conflicting duplicate Article JSON-LD datePublished values",
+        )
+
     def test_duplicate_article_jsonld_root_url_rejected_in_generated_metadata(self) -> None:
         mutation = self.fixture_data["duplicate_article_url_mismatch"]
         path = GENERATED_FIXTURE / "article.html.fixture"
