@@ -285,6 +285,123 @@ class I18nReleaseTests(unittest.TestCase):
             },
         )
 
+    def test_coverage_dispositions_annotate_without_hiding_unresolved_report_gaps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "about" / "index.html"
+            target = root / "de" / "about" / "index.html"
+            source.parent.mkdir(parents=True)
+            target.parent.mkdir(parents=True)
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>One.</p><p>Two.</p>'
+                '<h2 id="missing">Missing section</h2><p>Still source-only.</p>'
+                '<a href="https://example.test/source">Source link</a></main>',
+                encoding="utf-8",
+            )
+            target_html = (
+                '<meta name="robots" content="noindex, follow">'
+                '<main><h2 id="overview">Übersicht</h2><p>Ein Absatz.</p></main>'
+            )
+            target.write_text(target_html, encoding="utf-8")
+            source_hash = MODULE.page_hash(source)
+            target_hash = MODULE.page_hash(target)
+            review_path = root / "i18n" / "pilot" / "de" / "content-coverage-review-2026-10-13.json"
+            review_path.parent.mkdir(parents=True)
+            review_path.write_text(json.dumps({
+                "language_pair": "en-US -> de-DE",
+                "record_type": "content-coverage-disposition",
+                "review_status": "ai-reviewed",
+                "reviewed_on": "2026-10-13",
+                "native_or_human_approval": False,
+                "release_accepted": False,
+                "routes": [{
+                    "route": "/about/",
+                    "locale": "de",
+                    "source_sha256": source_hash,
+                    "target_path": "de/about/index.html",
+                    "target_sha256": target_hash,
+                    "coverage_dispositions": [{
+                        "section_id": "overview",
+                        "disposition": "intentional-abridgment",
+                        "rationale": "The translated section is intentionally concise.",
+                    }],
+                    "unscoped_disposition": {
+                        "disposition": "unresolved",
+                        "rationale": "Unattributed report findings still need review.",
+                    },
+                }],
+            }), encoding="utf-8")
+            state_path = root / "i18n" / "sync-state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({
+                "schema_version": "1.0",
+                "pages": {
+                    "/about/": {"targets": {"de": {
+                        "synced_source_sha256": source_hash,
+                        "target_sha256": target_hash,
+                    }}},
+                },
+            }), encoding="utf-8")
+            gaps = [{
+                "locale": "de",
+                "route": "/about/",
+                "omissions": [
+                    {
+                        "kind": "heading",
+                        "heading": "Missing section",
+                        "heading_id": "missing",
+                    },
+                    {
+                        "kind": "content_block",
+                        "block": "p",
+                        "source_count": 2,
+                        "target_count": 1,
+                        "omitted_count": 1,
+                        "sections": [{
+                            "heading": "Overview",
+                            "heading_id": "overview",
+                            "source_count": 2,
+                            "target_count": 1,
+                            "omitted_count": 1,
+                        }],
+                    },
+                    {
+                        "kind": "protected_link",
+                        "href": "https://example.test/source",
+                    },
+                ],
+            }]
+            config = {
+                "state_file": "i18n/sync-state.json",
+                "advisory_content_coverage_locales": ["de"],
+                "advisory_coverage_review_records": {
+                    "de": "i18n/pilot/de/content-coverage-review-2026-10-13.json",
+                },
+                "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+            }
+            with patch.object(MODULE, "ROOT", root):
+                result = MODULE.apply_coverage_dispositions(gaps, config)
+                self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+
+        self.assertEqual(3, len(result[0]["omissions"]))
+        self.assertEqual(2, len(result[0]["unresolved_omissions"]))
+        self.assertEqual(
+            "intentional-abridgment",
+            result[0]["omissions"][1]["sections"][0]["review_disposition"]["disposition"],
+        )
+        self.assertEqual(
+            "unresolved",
+            result[0]["omissions"][0]["review_disposition"]["disposition"],
+        )
+        self.assertEqual(
+            "unresolved",
+            result[0]["omissions"][2]["review_disposition"]["disposition"],
+        )
+        self.assertIn(
+            "[unresolved]",
+            MODULE.format_coverage_omission(result[0]["omissions"][2]),
+        )
+
     def test_detector_hash_is_stable_across_checkout_line_endings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

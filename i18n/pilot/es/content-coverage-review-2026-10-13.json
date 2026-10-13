@@ -1,0 +1,96 @@
+{
+  "record_type": "content-coverage-disposition",
+  "language_pair": "en-US -> es-ES",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-10-13",
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "publication_status": "noindex draft; this content-coverage disposition is not publication approval",
+  "review_scope": "Route-and-section dispositions for structural content gaps in the current Spain-Spanish draft. Unresolved findings remain release-report advisories.",
+  "routes": [
+    {
+      "route": "/",
+      "locale": "es",
+      "source_sha256": "01c727314716f81d1aba7ee9fe5d7c3ffcfd33419003f9b88c699a1b20b56472",
+      "target_path": "es/index.html",
+      "target_sha256": "300d477fa7eba57f39b296f2918384805d493d280f94d18435678723252eb264",
+      "coverage_dispositions": [
+        {
+          "section_id": "transition-notice-title",
+          "disposition": "unresolved",
+          "rationale": "The current English capability-transition notice is absent from the Spain-Spanish page; its omission has not been reviewed as an intentional abridgment."
+        },
+        {
+          "section_id": "latest-okh-heading",
+          "disposition": "intentional-abridgment",
+          "rationale": "The W03 route review records that the matching English latest-card unit is absent while a separate localized project card is retained. This decision covers that content treatment only."
+        },
+        {
+          "section_id": "writing-horizon-heading",
+          "disposition": "unresolved",
+          "rationale": "The source writing section is absent from the Spain-Spanish page and no route review records an equivalent localized section."
+        },
+        {
+          "section_id": "start-here-heading",
+          "disposition": "intentional-abridgment",
+          "rationale": "The Spain-Spanish page retains all three source action-card headings with shorter explanatory copy; this is recorded as a content abridgment, not a completeness or release approval."
+        },
+        {
+          "section_id": "transition-dialog-title",
+          "disposition": "unresolved",
+          "rationale": "The current source transition dialog has no Spain-Spanish counterpart and remains to be reviewed."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "Aggregate heading counts and protected links have no stable section attribution in the report and remain visible as unresolved findings."
+      }
+    },
+    {
+      "route": "/contact/",
+      "locale": "es",
+      "source_sha256": "2d60d9782e2915ab1fb8c27169ac57bb0e955418877bea9cc65f2e6be5ddb8c6",
+      "target_path": "es/contact/index.html",
+      "target_sha256": "c5d9d5164d3876cbc76ec7d38895af91b5d3ec320dece0c8d4387c4238f85c94",
+      "coverage_dispositions": [
+        {
+          "section_id": "hero-title",
+          "disposition": "intentional-abridgment",
+          "rationale": "The Spain-Spanish hero keeps the translated contact invitation in a shorter paragraph; this is an intentional copy-length reduction."
+        },
+        {
+          "section_id": "contact-details",
+          "disposition": "unresolved",
+          "rationale": "The Spain-Spanish contact section omits the source inquiry checklist and other practical contact guidance; the missing material has not been accepted as an abridgment."
+        },
+        {
+          "section_id": "support",
+          "disposition": "intentional-abridgment",
+          "rationale": "The Spain-Spanish copy shortens the source's origin story while retaining the Ko-fi explanation and support invitation."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "The aggregate heading count is not attributable to one reviewed section and remains visible as an unresolved finding."
+      }
+    },
+    {
+      "route": "/projects/",
+      "locale": "es",
+      "source_sha256": "1e311a371182ccf5a6470260f6e56026ec2f8e737b8816b33860ec30857fe185",
+      "target_path": "es/projects/index.html",
+      "target_sha256": "29f6d4aa5737c857235b1cff39251baa25a9017779c56080478989e51f75a061",
+      "coverage_dispositions": [
+        {
+          "section_id": "selected-work-heading",
+          "disposition": "unresolved",
+          "rationale": "The current source Selected work section is absent from the Spain-Spanish page. The separate localized project shelf does not establish that the source section's project and evidence content has been reviewed or intentionally abridged."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "Aggregate heading counts and protected links have no stable section attribution in the report and remain visible as unresolved findings."
+      }
+    }
+  ]
+}

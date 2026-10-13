@@ -1,0 +1,96 @@
+{
+  "record_type": "content-coverage-disposition",
+  "language_pair": "en-US -> de-DE",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-10-13",
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "publication_status": "noindex draft; this content-coverage disposition is not publication approval",
+  "review_scope": "Route-and-section dispositions for structural content gaps in the current German draft. Unresolved findings remain release-report advisories.",
+  "routes": [
+    {
+      "route": "/",
+      "locale": "de",
+      "source_sha256": "01c727314716f81d1aba7ee9fe5d7c3ffcfd33419003f9b88c699a1b20b56472",
+      "target_path": "de/index.html",
+      "target_sha256": "955956bf7cae05082cfe84c9f0fc0307e64e3188a91da6ead5cff410988be4f4",
+      "coverage_dispositions": [
+        {
+          "section_id": "transition-notice-title",
+          "disposition": "unresolved",
+          "rationale": "The current English capability-transition notice is absent from the German page; its omission has not been reviewed as an intentional abridgment."
+        },
+        {
+          "section_id": "latest-okh-heading",
+          "disposition": "intentional-abridgment",
+          "rationale": "The W03 route review records that the matching English latest-card unit is absent while a separate localized project card is retained. This decision covers that content treatment only."
+        },
+        {
+          "section_id": "writing-horizon-heading",
+          "disposition": "unresolved",
+          "rationale": "The source writing section is absent from the German page and no route review records an equivalent localized section."
+        },
+        {
+          "section_id": "start-here-heading",
+          "disposition": "intentional-abridgment",
+          "rationale": "The German page retains all three source action-card headings with shorter explanatory copy; this is recorded as a content abridgment, not a completeness or release approval."
+        },
+        {
+          "section_id": "transition-dialog-title",
+          "disposition": "unresolved",
+          "rationale": "The current source transition dialog has no German counterpart and remains to be reviewed."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "Aggregate heading counts and protected links have no stable section attribution in the report and remain visible as unresolved findings."
+      }
+    },
+    {
+      "route": "/contact/",
+      "locale": "de",
+      "source_sha256": "2d60d9782e2915ab1fb8c27169ac57bb0e955418877bea9cc65f2e6be5ddb8c6",
+      "target_path": "de/contact/index.html",
+      "target_sha256": "e593a30484e83d3db502d167df5e2959427aaa099ebaf03339f97aaab10b15d8",
+      "coverage_dispositions": [
+        {
+          "section_id": "hero-title",
+          "disposition": "intentional-abridgment",
+          "rationale": "The German hero keeps the translated contact invitation in a shorter paragraph; this is an intentional copy-length reduction."
+        },
+        {
+          "section_id": "contact-details",
+          "disposition": "unresolved",
+          "rationale": "The German contact section omits the source inquiry checklist and other practical contact guidance; the missing material has not been accepted as an abridgment."
+        },
+        {
+          "section_id": "support",
+          "disposition": "intentional-abridgment",
+          "rationale": "The German copy shortens the source's origin story while retaining the Ko-fi explanation and support invitation."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "The aggregate heading count is not attributable to one reviewed section and remains visible as an unresolved finding."
+      }
+    },
+    {
+      "route": "/projects/",
+      "locale": "de",
+      "source_sha256": "1e311a371182ccf5a6470260f6e56026ec2f8e737b8816b33860ec30857fe185",
+      "target_path": "de/projects/index.html",
+      "target_sha256": "e7f95716913e9b72bf0328cf80a7edfd8675b9900a4503e74d2d13d59e37715e",
+      "coverage_dispositions": [
+        {
+          "section_id": "selected-work-heading",
+          "disposition": "unresolved",
+          "rationale": "The current source Selected work section is absent from the German page. The separate localized project shelf does not establish that the source section's project and evidence content has been reviewed or intentionally abridged."
+        }
+      ],
+      "unscoped_disposition": {
+        "disposition": "unresolved",
+        "rationale": "Aggregate heading counts and protected links have no stable section attribution in the report and remain visible as unresolved findings."
+      }
+    }
+  ]
+}
