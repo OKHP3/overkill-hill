@@ -1308,6 +1308,54 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertIn(articles[0]["url"], diagnostic)
         self.assertIn(mutation["value"], diagnostic)
 
+    def test_three_duplicate_article_urls_report_all_values_by_identity(self) -> None:
+        shared_id = "https://overkillhill.com/writings/shared-identity/#article"
+        matching_url = "https://overkillhill.com/writings/shared-identity/"
+        conflicting_url = "https://overkillhill.com/writings/conflicting/"
+        distinct_url = "https://overkillhill.com/writings/distinct/"
+        shared_article = {
+            "@type": "Article",
+            "@id": shared_id,
+            "datePublished": "2026-04-07",
+            "dateModified": "2026-05-24",
+        }
+        articles = [
+            {**shared_article, "headline": "First representation", "url": matching_url},
+            {**shared_article, "headline": "Second representation", "url": matching_url},
+            {**shared_article, "headline": "Third representation", "url": conflicting_url},
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/distinct/#article",
+                "headline": "Distinct article",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": distinct_url,
+            },
+        ]
+        parser = parse_html(
+            '<script type="application/ld+json">'
+            + json.dumps({"@graph": articles})
+            + "</script>"
+        )
+
+        findings = validator.validate_article_jsonld_dates(
+            "three-duplicate-articles.fixture",
+            parser,
+        )
+
+        self.assertEqual(len(findings), 1, findings_text(findings))
+        self.assert_rejected(
+            findings,
+            "conflicting duplicate Article JSON-LD url values",
+        )
+        diagnostic = findings_text(findings)
+        self.assertIn(shared_id, diagnostic)
+        self.assertIn(
+            repr([matching_url, matching_url, conflicting_url]),
+            diagnostic,
+        )
+        self.assertNotIn(distinct_url, diagnostic)
+
     def test_noindex_duplicate_article_url_conflict_remains_exempt(self) -> None:
         page = self.pages_by_route["/writings/biases-as-constants/"]
         source_path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
