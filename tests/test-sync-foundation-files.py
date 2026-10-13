@@ -1,6 +1,7 @@
 """Disposable-repository safety tests for scripts/sync-foundation-files.py."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -301,6 +302,61 @@ class SyncFoundationSafetyTests(unittest.TestCase):
         self.assertEqual(mismatch["asset"], FILES[0])
         self.assertNotEqual(mismatch["actual_fingerprint"], mismatch["expected_fingerprint"])
         self.assertIn("AskJamie revision", result.stdout)
+
+    def test_verify_saved_report_preserves_every_pinned_mismatch(self):
+        drift = {
+            ("glee-fullytools", FILES[1]): "Glee app drift\n",
+            ("askjamie", FILES[0]): "AskJamie theme drift\n",
+        }
+        site_revisions = {}
+        actual_fingerprints = {}
+        for (name, asset), content in drift.items():
+            repo = self.repos[name]
+            (repo / asset).write_text(content, encoding="utf-8")
+            git(repo, "add", asset)
+            git(repo, "commit", "-m", f"drift {asset}")
+            site_revisions[name] = git(repo, "rev-parse", "HEAD")
+            actual_fingerprints[(name, asset)] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+        pins = []
+        for name, repo in self.repos.items():
+            revision = site_revisions.get(name) or git(repo, "rev-parse", "HEAD")
+            pins.append(f"{name}={revision}")
+        source = self.repos["overkill-hill"]
+        expected_fingerprints = {
+            asset: hashlib.sha256((source / asset).read_bytes()).hexdigest()
+            for _, asset in drift
+        }
+        report_path = self.root / "multiple-mismatches-report.json"
+        result = self.invoke(
+            "--verify",
+            "--source-repo", "overkill-hill",
+            "--source-revision", git(source, "rev-parse", "HEAD"),
+            *sum((["--site-revision", pin] for pin in pins), []),
+            "--report-file", str(report_path),
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(json.loads(result.stdout), report)
+
+        mismatches = report["verification"]["mismatches"]
+        self.assertEqual(len(mismatches), len(drift))
+        actual_mismatches = {
+            (item["site"], item["revision"], item["asset"]): (
+                item["expected_fingerprint"],
+                item["actual_fingerprint"],
+            )
+            for item in mismatches
+        }
+        expected_mismatches = {
+            (
+                {"glee-fullytools": "Glee", "askjamie": "AskJamie"}[name],
+                site_revisions[name],
+                asset,
+            ): (expected_fingerprints[asset], actual_fingerprints[(name, asset)])
+            for name, asset in drift
+        }
+        self.assertEqual(actual_mismatches, expected_mismatches)
 
     def test_failing_hook_prevents_commit_and_accounts_for_output(self):
         module = load_module()
