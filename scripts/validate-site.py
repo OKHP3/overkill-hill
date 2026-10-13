@@ -618,36 +618,90 @@ def load_sitemap_entries(sitemap_path: Path = SITEMAP) -> dict[str, str | None]:
     return entries
 
 
+def _normalize_sitemap_location_for_duplicates(location: str) -> str:
+    """Normalize equivalent percent-encoding without decoding reserved bytes.
+
+    RFC 3986 treats percent-encoded unreserved characters as equivalent to
+    their literal spelling. Reserved characters such as an encoded slash are
+    retained because decoding them can change the route structure.
+    """
+    def normalize_component(value: str) -> str:
+        def replace_escape(match: re.Match[str]) -> str:
+            byte = int(match.group(1), 16)
+            character = chr(byte)
+            if character.isascii() and (
+                character.isalnum() or character in "-._~"
+            ):
+                return character
+            return f"%{byte:02X}"
+
+        return re.sub(r"%([0-9a-fA-F]{2})", replace_escape, value)
+
+    parsed = urlparse(location)
+    return parsed._replace(
+        path=normalize_component(parsed.path),
+        params=normalize_component(parsed.params),
+        query=normalize_component(parsed.query),
+        fragment=normalize_component(parsed.fragment),
+    ).geturl()
+
+
 def validate_sitemap_duplicates(sitemap_path: Path = SITEMAP) -> list[Finding]:
-    """Reject duplicate sitemap locations before consumers build a date map."""
+    """Reject duplicate sitemap locations before consumers build a date map.
+
+    Equivalent percent-encoded spellings of unreserved URL characters share a
+    duplicate key; encoded reserved characters remain distinct.
+    """
     entries, findings = _sitemap_entries_with_positions_and_findings_from_path(sitemap_path)
     occurrences: dict[str, list[tuple[int, str | None]]] = {}
     for position, loc, lastmod in entries:
-        occurrences.setdefault(loc, []).append((position, lastmod))
+        key = _normalize_sitemap_location_for_duplicates(loc)
+        occurrences.setdefault(key, []).append((position, lastmod))
 
-    for loc in sorted(occurrences):
-        entries = occurrences[loc]
-        if len(entries) < 2:
+    for normalized_location in sorted(occurrences):
+        matching_entries = occurrences[normalized_location]
+        if len(matching_entries) < 2:
             continue
-        positions = ", ".join(str(position) for position, _ in entries)
+        positions = ", ".join(
+            str(position) for position, _ in matching_entries
+        )
+        source_locations = [
+            loc
+            for _, loc, _ in entries
+            if _normalize_sitemap_location_for_duplicates(loc)
+            == normalized_location
+        ]
+        distinct_source_locations = sorted(set(source_locations))
+        if len(distinct_source_locations) == 1:
+            duplicate_message = (
+                f"duplicate sitemap location: {normalized_location} appears "
+                f"{len(matching_entries)} times at sitemap entry positions "
+                f"{positions}"
+            )
+        else:
+            sources = ", ".join(repr(loc) for loc in distinct_source_locations)
+            duplicate_message = (
+                "duplicate sitemap location after percent-encoding "
+                f"normalization: {normalized_location} appears "
+                f"{len(matching_entries)} times at sitemap entry positions "
+                f"{positions} (source locations: {sources})"
+            )
         findings.append(Finding(
             "ERROR",
             "sitemap.xml",
-            (
-                f"duplicate sitemap location: {loc} appears {len(entries)} times "
-                f"at sitemap entry positions {positions}"
-            ),
+            duplicate_message,
         ))
-        if len({lastmod for _, lastmod in entries}) > 1:
+        if len({lastmod for _, lastmod in matching_entries}) > 1:
             dated_entries = "; ".join(
                 f"position {position}: {lastmod!r}"
-                for position, lastmod in entries
+                for position, lastmod in matching_entries
             )
             findings.append(Finding(
                 "ERROR",
                 "sitemap.xml",
                 (
-                    f"conflicting duplicate sitemap lastmod values for {loc}: "
+                    "conflicting duplicate sitemap lastmod values for "
+                    f"{normalized_location}: "
                     f"{dated_entries}"
                 ),
             ))

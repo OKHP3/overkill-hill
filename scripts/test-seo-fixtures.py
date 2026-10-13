@@ -1123,6 +1123,70 @@ class SEOFixtureTests(unittest.TestCase):
             )
             self.assertNotIn("conflicting duplicate sitemap lastmod values", text)
 
+    def test_percent_encoded_unreserved_sitemap_aliases_are_duplicates(self) -> None:
+        literal_location = "https://overkillhill.com/about/"
+        encoded_location = "https://overkillhill.com/%61bout/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{literal_location}</loc>"
+                "<lastmod>2026-05-24</lastmod></url>"
+                f"<url><loc>{encoded_location}</loc>"
+                "<lastmod>2026-05-28</lastmod></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            text = findings_text(findings)
+            self.assertIn(
+                (
+                    "duplicate sitemap location after percent-encoding "
+                    "normalization: "
+                    f"{literal_location} appears 2 times at sitemap entry "
+                    "positions 1, 2"
+                ),
+                text,
+            )
+            self.assertIn(literal_location, text)
+            self.assertIn(encoded_location, text)
+            self.assertIn(
+                (
+                    f"conflicting duplicate sitemap lastmod values for "
+                    f"{literal_location}: position 1: '2026-05-24'; "
+                    "position 2: '2026-05-28'"
+                ),
+                text,
+            )
+            self.assertEqual(
+                validator.load_sitemap_entries(sitemap_path),
+                {
+                    literal_location: "2026-05-24",
+                    encoded_location: "2026-05-28",
+                },
+                "duplicate detection must not change the sitemap inventory API",
+            )
+
+    def test_percent_encoded_reserved_sitemap_routes_remain_distinct(self) -> None:
+        literal_slash_route = "https://overkillhill.com/a/b/"
+        encoded_slash_route = "https://overkillhill.com/a%2Fb/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{literal_slash_route}</loc></url>"
+                f"<url><loc>{encoded_slash_route}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator.validate_sitemap_duplicates(sitemap_path),
+                [],
+                "an encoded slash must not be collapsed into a route separator",
+            )
+
     def test_sitemap_url_blocks_require_exactly_one_usable_location(self) -> None:
         valid_before = f"{validator.SITE_ORIGIN}/about/"
         valid_after = f"{validator.SITE_ORIGIN}/contact/"
