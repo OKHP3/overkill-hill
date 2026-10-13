@@ -148,6 +148,27 @@ class BrandThemeMetadataTests(unittest.TestCase):
             with self.subTest(error=expected):
                 self.assertIn(expected, message)
 
+    def test_contract_reports_duplicate_identifiers_alongside_field_errors(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["name"] = contract["glee"]["name"]
+        contract["askjamie"]["bodyClass"] = contract["glee"]["bodyClass"]
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["dark"] = "#bad"
+
+        with self.assertRaises(ValueError) as raised:
+            validator.validate_brand_theme_contract({"brands": contract})
+
+        message = str(raised.exception)
+        expected_errors = (
+            "brand 'glee' has invalid light color 'orange'",
+            "brand 'askjamie' has invalid dark color '#bad'",
+            "brand 'askjamie' duplicates brand name 'Glee' from brand 'glee'",
+            "brand 'askjamie' duplicates body class 'glee-main' from brand 'glee'",
+        )
+        for expected in expected_errors:
+            with self.subTest(error=expected):
+                self.assertIn(expected, message)
+
     def test_release_validator_fails_with_aggregated_brand_errors(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
         contract["glee"]["light"] = "orange"
