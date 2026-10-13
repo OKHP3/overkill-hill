@@ -2161,6 +2161,77 @@ class SEOFixtureTests(unittest.TestCase):
                 else:
                     self.assert_rejected(findings, mutation["expected"])
 
+    def test_duplicate_article_dates_accept_matching_offsets_only(self) -> None:
+        page = self.pages_by_route["/writings/first-diagram-is-a-liar/"]
+        sources = (
+            (ROOT / "site-src" / "pages" / page["path"]).with_suffix(
+                ".extras.html"
+            ),
+            GENERATED_FIXTURE / "article.html.fixture",
+        )
+        cases = {
+            "datePublished": (
+                "2026-04-07T12:00:00Z",
+                "2026-04-07T14:00:00+02:00",
+                "2026-04-07T14:00:01+02:00",
+            ),
+            "dateModified": (
+                "2026-05-24T00:00:00Z",
+                "2026-05-24T05:30:00+05:30",
+                "2026-05-24T05:30:01+05:30",
+            ),
+        }
+
+        for path in sources:
+            original_raw = path.read_text(encoding="utf-8")
+            original_parser = parse_html(original_raw)
+            for field, (first, same_instant, different_instant) in cases.items():
+                for second, should_pass in (
+                    (same_instant, True),
+                    (different_instant, False),
+                ):
+                    with self.subTest(
+                        path=path.name,
+                        field=field,
+                        second=second,
+                    ):
+                        first_raw = mutate_jsonld_field(original_raw, field, first)
+                        duplicated_raw = duplicate_article_jsonld(
+                            first_raw, field, second
+                        )
+                        parser = parse_html(duplicated_raw)
+                        articles = article_jsonld_nodes(duplicated_raw)
+                        self.assertEqual(len(articles), 2)
+                        self.assertEqual(
+                            {article[field] for article in articles},
+                            {first, second},
+                        )
+                        self.assertEqual(
+                            original_parser.meta,
+                            parser.meta,
+                            "duplicate-date fixture changed page metadata",
+                        )
+                        self.assertEqual(
+                            original_parser.is_noindex,
+                            parser.is_noindex,
+                            "duplicate-date fixture changed the indexing boundary",
+                        )
+
+                        findings = validator.validate_article_jsonld_dates(
+                            path.name,
+                            parser,
+                        )
+                        duplicate_message = (
+                            f"conflicting duplicate Article JSON-LD {field} values"
+                        )
+                        if should_pass:
+                            self.assertNotIn(
+                                duplicate_message,
+                                findings_text(findings),
+                            )
+                        else:
+                            self.assert_rejected(findings, duplicate_message)
+
     def test_duplicate_article_jsonld_dates_rejected_in_source_extras(self) -> None:
         mutation = self.fixture_data["duplicate_article_date_mismatch"]
         page = self.pages_by_route[mutation["route"]]

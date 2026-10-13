@@ -1110,7 +1110,10 @@ def validate_article_jsonld_dates(
         if isinstance(article.get("datePublished"), str)
         and article["datePublished"]
     ]
-    if len(published_dates) > 1 and len(set(published_dates)) > 1:
+    if len(published_dates) > 1 and any(
+        not _article_date_values_match(published_dates[0], value)
+        for value in published_dates[1:]
+    ):
         findings.append(Finding(
             "ERROR",
             location,
@@ -1123,7 +1126,10 @@ def validate_article_jsonld_dates(
         if isinstance(article.get("dateModified"), str)
         and article["dateModified"]
     ]
-    if len(modified_dates) > 1 and len(set(modified_dates)) > 1:
+    if len(modified_dates) > 1 and any(
+        not _article_date_values_match(modified_dates[0], value)
+        for value in modified_dates[1:]
+    ):
         findings.append(Finding(
             "ERROR",
             location,
