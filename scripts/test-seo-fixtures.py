@@ -2009,9 +2009,23 @@ class SEOFixtureTests(unittest.TestCase):
         return fixture, draft_page, promoted_page
 
     def test_article_specific_image_control_and_noindex_exemption(self) -> None:
-        _, draft_page, promoted_page = self._promoted_article_social_image_case()
+        fixture, draft_page, promoted_page = self._promoted_article_social_image_case()
         draft_path = ROOT / draft_page["path"]
-        draft_parser = parse_html(draft_path.read_text(encoding="utf-8"))
+        draft_raw = draft_path.read_text(encoding="utf-8")
+        draft_parser = parse_html(draft_raw)
+        shared_asset = (
+            ROOT / validator.SHARED_BRAND_SOCIAL_IMAGE.lstrip("/")
+        ).resolve()
+
+        for alias in fixture["aliases"]:
+            with self.subTest(image_alias=alias["id"]):
+                resolved = validator._image_asset_path(alias["value"])
+                self.assertIsNotNone(resolved)
+                self.assertEqual(
+                    resolved.resolve(),
+                    shared_asset,
+                    f"_image_asset_path did not resolve alias {alias['value']!r}",
+                )
 
         self.assertFalse(validator.is_indexable_page(draft_page))
         self.assertFalse(
@@ -2022,6 +2036,30 @@ class SEOFixtureTests(unittest.TestCase):
             validator.validate_generated_seo(draft_path, draft_parser, draft_page),
             "generated noindex Article drafts using the shared brand image remain exempt",
         )
+
+        for alias in fixture["aliases"]:
+            with self.subTest(noindex_alias=alias["id"]):
+                alias_draft = copy.deepcopy(draft_page)
+                alias_draft["meta:og:image"] = alias["value"]
+                alias_draft["meta:twitter:image"] = alias["value"]
+                self.assertFalse(
+                    validator.validate_source_seo_contract([alias_draft]),
+                    "noindex source Article drafts using a shared-image alias remain exempt",
+                )
+
+                alias_raw = mutate_meta(
+                    mutate_meta(draft_raw, "meta:og:image", alias["value"]),
+                    "meta:twitter:image",
+                    alias["value"],
+                )
+                self.assertFalse(
+                    validator.validate_generated_seo(
+                        draft_path,
+                        parse_html(alias_raw),
+                        alias_draft,
+                    ),
+                    "noindex generated Article drafts using a shared-image alias remain exempt",
+                )
 
         source_findings = validator.validate_source_seo_contract([promoted_page])
         self.assertFalse(
@@ -2044,17 +2082,24 @@ class SEOFixtureTests(unittest.TestCase):
     def test_promoted_article_shared_brand_image_rejected_in_source(self) -> None:
         fixture, _, promoted_page = self._promoted_article_social_image_case()
         for field in ("meta:og:image", "meta:twitter:image"):
-            for url_kind in ("absolute_url", "local_url"):
+            url_cases = [
+                (url_kind, fixture[url_kind])
+                for url_kind in ("absolute_url", "local_url")
+            ] + [
+                (alias["id"], alias["value"])
+                for alias in fixture["aliases"]
+            ]
+            for url_kind, url in url_cases:
                 with self.subTest(field=field, url_kind=url_kind):
                     mutated_page = copy.deepcopy(promoted_page)
-                    mutated_page[field] = fixture[url_kind]
+                    mutated_page[field] = url
                     findings = validator.validate_source_seo_contract(
                         [mutated_page]
                     )
                     self.assert_rejected(
                         findings,
                         f"{fixture['expected_source']}: {field} "
-                        f"({fixture[url_kind]})",
+                        f"({url})",
                     )
 
     def test_promoted_article_shared_brand_image_rejected_in_generated_html(self) -> None:
@@ -2062,12 +2107,19 @@ class SEOFixtureTests(unittest.TestCase):
         generated_path = GENERATED_FIXTURE / "article.html.fixture"
         original_raw = generated_path.read_text(encoding="utf-8")
         for field in ("meta:og:image", "meta:twitter:image"):
-            for url_kind in ("absolute_url", "local_url"):
+            url_cases = [
+                (url_kind, fixture[url_kind])
+                for url_kind in ("absolute_url", "local_url")
+            ] + [
+                (alias["id"], alias["value"])
+                for alias in fixture["aliases"]
+            ]
+            for url_kind, url in url_cases:
                 with self.subTest(field=field, url_kind=url_kind):
                     mutated_raw = mutate_meta(
                         original_raw,
                         field,
-                        fixture[url_kind],
+                        url,
                     )
                     findings = validator.validate_generated_seo(
                         generated_path,
@@ -2077,7 +2129,7 @@ class SEOFixtureTests(unittest.TestCase):
                     self.assert_rejected(
                         findings,
                         f"{fixture['expected_generated']}: {field} "
-                        f"({fixture[url_kind]})",
+                        f"({url})",
                     )
 
     def assert_rejected(self, findings: list, expected: str) -> None:
