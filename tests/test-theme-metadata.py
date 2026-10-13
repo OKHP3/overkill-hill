@@ -170,8 +170,19 @@ class BrandThemeMetadataTests(unittest.TestCase):
             with self.subTest(error=expected):
                 self.assertIn(expected, message)
 
+    def test_contract_rejects_duplicate_storage_keys(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"brand 'askjamie' duplicates storage key .* from brand 'glee'",
+        ):
+            validator.validate_brand_theme_contract({"brands": contract})
+
     def test_release_validator_fails_with_aggregated_brand_errors(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
         contract["glee"]["light"] = "orange"
         contract["askjamie"]["dark"] = "#bad"
         with tempfile.TemporaryDirectory() as directory:
@@ -203,12 +214,16 @@ runpy.run_path(sys.argv[3], run_name="__main__")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+        self.assertIn(
+            "brand 'askjamie' duplicates storage key",
+            result.stderr,
+        )
         self.assertIn("brand 'glee' has invalid light color 'orange'", result.stderr)
         self.assertIn("brand 'askjamie' has invalid dark color '#bad'", result.stderr)
 
     def test_theme_generator_preserves_app_js_when_multi_brand_contract_is_invalid(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
-        contract["glee"]["storageKey"] = ""
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
         contract["glee"]["light"] = "orange"
         contract["askjamie"]["colorScheme"] = "solarized"
         contract["askjamie"]["dark"] = "#bad"
@@ -248,7 +263,7 @@ runpy.run_path(sys.argv[3], run_name="__main__")
             self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
             expected_errors = (
-                "brand 'glee' has invalid 'storageKey'",
+                "brand 'askjamie' duplicates storage key",
                 "brand 'glee' has invalid light color 'orange'",
                 "brand 'askjamie' has invalid dark color '#bad'",
                 "brand 'askjamie' has invalid 'colorScheme' value 'solarized'",

@@ -141,6 +141,7 @@ def validate_brand_theme_contract(raw_contract: object) -> None:
     errors: list[str] = []
     seen_names: dict[str, str] = {}
     seen_body_classes: dict[str, str] = {}
+    seen_storage_keys: dict[str, str] = {}
     for brand_id, brand in brands.items():
         label = f"brand {brand_id!r}"
         if not isinstance(brand_id, str) or not brand_id.strip():
@@ -206,6 +207,16 @@ def validate_brand_theme_contract(raw_contract: object) -> None:
                 )
             else:
                 seen_body_classes[body_class] = brand_id
+
+        storage_key = brand.get("storageKey")
+        if isinstance(storage_key, str) and storage_key.strip():
+            if storage_key in seen_storage_keys:
+                errors.append(
+                    f"{label} duplicates storage key {storage_key!r} "
+                    f"from brand {seen_storage_keys[storage_key]!r}"
+                )
+            else:
+                seen_storage_keys[storage_key] = brand_id
 
     if errors:
         raise ValueError("\n".join(errors))
