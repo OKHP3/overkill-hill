@@ -89,6 +89,42 @@ class BrandThemeMetadataTests(unittest.TestCase):
         self.assertIn("JSON path /brands/glee/name", message)
         self.assertIn(f"line 5, column {duplicate_key_column}", message)
 
+    def test_contract_loader_reports_duplicate_key_at_contract_root(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = (
+            '{\n  "version": 1,\n  "version": 2,\n'
+            f'  "brands": {{"glee": {glee}}}\n}}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
+                validator.load_brand_theme_contract(path)
+
+        message = str(raised.exception)
+        self.assertIn("duplicate JSON key 'version'", message)
+        self.assertIn("at JSON root", message)
+        self.assertIn("JSON path /version", message)
+
+    def test_contract_loader_reports_duplicate_key_in_non_brand_object(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = (
+            '{\n  "brands": {"glee": '
+            f'{glee}'
+            '},\n  "metadata": {\n    "owner": "first",\n'
+            '    "owner": "second"\n  }\n}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
+                validator.load_brand_theme_contract(path)
+
+        message = str(raised.exception)
+        self.assertIn("duplicate JSON key 'owner'", message)
+        self.assertIn("at metadata", message)
+        self.assertIn("JSON path /metadata/owner", message)
+
     def test_contract_reports_all_malformed_entries_and_fields_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
         contract["glee"]["storageKey"] = ""
