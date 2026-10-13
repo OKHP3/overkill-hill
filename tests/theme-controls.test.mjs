@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -393,11 +393,11 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
   try {
     await writeSource(
       "site-src/pages.json",
-      JSON.stringify({ pages: [{ path: "index.html" }] }),
+      JSON.stringify({ pages: [{ path: "index.html" }, { path: "about/index.html" }] }),
     );
     await writeSource(
       "sitemap.xml",
-      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url><url><loc>https://overkillhill.com/about/</loc></url></urlset>',
     );
     await writeSource(
       "config/murderbird-source-archive.json",
@@ -421,6 +421,15 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
       await writeSource(path, contents);
     }
     await writeSource("index.html", await readFile(join(repositoryRoot, "index.html")));
+    const sourceApp = await readFile(join(repositoryRoot, "assets", "js", "app.js"), "utf8");
+    const sourceFingerprint = createHash("sha256")
+      .update(sourceApp.replace(/\r\n/g, "\n"))
+      .digest("hex")
+      .slice(0, 8);
+    await writeSource(
+      "about/index.html",
+      `<html><body><script src="/assets/js/app.js?v=${sourceFingerprint}"></script></body></html>`,
+    );
     await mkdir(join(source, "assets", "js"), { recursive: true });
     await copyFile(
       join(repositoryRoot, "assets", "js", "app.js"),
@@ -460,16 +469,38 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
       assert.equal(packagedBrands[brandId]?.dark, expected.dark, `${brandId} dark color`);
     }
 
-    const packagedPage = await readFile(join(output, "index.html"), "utf8");
-    const appReference = packagedPage.match(
-      /src=["']\/assets\/js\/app\.js\?v=([a-f0-9]{8})["']/,
-    );
-    assert.ok(appReference, "a packaged published page references fingerprinted app.js");
     const expectedFingerprint = createHash("sha256")
       .update(packagedApp.replace(/\r\n/g, "\n"))
       .digest("hex")
       .slice(0, 8);
-    assert.equal(appReference[1], expectedFingerprint, "page fingerprint matches packaged app.js bytes");
+    const packagedHtmlPaths = (await readdir(output, { recursive: true }))
+      .filter((path) => path.endsWith(".html"))
+      .sort();
+    const pagesWithAppReferences = [];
+    for (const path of packagedHtmlPaths) {
+      const html = await readFile(join(output, path), "utf8");
+      const appReferences = [
+        ...html.matchAll(/\b(?:src|href)=["']\/assets\/js\/app\.js(?:\?([^"']*))?["']/g),
+      ];
+      if (appReferences.length === 0) continue;
+      pagesWithAppReferences.push(path);
+      for (const appReference of appReferences) {
+        const fingerprint = appReference[1]?.match(/(?:^|&)v=([a-f0-9]{8})(?:&|$)/)?.[1];
+        assert.equal(
+          fingerprint,
+          expectedFingerprint,
+          `${path} app.js fingerprint matches packaged app.js bytes`,
+        );
+      }
+    }
+    assert.ok(
+      pagesWithAppReferences.includes("index.html"),
+      "a packaged published page references fingerprinted app.js",
+    );
+    assert.ok(
+      pagesWithAppReferences.includes("about/index.html"),
+      "the package regression covers more than the homepage",
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
