@@ -1660,19 +1660,29 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
 
 def validate_robots_indexing_directives(
     location: str,
-    robots_values: list[str],
+    meta_values: dict[str, list[str]],
 ) -> list[Finding]:
-    """Reject rendered robots values that disagree on index versus noindex."""
-    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
-    if not {"index", "noindex"}.issubset(set().union(*robots_tokens)):
+    """Reject page-wide and crawler-specific robots indexing disagreements."""
+    robot_meta = {
+        name: values
+        for name, values in meta_values.items()
+        if name == "robots"
+        or name.endswith("bot")
+        or "bot-" in name
+        or "bot_" in name
+    }
+    directives = [
+        (name, position, value, robots_indexing_tokens(value))
+        for name, values in robot_meta.items()
+        for position, value in enumerate(values, start=1)
+    ]
+    tokens = set().union(*(entry[3] for entry in directives)) if directives else set()
+    if not {"index", "noindex"}.issubset(tokens):
         return []
     conflicting_tags = [
-        f"robots tag #{position}={value!r}"
-        for position, (value, tokens) in enumerate(
-            zip(robots_values, robots_tokens),
-            start=1,
-        )
-        if tokens.intersection(ROBOTS_INDEXING_TOKENS)
+        f"{name} tag #{position}={value!r}"
+        for name, position, value, value_tokens in directives
+        if value_tokens.intersection(ROBOTS_INDEXING_TOKENS)
     ]
     return [Finding(
         "ERROR",
@@ -1696,7 +1706,7 @@ def validate_generated_seo(
         if locale_page is not None:
             findings = validate_robots_indexing_directives(
                 rel,
-                parser.meta.get("robots", []),
+                parser.meta,
             )
             manifest_boundary = (
                 "indexable" if locale_page.get("indexable") else "noindex"
@@ -1737,8 +1747,7 @@ def validate_generated_seo(
         for key, entries in parser.meta.items()
     }
     findings = validate_organization_nodes(rel, parser)
-    robots_values = parser.meta.get("robots", [])
-    findings.extend(validate_robots_indexing_directives(rel, robots_values))
+    findings.extend(validate_robots_indexing_directives(rel, parser.meta))
     manifest_boundary = "indexable" if is_indexable_page(manifest_page) else "noindex"
     rendered_boundary = "noindex" if parser.is_noindex else "indexable"
     if rendered_boundary != manifest_boundary:

@@ -2057,6 +2057,80 @@ class SEOFixtureTests(unittest.TestCase):
             "consistent duplicate noindex directives are explicitly accepted",
         )
 
+    def test_crawler_robots_directives_must_match_page_wide_indexing_contract(self) -> None:
+        fixture = self.fixture_data["crawler_robots_contract"]
+        index_path = GENERATED_FIXTURE / "index.html.fixture"
+        index_page = self.pages_by_route["/"]
+        index_raw = index_path.read_text(encoding="utf-8")
+        draft_page = self.pages_by_route["/writings/biases-as-constants/"]
+        draft_path = ROOT / draft_page["path"]
+        draft_raw = draft_path.read_text(encoding="utf-8")
+
+        cases = (
+            (
+                "crawler-specific noindex cannot override page-wide index",
+                index_path,
+                index_page,
+                index_raw.replace(
+                    "</head>",
+                    f'<meta name="googlebot" content="{fixture["noindex"]}"></head>',
+                    1,
+                ),
+                ("robots tag #1=", "googlebot tag #1="),
+            ),
+            (
+                "crawler-specific index cannot override page-wide noindex",
+                draft_path,
+                draft_page,
+                mutate_meta(draft_raw, "meta:googlebot", fixture["index"]),
+                ("robots tag #1=", "googlebot tag #1="),
+            ),
+        )
+        for case, path, page, raw, expected_labels in cases:
+            with self.subTest(case=case):
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(raw),
+                    page,
+                )
+                conflicts = [
+                    finding for finding in findings
+                    if fixture["expected"] in finding.msg
+                ]
+                self.assertEqual(len(conflicts), 1, findings_text(findings))
+                for label in expected_labels:
+                    self.assertIn(label, conflicts[0].msg)
+
+        consistent_raw = index_raw.replace(
+            "</head>",
+            f'<meta name="googlebot" content="{fixture["index"]}"></head>',
+            1,
+        )
+        consistent_findings = validator.validate_generated_seo(
+            index_path,
+            parse_html(consistent_raw),
+            index_page,
+        )
+        self.assertFalse(
+            consistent_findings,
+            "matching page-wide and crawler-specific index directives are accepted",
+        )
+
+        crawler_only_raw = index_raw.replace(
+            "</head>",
+            '<meta name="googlebot" content="max-snippet:0"></head>',
+            1,
+        )
+        crawler_only_findings = validator.validate_generated_seo(
+            index_path,
+            parse_html(crawler_only_raw),
+            index_page,
+        )
+        self.assertFalse(
+            crawler_only_findings,
+            "crawler-specific presentation directives do not conflict with indexing",
+        )
+
     def test_draft_article_promotion_requires_article_metadata(self) -> None:
         mutation = self.fixture_data["draft_article_promotion"]
         draft_page = page_for_route(self.source_pages, mutation["route"])

@@ -8,6 +8,7 @@
 - [GitHub workflow push auth](github-workflow-push-auth.md) — workflow edits need the right scope; successful blob writes do not prove Git tree/ref creation will work.
 - [Repository janitor SSH prompt](repo-janitor-ssh-prompts.md) — audit all transient Replit remotes noninteractively so stale SSH remotes cannot block branch inventory.
 - [SEO source/render boundary](seo-source-render-boundary.md) — validate manifest intent and rendered HTML separately when the build normalizes legacy metadata or excludes pilot locales.
+- [Robots metadata policy](robots-meta-policy.md) — crawler-specific index/noindex directives must agree with page-wide robots intent; crawler-specific presentation directives may differ.
 - [SEO fixture baselines](seo-fixture-baselines.md) — shared source/render mutations must differ from both baselines or one regression path can become a false pass.
 - [CSP enforcement boundary](csp-enforcement-boundary.md) — source policies can enforce via meta while live response headers still depend on a header-capable edge; keep builder serialization stable.
 - [Browser fixture process model](browser-fixture-process-model.md) — local HTTP fixture servers need asynchronous child-process tests so the Node event loop can keep serving browser requests.

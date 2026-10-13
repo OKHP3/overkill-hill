@@ -233,6 +233,11 @@
     "noindex": "noindex, follow",
     "expected": "conflicting robots index/noindex directives in rendered content tags"
   },
+  "crawler_robots_contract": {
+    "index": "index, follow",
+    "noindex": "noindex, follow",
+    "expected": "conflicting robots index/noindex directives in rendered content tags"
+  },
   "organization_same_as_drift": {
     "from": "https://www.linkedin.com/company/overkillhillp3",
     "to": "https://example.com/not-the-verified-profile"
