@@ -14,6 +14,21 @@ UTILITIES = {'/404.html', '/under-construction.html', '/search/', '/found-ry/'}
 
 
 class PageFamilyTests(unittest.TestCase):
+    def test_draft_writings_keep_status_without_a_blocking_modal(self):
+        for slug in ('biases-as-constants', 'magnus-saga'):
+            with self.subTest(slug=slug):
+                source = ROOT / 'site-src/pages/writings' / slug
+                main = BeautifulSoup((source / 'index.main.html').read_text(encoding='utf-8'), 'html.parser')
+                extras = BeautifulSoup((source / 'index.extras.html').read_text(encoding='utf-8'), 'html.parser')
+                published = BeautifulSoup((ROOT / 'writings' / slug / 'index.html').read_text(encoding='utf-8'), 'html.parser')
+                for page in (main, published):
+                    notice = page.select_one('.draft-notice[role="note"]')
+                    self.assertIsNotNone(notice)
+                    self.assertIn('Draft: not yet published.', notice.get_text())
+                    self.assertIsNone(page.select_one('.construction-overlay, [data-wip-dismiss]'))
+                self.assertIsNone(extras.select_one('.construction-overlay, [data-wip-dismiss]'))
+                self.assertIn('noindex', published.select_one('meta[name="robots"]')['content'])
+
     def test_content_pages_share_an_accessible_masthead(self):
         for page in PAGES:
             if page['route'] in UTILITIES or page.get('redirect_to'):

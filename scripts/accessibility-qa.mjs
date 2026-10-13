@@ -243,6 +243,85 @@ async function inspectReducedMotion(page, definition) {
   });
 }
 
+async function inspectDraftWritingNavigation(browser) {
+  const failures = [];
+  for (const width of [1280, 320]) {
+    for (const storage of ["fresh", "prior-foundry-dismissal", "unavailable"]) {
+      const context = await browser.newContext({ viewport: { width, height: 800 } });
+      try {
+        if (storage === "prior-foundry-dismissal") {
+          await context.addInitScript(() => localStorage.setItem("glee-wip-dismissed:found-ry", "true"));
+        } else if (storage === "unavailable") {
+          await context.addInitScript(() => {
+            Object.defineProperty(window, "localStorage", {
+              get() { throw new DOMException("Storage unavailable in this test", "SecurityError"); },
+            });
+          });
+        }
+        const page = await context.newPage();
+        for (const slug of ["biases-as-constants", "magnus-saga"]) {
+          const path = `/writings/${slug}/`;
+          await page.goto(`${baseUrl}/writings/`, { waitUntil: "domcontentloaded" });
+          await page.locator(`main a[href="${path}"]`).click();
+          await page.waitForURL(`${baseUrl}${path}`);
+          await page.waitForLoadState("load");
+          const label = `${path} at ${width}px with ${storage} storage`;
+          const notice = page.locator('.draft-notice[role="note"]');
+          if (!await notice.isVisible() || !await notice.innerText().then(text => text.includes("Draft: not yet published."))) {
+            failures.push(`${label}: draft status is not visible`);
+          }
+          if (await page.locator('.construction-overlay, [data-wip-dismiss]').count()) {
+            failures.push(`${label}: an unrelated construction gate remains`);
+          }
+          const layout = await page.evaluate(() => ({
+            width: innerWidth,
+            documentWidth: document.documentElement.scrollWidth,
+            overflowY: getComputedStyle(document.body).overflowY,
+            rootOverflowY: getComputedStyle(document.documentElement).overflowY,
+            scrollHeight: document.documentElement.scrollHeight,
+            height: innerHeight,
+          }));
+          const scrollLocked = [layout.overflowY, layout.rootOverflowY]
+            .some(value => value === "hidden" || value === "clip")
+            && layout.scrollHeight > layout.height;
+          if (layout.documentWidth > layout.width + 1 || scrollLocked) {
+            failures.push(`${label}: reading is clipped or scrolling is locked`);
+          }
+          await page.keyboard.press("Tab");
+          await page.waitForFunction(() => {
+            const element = document.activeElement;
+            return element && (!element.classList.contains("okh-skip-link")
+              || element.getBoundingClientRect().top >= 0);
+          }, null, { timeout: 1500 });
+          const skipFocus = await page.evaluate(() => {
+            const element = document.activeElement;
+            if (!element) return false;
+            const rect = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+            return element.classList.contains("okh-skip-link")
+              && element.matches(":focus-visible")
+              && style.visibility !== "hidden" && Number(style.opacity) > 0
+              && style.clip === "auto" && style.clipPath === "none"
+              && rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight
+              && rect.left >= 0 && rect.right <= innerWidth
+              && (hit === element || element.contains(hit));
+          });
+          if (!skipFocus) failures.push(`${label}: Tab does not reach the visible skip link`);
+          await page.keyboard.press("Enter");
+          if (!await page.evaluate(() => document.activeElement?.id === "main")) {
+            failures.push(`${label}: keyboard skip link does not reach the article`);
+          }
+        }
+        console.log(`Checked draft-writing navigation: ${width}px, ${storage} storage`);
+      } finally {
+        await context.close();
+      }
+    }
+  }
+  return failures;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -250,6 +329,9 @@ async function main() {
   let failures = 0;
 
   try {
+    const draftFailures = await inspectDraftWritingNavigation(browser);
+    failures += draftFailures.length;
+    draftFailures.forEach(failure => console.error(`FAIL  draft writing: ${failure}`));
     for (const definition of REPRESENTATIVE_PAGES) {
       const ariaFailures = await inspectAriaAndDiagrams(page, definition.path);
       const keyboardFailures = await inspectKeyboardAndFocus(page, definition);
