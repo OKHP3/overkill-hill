@@ -1326,6 +1326,30 @@ class SEOFixtureTests(unittest.TestCase):
                 "an encoded slash must not be collapsed into a route separator",
             )
 
+    def test_locale_and_site_sitemap_inventories_use_distinct_location_boundaries(self) -> None:
+        stray_location = "https://overkillhill.com/stray-loc/"
+        url_record_location = "https://overkillhill.com/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<loc>{stray_location}</loc>"
+                f"<url><loc>{url_record_location}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                locale_checker.sitemap_locations(sitemap_path),
+                [stray_location, url_record_location],
+                "the locale validator inventories every <loc> element",
+            )
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(url_record_location, None)],
+                "the site validator inventories only <loc> elements inside <url> records",
+            )
+
     def test_sitemap_url_blocks_require_exactly_one_usable_location(self) -> None:
         valid_before = f"{validator.SITE_ORIGIN}/about/"
         valid_after = f"{validator.SITE_ORIGIN}/contact/"
