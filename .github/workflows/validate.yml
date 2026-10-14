@@ -76,12 +76,29 @@ jobs:
             git -C "$probe_dir" init --quiet
             printf 'Fetching %s (%s=%s) from %s\n' \
               "$site" "$revision_variable" "$revision" "$repository"
-            if ! git -C "$probe_dir" fetch --no-tags --depth=1 --filter=tree:0 "$repository" "$revision"; then
-              printf 'ERROR: %s (%s=%s) foundation revision could not be fetched from %s.\n' \
-                "$site" "$revision_variable" "$revision" "$repository" >&2
-              printf 'Fetch check: %s (%s=%s): FAILED; could not fetch from %s\n' \
-                "$site" "$revision_variable" "$revision" "$repository" \
-                | tee -a theme-control-revisions.txt
+            local fetch_output fetch_exit
+            if fetch_output="$(git -C "$probe_dir" fetch --no-tags --depth=1 --filter=tree:0 "$repository" "$revision" 2>&1)"; then
+              :
+            else
+              fetch_exit=$?
+              local failure_kind="fetch failure (Git did not confirm a missing object)"
+              if grep -Eiq \
+                "couldn't find remote ref|not our ref|no such (object|ref)|unadvertised object|bad object" \
+                <<< "$fetch_output"; then
+                failure_kind="missing pinned object"
+              elif grep -Eiq \
+                "could not resolve|couldn't resolve|failed to connect|connection (timed out|reset|refused)|network is unreachable|temporary failure in name resolution|operation timed out|unexpected disconnect|remote end hung up|HTTP (502|503|504)|server returned error" \
+                <<< "$fetch_output"; then
+                failure_kind="transient repository/network failure"
+              fi
+              printf 'ERROR: %s (%s=%s) foundation fetch failed from %s: %s (git exit %s).\n' \
+                "$site" "$revision_variable" "$revision" "$repository" "$failure_kind" "$fetch_exit" >&2
+              {
+                printf 'Fetch check: %s (%s=%s): FAILED; %s from %s (git exit %s)\n' \
+                  "$site" "$revision_variable" "$revision" "$failure_kind" "$repository" "$fetch_exit"
+                printf 'Git diagnostic for %s (%s=%s):\n%s\n' \
+                  "$site" "$revision_variable" "$revision" "$fetch_output"
+              } | tee -a theme-control-revisions.txt
               return 1
             fi
 

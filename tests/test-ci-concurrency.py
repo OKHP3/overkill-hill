@@ -202,9 +202,11 @@ class ConcurrencyTests(unittest.TestCase):
             ],
         )
         self.assertIn(
-            'foundation revision could not be fetched from',
+            'missing pinned object',
             fetch_step,
         )
+        self.assertIn('transient repository/network failure', fetch_step)
+        self.assertIn('Git diagnostic for %s (%s=%s):\\n%s\\n', fetch_step)
         self.assertIn(
             'fetched unexpected revision',
             fetch_step,
@@ -240,8 +242,13 @@ class ConcurrencyTests(unittest.TestCase):
 
         self.assertIn('id: foundation_fetch', fetch_step)
         self.assertIn('continue-on-error: true', fetch_step)
+        self.assertIn('fetch failure (Git did not confirm a missing object)', fetch_step)
         self.assertIn(
-            'Fetch check: %s (%s=%s): FAILED; could not fetch from %s',
+            'Fetch check: %s (%s=%s): FAILED; %s from %s (git exit %s)',
+            fetch_step,
+        )
+        self.assertIn(
+            'Git diagnostic for %s (%s=%s):\\n%s\\n',
             fetch_step,
         )
         self.assertIn(
@@ -271,7 +278,7 @@ class ConcurrencyTests(unittest.TestCase):
         self.assertIn('path: theme-control-revisions.txt', upload_step)
         self.assertIn('retention-days: 30', upload_step)
 
-    def test_theme_control_fetch_helper_reports_an_unavailable_revision_offline(self):
+    def test_theme_control_fetch_helper_identifies_a_missing_revision_offline(self):
         source = job(VALIDATE, 'validate')
         fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
         function_match = re.search(
@@ -310,10 +317,84 @@ class ConcurrencyTests(unittest.TestCase):
             output = result.stdout + result.stderr
             self.assertIn('FixtureSite', output)
             self.assertIn('THEME_CONTROL_FIXTURE_REVISION', output)
-            self.assertIn('foundation revision could not be fetched', output)
+            self.assertIn('missing pinned object', output)
             evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
             self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
-            self.assertIn('FAILED; could not fetch from', evidence)
+            self.assertIn('FAILED; missing pinned object from', evidence)
+            self.assertIn('Git diagnostic for FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
+            self.assertRegex(evidence, r"couldn't find remote ref|not our ref")
+
+    def test_theme_control_fetch_helper_identifies_a_transient_network_failure(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        function_match = re.search(
+            r'(?ms)^          verify_revision\(\) \{\n.*?^          \}',
+            fetch_step,
+        )
+        self.assertIsNotNone(function_match, 'missing workflow verify_revision helper')
+        helper = textwrap.dedent(function_match.group(0))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bin_directory = root / 'bin'
+            bin_directory.mkdir()
+            git_stub = bin_directory / 'git'
+            git_stub.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    [[ "$1" == "-C" ]] || exit 90
+                    shift 2
+                    case "$1" in
+                      init) exit 0 ;;
+                      fetch)
+                        printf '%s\\n' "fatal: unable to access 'https://github.com/fixture/repository.git/': Could not resolve host: github.com" >&2
+                        exit 128
+                        ;;
+                      *) exit 91 ;;
+                    esac
+                    """
+                ),
+                encoding='utf-8',
+            )
+            git_stub.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({
+                'PATH': f'{bin_directory}{os.pathsep}{environment["PATH"]}',
+                'RUNNER_TEMP': str(root / 'runner-temp'),
+            })
+            result = subprocess.run(
+                [
+                    'bash',
+                    '-c',
+                    'set -euo pipefail\n'
+                    f'{helper}\n'
+                    'verify_revision "FixtureSite" "THEME_CONTROL_FIXTURE_REVISION" '
+                    '"https://github.com/fixture/repository.git" "0123456789abcdef"\n',
+                ],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, 'network failure must fail')
+            output = result.stdout + result.stderr
+            self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=0123456789abcdef)', output)
+            self.assertIn('transient repository/network failure', output)
+            self.assertIn('Could not resolve host: github.com', output)
+            evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
+            self.assertIn(
+                'FAILED; transient repository/network failure from '
+                'https://github.com/fixture/repository.git (git exit 128)',
+                evidence,
+            )
+            self.assertIn(
+                'Git diagnostic for FixtureSite (THEME_CONTROL_FIXTURE_REVISION=0123456789abcdef):',
+                evidence,
+            )
+            self.assertIn('Could not resolve host: github.com', evidence)
 
     def test_theme_control_fetch_helper_records_a_successful_pinned_revision_offline(self):
         source = job(VALIDATE, 'validate')
