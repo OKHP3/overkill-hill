@@ -493,6 +493,53 @@ class SEOFixtureTests(unittest.TestCase):
             findings,
         )
 
+    def test_multi_locale_manifest_rejects_duplicate_target_route_within_locale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path = root / "manifest.json"
+            shutil.copy2(
+                FIXTURE_ROOT / "locale-duplicate-target-routes.json",
+                manifest_path,
+            )
+            shutil.copy2(ROOT / "index.html", root / "index.html")
+            sitemap_path = root / "sitemap.xml"
+            sitemap_path.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<url><loc>{locale_checker.route_url('/')}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+            index_dir = root / "assets" / "data"
+            index_dir.mkdir(parents=True)
+            for locale in ("fr", "de"):
+                (index_dir / f"search-index.{locale}.json").write_text(
+                    json.dumps({"locale": locale, "count": 0, "entries": []}),
+                    encoding="utf-8",
+                )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["locales"]["de"]["pages"][0]["target_route"] = "/de/"
+            manifest["locales"]["fr"]["pages"].append(
+                copy.deepcopy(manifest["locales"]["fr"]["pages"][0])
+            )
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                root=root,
+            )
+
+        self.assertIn(
+            "locale 'fr' declares duplicate target route: /fr/",
+            findings,
+        )
+        self.assertFalse(
+            any("claimed by multiple locales" in finding for finding in findings),
+            "a repeated route within one locale must not be reported as a cross-locale conflict",
+        )
+
     def test_multi_locale_manifest_rejects_shared_target_route(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
