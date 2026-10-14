@@ -463,6 +463,36 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_locale_search_index_rejects_duplicate_url_members(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, sitemap_path, index_path = self._write_mixed_locale_fixture(
+                root,
+                source_routes | promoted_routes,
+                promoted_routes,
+            )
+            index_path.write_text(
+                '{"site":"https://overkillhill.com","locale":"fr",'
+                '"generated":"fixture","count":2,"entries":['
+                '{"url":"/fr/","url":"/fr/about/"},'
+                '{"url":"/fr/projects/"}]}',
+                encoding="utf-8",
+            )
+
+            findings = locale_checker.validate(
+                manifest_path=root / "manifest.json",
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+        self.assertIn(
+            "locale search index is not valid JSON: duplicate JSON member name 'url'",
+            findings,
+        )
+
     def test_multi_locale_manifest_rejects_shared_target_route(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

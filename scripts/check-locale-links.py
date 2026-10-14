@@ -107,6 +107,19 @@ def fail(findings: list[str], message: str) -> None:
     findings.append(message)
 
 
+class DuplicateJsonMemberError(ValueError):
+    pass
+
+
+def reject_duplicate_json_members(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateJsonMemberError(f"duplicate JSON member name {key!r}")
+        result[key] = value
+    return result
+
+
 def load_manifest(path: Path) -> dict:
     try:
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -142,11 +155,14 @@ def check_search_index(
         fail(findings, f"locale search index is missing: {index_path}")
         return
     try:
-        payload = json.loads(index_path.read_text(encoding="utf-8"))
+        payload = json.loads(
+            index_path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_json_members,
+        )
     except UnicodeDecodeError:
         fail(findings, "locale search index is not valid UTF-8")
         return
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError, DuplicateJsonMemberError) as exc:
         fail(findings, f"locale search index is not valid JSON: {exc}")
         return
     if not isinstance(payload, dict):
