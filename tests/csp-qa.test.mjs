@@ -2833,7 +2833,7 @@ test("rejects invalid external-health budgets before browser startup or report c
 async function simulateExternalHealth({
   budget = 6500, lateHealthy = true, startup = null,
   pageCloseMs = 0, browserCloseMs = 0,
-  routeStatuses = null, browserName = "chromium",
+  routeStatuses = null, lateResponseStatus = 200, browserName = "chromium",
 } = {}) {
   const source = await readFile(cspQaScript, "utf8");
   const entry = source.indexOf("\nif (fixtureSummaryArg) {");
@@ -2867,7 +2867,9 @@ async function simulateExternalHealth({
       if (lateHealthy && !responded && now >= 6250) {
         responded = true;
         handlers.response({
-          request: () => request, status: () => 200, statusText: () => "OK",
+          request: () => request,
+          status: () => lateResponseStatus,
+          statusText: () => lateResponseStatus === 200 ? "OK" : "Service Unavailable",
         });
       }
     },
@@ -3006,6 +3008,40 @@ test("keeps late healthy response successful when observation fits budget", asyn
   assert.equal(report.timeBudget.exceeded, false);
   assert.equal(report.summary.available, 1);
   assert.equal(report.summary.timeouts, 1);
+});
+
+test("keeps a late HTTP 503 as an outage with its original timeout evidence", async () => {
+  const { report, exitCode, now } = await simulateExternalHealth({
+    budget: 10000,
+    lateResponseStatus: 503,
+  });
+  assert.equal(exitCode, 1);
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+  assert.equal(report.summary.externalOutages, 1);
+  assert.equal(report.summary.timeouts, 1);
+  assert.equal(now, 7000, "the 1s follow-up window should remain bounded");
+  assert.deepEqual(report.timeouts, [{
+    route: "/only/",
+    url: report.dependencies[0].url,
+  }]);
+  assert.equal(report.externalOutages.length, 1);
+  const [dependency] = report.dependencies;
+  assert.equal(dependency.state, "unavailable");
+  assert.deepEqual(dependency.responses, [{
+    route: "/only/",
+    status: 503,
+    statusText: "Service Unavailable",
+  }]);
+  assert.deepEqual(dependency.timeouts, report.timeouts);
+  assert.deepEqual(dependency.routeOutcomes, [{
+    route: "/only/",
+    state: "unavailable",
+    cspBlocked: false,
+    responses: dependency.responses,
+    failures: [],
+    timeouts: report.timeouts,
+    cspEvidence: [],
+  }]);
 });
 
 test("accounts for page and browser close reaching the deadline", async () => {
