@@ -273,11 +273,28 @@ def verify_revisions(
     for name in REPO_DIRS:
         revision = site_revisions.get(name)
         if revision is None:
-            problems.append(f"{SITE_LABELS[name]}: missing pinned commit revision")
+            error = "missing pinned commit revision"
+            problems.append(f"{SITE_LABELS[name]}: {error}")
+            report["sites"][name] = {
+                "site": SITE_LABELS[name],
+                "revision": None,
+                "pinned_revision": None,
+                "status": "unavailable",
+                "error": error,
+                "files": {},
+            }
             continue
         resolved, error = resolve_revision(repos[name], revision)
         if error:
             problems.append(f"{SITE_LABELS[name]} revision {revision}: {error}")
+            report["sites"][name] = {
+                "site": SITE_LABELS[name],
+                "revision": None,
+                "pinned_revision": revision,
+                "status": "unavailable",
+                "error": error,
+                "files": {},
+            }
             continue
         resolved_revisions[name] = resolved
         report["sites"][name] = {
@@ -315,6 +332,17 @@ def verify_revisions(
         for name in REPO_DIRS:
             site_report = report["sites"].get(name)
             if site_report is None:
+                continue
+            if site_report.get("status") == "unavailable":
+                fingerprint_report["sites"][name] = {
+                    "site": SITE_LABELS[name],
+                    "revision": None,
+                    "pinned_revision": site_report["pinned_revision"],
+                    "status": "unavailable",
+                    "sha256": None,
+                    "bytes": None,
+                    "error": site_report["error"],
+                }
                 continue
             pinned_content, read_error = source_bytes(repos[name], resolved_revisions[name], relpath)
             if read_error:

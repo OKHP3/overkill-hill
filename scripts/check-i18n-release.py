@@ -29,8 +29,11 @@ class ContentCoverageParser(HTMLParser):
         self.headings: list[dict[str, str]] = []
         self.heading_counts: dict[str, int] = {}
         self.content_blocks: dict[str, int] = {}
+        self.section_headings: dict[str, dict[str, str]] = {}
+        self.section_content_blocks: dict[str, dict[str, int]] = {}
         self.protected_links: set[str] = set()
         self.current_heading: dict[str, str] | None = None
+        self.active_section_id = ""
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -46,8 +49,14 @@ class ContentCoverageParser(HTMLParser):
                 "ordinal": str(self.heading_counts[tag]),
                 "text": "",
             }
+            self.active_section_id = self.current_heading["id"]
+            if self.active_section_id:
+                self.section_headings[self.active_section_id] = self.current_heading
         elif tag in {"p", "li", "blockquote", "figure", "table"}:
             self.content_blocks[tag] = self.content_blocks.get(tag, 0) + 1
+            if self.active_section_id:
+                section_blocks = self.section_content_blocks.setdefault(self.active_section_id, {})
+                section_blocks[tag] = section_blocks.get(tag, 0) + 1
         elif tag == "a":
             href = (attributes.get("href") or "").strip()
             if urlsplit(href).scheme.lower() in {"http", "https", "mailto", "tel"}:
@@ -100,14 +109,31 @@ def compare_content_coverage(
             })
     for block, source_count in source.content_blocks.items():
         target_count = target.content_blocks.get(block, 0)
-        if source_count > target_count:
-            omissions.append({
+        section_deficits = []
+        for heading_id, heading in source.section_headings.items():
+            section_source_count = source.section_content_blocks.get(heading_id, {}).get(block, 0)
+            section_target_count = target.section_content_blocks.get(heading_id, {}).get(block, 0)
+            if section_source_count > section_target_count:
+                section_deficits.append({
+                    "heading": heading["text"],
+                    "heading_id": heading_id,
+                    "source_count": section_source_count,
+                    "target_count": section_target_count,
+                    "omitted_count": section_source_count - section_target_count,
+                })
+        # Extra blocks elsewhere cannot cancel a missing translated section.
+        if source_count > target_count or section_deficits:
+            omission = {
                 "kind": "content_block",
                 "block": block,
                 "source_count": source_count,
                 "target_count": target_count,
-                "omitted_count": source_count - target_count,
-            })
+                "omitted_count": max(source_count - target_count,
+                    sum(section["omitted_count"] for section in section_deficits)),
+            }
+            if section_deficits:
+                omission["sections"] = section_deficits
+            omissions.append(omission)
     for href in sorted(source.protected_links - target.protected_links):
         omissions.append({"kind": "protected_link", "href": href})
     if not omissions:
@@ -150,6 +176,231 @@ def collect_source_coverage(
     return gaps
 
 
+def load_coverage_dispositions(config: Dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Load only current-hash route decisions for advisory coverage gaps."""
+    record_paths = config.get("advisory_coverage_review_records", {})
+    if not isinstance(record_paths, dict):
+        raise ValueError("advisory_coverage_review_records must map locale keys to review files")
+    ledger = load_state(config)
+    target_locales = config.get("target_locales", {})
+    dispositions: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for locale in config.get("advisory_content_coverage_locales", []):
+        relative_record = record_paths.get(locale)
+        if relative_record is None:
+            continue
+        if not isinstance(relative_record, str) or not relative_record.strip():
+            raise ValueError(f"coverage review record path is invalid for {locale}")
+        path = ROOT / relative_record
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid coverage review record for {locale}: {exc}") from exc
+        locale_config = target_locales.get(locale, {})
+        expected_pair = f"en-US -> {locale_config.get('locale')}"
+        reviewed_on = record.get("reviewed_on") if isinstance(record, dict) else None
+        if (
+            not isinstance(record, dict)
+            or record.get("record_type") != "content-coverage-disposition"
+            or record.get("language_pair") != expected_pair
+            or record.get("review_status") not in {"ai-reviewed", "approved"}
+            or record.get("native_or_human_approval") is not False
+            or record.get("release_accepted") is not False
+            or not isinstance(reviewed_on, str)
+            or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_on)
+            or not isinstance(record.get("routes"), list)
+        ):
+            raise ValueError(f"coverage review record for {locale} has invalid review or release status")
+        try:
+            date.fromisoformat(reviewed_on)
+        except ValueError as exc:
+            raise ValueError(f"coverage review record for {locale} has an invalid review date") from exc
+        record_name = path.relative_to(ROOT).as_posix()
+        expected_root = locale_config.get("root", "").strip("/")
+        seen_routes: set[str] = set()
+        for entry in record["routes"]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("route"), str):
+                raise ValueError(f"coverage review record for {locale} has an invalid route entry")
+            route = entry["route"]
+            if route in seen_routes:
+                raise ValueError(f"coverage review record for {locale} repeats route {route}")
+            seen_routes.add(route)
+            expected_target = (
+                f"{expected_root}/{route.strip('/')}/index.html"
+                if route.strip("/")
+                else f"{expected_root}/index.html"
+            )
+            if (
+                entry.get("locale") != locale
+                or entry.get("target_path") != expected_target
+                or not all(
+                    isinstance(entry.get(field), str)
+                    and re.fullmatch(r"[0-9a-f]{64}", entry[field])
+                    for field in ("source_sha256", "target_sha256")
+                )
+            ):
+                raise ValueError(
+                    f"coverage review record for {locale} has invalid route hashes or target for {route}"
+                )
+            section_entries = entry.get("coverage_dispositions")
+            if not isinstance(section_entries, list):
+                raise ValueError(f"coverage review route {route} for {locale} needs coverage_dispositions")
+            sections: dict[str, dict[str, str]] = {}
+            for section in section_entries:
+                if (
+                    not isinstance(section, dict)
+                    or not isinstance(section.get("section_id"), str)
+                    or not section["section_id"].strip()
+                    or section.get("disposition") not in {"intentional-abridgment", "unresolved"}
+                    or not isinstance(section.get("rationale"), str)
+                    or not section["rationale"].strip()
+                ):
+                    raise ValueError(
+                        f"coverage review route {route} for {locale} has an invalid section disposition"
+                    )
+                section_id = section["section_id"]
+                if section_id in sections:
+                    raise ValueError(
+                        f"coverage review route {route} for {locale} repeats section {section_id}"
+                    )
+                sections[section_id] = {
+                    "disposition": section["disposition"],
+                    "rationale": section["rationale"],
+                }
+            route_disposition = entry.get("unscoped_disposition")
+            if (
+                not isinstance(route_disposition, dict)
+                or route_disposition.get("disposition") not in {"intentional-abridgment", "unresolved"}
+                or not isinstance(route_disposition.get("rationale"), str)
+                or not route_disposition["rationale"].strip()
+            ):
+                raise ValueError(f"coverage review route {route} for {locale} needs an unscoped disposition")
+
+            ledger_target = (
+                ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
+            )
+            source_path = ROOT / f"{route.strip('/') + '/' if route.strip('/') else ''}index.html"
+            target_path = ROOT / expected_target
+            current = (
+                entry["source_sha256"] == ledger_target.get("synced_source_sha256")
+                and entry["target_sha256"] == ledger_target.get("target_sha256")
+                and source_path.is_file()
+                and target_path.is_file()
+                and entry["source_sha256"] == page_hash(source_path)
+                and entry["target_sha256"] == page_hash(target_path)
+            )
+            dispositions[(locale, route)] = {
+                "record": record_name,
+                "current": current,
+                "sections": sections if current else {},
+                "unscoped": (
+                    {
+                        "disposition": route_disposition["disposition"],
+                        "rationale": route_disposition["rationale"],
+                    }
+                    if current
+                    else {
+                        "disposition": "unresolved",
+                        "rationale": "The review hashes do not match the current page bytes and sync ledger; its decisions are not applied.",
+                    }
+                ),
+            }
+    return dispositions
+
+
+def apply_coverage_dispositions(
+    gaps: list[dict[str, Any]],
+    config: Dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Annotate findings without removing intentional or unresolved gaps."""
+    records = load_coverage_dispositions(config)
+    annotated: list[dict[str, Any]] = []
+    for gap in gaps:
+        review = records.get((gap["locale"], gap["route"]))
+        section_decisions = review["sections"] if review else {}
+        unscoped = (
+            review["unscoped"]
+            if review
+            else {
+                "disposition": "unresolved",
+                "rationale": "No current-hash route review disposition is recorded.",
+            }
+        )
+        unresolved_omissions: list[dict[str, Any]] = []
+        omissions: list[dict[str, Any]] = []
+        for original in gap["omissions"]:
+            omission = dict(original)
+            if omission.get("kind") == "heading" and omission.get("heading_id"):
+                decision = section_decisions.get(omission["heading_id"], unscoped)
+                omission["review_disposition"] = decision
+            if isinstance(omission.get("sections"), list):
+                sections = []
+                for original_section in omission["sections"]:
+                    section = dict(original_section)
+                    decision = section_decisions.get(section.get("heading_id"), unscoped)
+                    section["review_disposition"] = decision
+                    sections.append(section)
+                omission["sections"] = sections
+                if sections:
+                    omission["review_disposition"] = {
+                        "disposition": (
+                            "intentional-abridgment"
+                            if all(
+                                section["review_disposition"]["disposition"]
+                                == "intentional-abridgment"
+                                for section in sections
+                            )
+                            else "unresolved"
+                        ),
+                        "rationale": "See the route-and-section decisions attached to each section.",
+                    }
+            if "review_disposition" not in omission:
+                omission["review_disposition"] = unscoped
+            if omission["review_disposition"]["disposition"] == "unresolved":
+                unresolved_omissions.append({
+                    "kind": omission.get("kind", ""),
+                    "section_ids": [
+                        section.get("heading_id", "")
+                        for section in omission.get("sections", [])
+                        if section.get("review_disposition", {}).get("disposition") == "unresolved"
+                    ],
+                    "detail": omission.get("heading") or omission.get("href") or omission.get("block") or omission.get("level") or "",
+                })
+            omissions.append(omission)
+        annotated.append({
+            **gap,
+            "review_record": review["record"] if review else None,
+            "omissions": omissions,
+            "unresolved_omissions": unresolved_omissions,
+        })
+    return annotated
+
+
+def format_coverage_omission(omission: dict[str, Any]) -> str:
+    """Format a structural coverage finding for the human-readable report."""
+    if omission.get("heading"):
+        detail = omission["heading"]
+    elif omission.get("href"):
+        detail = omission["href"]
+    else:
+        detail = (
+            f"{omission.get('kind')}: {omission.get('block') or omission.get('level') or ''} "
+            f"({omission.get('source_count')} source / {omission.get('target_count')} target)"
+        )
+    sections = omission.get("sections", [])
+    if sections:
+        section_details = ", ".join(
+            f"{section.get('heading') or section.get('heading_id')} "
+            f"({section.get('source_count')} source / {section.get('target_count')} target) "
+            f"[{section.get('review_disposition', {}).get('disposition', 'unresolved')}]"
+            for section in sections
+        )
+        detail += f"; sections: {section_details}"
+    disposition = omission.get("review_disposition", {}).get("disposition", "unresolved")
+    detail += f" [{disposition}]"
+    return detail
+
+
 def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
     """Cross-check dated advisory review route hashes against the shared ledger."""
     locales = config.get("advisory_content_coverage_locales", [])
@@ -185,6 +436,8 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
                     "reason": f"invalid JSON: {exc}",
                 })
                 continue
+            if isinstance(record, dict) and record.get("record_type") == "content-coverage-disposition":
+                continue
             if not isinstance(record, dict) or not isinstance(record.get("routes"), list):
                 report["invalid_records"].append({
                     "locale": locale, "record": path.relative_to(ROOT).as_posix(),
@@ -194,18 +447,21 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
             report["records_checked"] += 1
             record_name = path.relative_to(ROOT).as_posix()
             reviewed_on = record.get("reviewed_on", "")
-            entries: dict[str, list[dict[str, Any]]] = {}
+            entries: dict[str, list[tuple[dict[str, Any], bool]]] = {}
             review_status = record.get("review_status")
+            record_valid = True
             if (
                 record.get("language_pair") != expected_pair
                 or not isinstance(review_status, str)
                 or review_status not in {"ai-reviewed", "approved"}
             ):
+                record_valid = False
                 report["invalid_records"].append({
                     "locale": locale, "record": record_name,
                     "reason": "review status or language pair is not valid for this advisory locale",
                 })
             if not isinstance(reviewed_on, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_on):
+                record_valid = False
                 report["invalid_records"].append({
                     "locale": locale, "record": record_name,
                     "reason": "reviewed_on must be an ISO calendar date",
@@ -215,6 +471,7 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
                 try:
                     date.fromisoformat(reviewed_on)
                 except ValueError:
+                    record_valid = False
                     report["invalid_records"].append({
                         "locale": locale, "record": record_name,
                         "reason": "reviewed_on must be a real ISO calendar date",
@@ -228,32 +485,37 @@ def audit_advisory_review_evidence(config: Dict[str, Any]) -> dict[str, Any]:
                     })
                     continue
                 route = entry["route"]
-                entries.setdefault(route, []).append(entry)
                 expected_target = (
                     f"{expected_root}/{route.strip('/')}/index.html"
                     if route.strip("/") else f"{expected_root}/index.html"
                 )
+                entry_valid = True
                 if route not in routes or entry.get("target_path") != expected_target:
+                    entry_valid = False
                     report["invalid_records"].append({
                         "locale": locale, "route": route, "record": record_name,
                         "reason": "route is out of scope or target_path does not match the configured locale",
                     })
                 for field in ("source_sha256", "target_sha256"):
                     if not isinstance(entry.get(field), str) or not re.fullmatch(r"[0-9a-f]{64}", entry[field]):
+                        entry_valid = False
                         report["invalid_records"].append({
                             "locale": locale, "route": route, "record": record_name,
                             "reason": f"{field} is missing or malformed",
                         })
+                entries.setdefault(route, []).append((entry, entry_valid))
             for route, route_entries in entries.items():
                 if len(route_entries) != 1:
                     report["duplicates"].append({
                         "locale": locale, "route": route, "record": record_name,
                         "entry_count": len(route_entries),
                     })
-                for entry in route_entries:
+                for entry, entry_valid in route_entries:
                     ledger_target = ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
                     is_current = (
-                        entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
+                        record_valid
+                        and entry_valid
+                        and entry.get("source_sha256") == ledger_target.get("synced_source_sha256")
                         and entry.get("target_sha256") == ledger_target.get("target_sha256")
                     )
                     evidence = {
@@ -385,8 +647,8 @@ def load_results(config: Dict[str, Any]) -> Dict[str, Any]:
         for status in ("stale", "in_sync", "needs_baseline")
         for item in results.get(status, [])
     ]
-    results["source_coverage_gaps"] = collect_source_coverage(
-        coverage_items,
+    results["source_coverage_gaps"] = apply_coverage_dispositions(
+        collect_source_coverage(coverage_items, config),
         config,
     )
     results["advisory_review_evidence"] = audit_advisory_review_evidence(config)
@@ -525,6 +787,61 @@ def adopt(locales: List[str], routes: List[str], provenance: Path, config: Dict[
     return 0
 
 
+def format_advisory_review_routes(
+    audit: Dict[str, Any], locales: List[str], routes: List[str],
+) -> List[str]:
+    """Format route-level current, missing, duplicate, and superseded review evidence."""
+    current_by_route = {
+        (item["locale"], item["route"]): item["records"]
+        for item in audit.get("current_pairs", [])
+    }
+    missing_routes = {
+        (item["locale"], item["route"])
+        for item in audit.get("missing", [])
+    }
+    duplicate_details: dict[tuple[str, str], list[str]] = {}
+    for item in audit.get("duplicates", []):
+        key = (item["locale"], item["route"])
+        if "records" in item:
+            detail = f"current records: {', '.join(dict.fromkeys(item['records']))}"
+        else:
+            detail = (
+                f"repeated entries in {item['record']} "
+                f"({item.get('entry_count', 0)} entries)"
+            )
+        duplicate_details.setdefault(key, [])
+        if detail not in duplicate_details[key]:
+            duplicate_details[key].append(detail)
+
+    superseded_by_route: dict[tuple[str, str], list[str]] = {}
+    for item in audit.get("superseded", []):
+        key = (item["locale"], item["route"])
+        detail = f"{item['record']} -> {', '.join(item['superseded_by'])}"
+        superseded_by_route.setdefault(key, [])
+        if detail not in superseded_by_route[key]:
+            superseded_by_route[key].append(detail)
+
+    lines = ["Advisory review records by route:"]
+    for route in routes:
+        locale_details = []
+        for locale in locales:
+            key = (locale, route)
+            records = list(dict.fromkeys(current_by_route.get(key, [])))
+            details = [f"{locale}: " + (
+                ", ".join(records) if records else (
+                    "MISSING (no current review record)"
+                    if key in missing_routes else "no current record reported"
+                )
+            )]
+            if duplicate_details.get(key):
+                details.append("duplicate: " + "; ".join(duplicate_details[key]))
+            if superseded_by_route.get(key):
+                details.append("superseded: " + "; ".join(superseded_by_route[key]))
+            locale_details.append("; ".join(details))
+        lines.append(f"  {route}: " + " | ".join(locale_details))
+    return lines
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("report", "check", "adopt"), default="report")
@@ -550,15 +867,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(f"{label:9} {status:14} {item['route']:20} -> {item['locale']}")
             for item in results["source_coverage_gaps"]:
                 detail = "; ".join(
-                    gap.get("heading")
-                    or gap.get("href")
-                    or f"{gap.get('kind')}: {gap.get('block') or gap.get('level') or ''} "
-                    f"({gap.get('source_count')} source / {gap.get('target_count')} target)"
-                    for gap in item["omissions"][:3]
+                    format_coverage_omission(gap)
+                    for gap in item["omissions"]
                 )
                 print(
                     f"ADVISORY  source_coverage_gap {item['route']:20} -> "
-                    f"{item['locale']}: {detail}"
+                    f"{item['locale']} "
+                    f"(unresolved findings: {len(item['unresolved_omissions'])}): {detail}"
                 )
             audit = results["advisory_review_evidence"]
             print(
@@ -570,6 +885,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 f"{len(audit['unmatched'])} unmatched, "
                 f"{len(audit['invalid_records'])} invalid"
             )
+            for line in format_advisory_review_routes(
+                audit,
+                config["advisory_content_coverage_locales"],
+                config["in_scope_routes"],
+            ):
+                print(line)
         if args.mode == "check" and results["policy"]["blocking_items"]:
             return 1
         return 0

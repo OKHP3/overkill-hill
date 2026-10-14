@@ -30,6 +30,81 @@ REGIONAL_BUILDER_SPEC.loader.exec_module(REGIONAL_BUILDER_MODULE)
 
 
 class I18nReleaseTests(unittest.TestCase):
+    def test_text_report_lists_current_duplicate_missing_and_superseded_records_by_route(self):
+        audit = {
+            "current_pairs": [
+                {"locale": "de", "route": "/", "records": ["i18n/pilot/de/current-home.json"]},
+                {"locale": "es", "route": "/", "records": ["i18n/pilot/es/current-home.json"]},
+            ],
+            "missing": [
+                {"locale": "de", "route": "/about/"},
+                {"locale": "es", "route": "/about/"},
+            ],
+            "duplicates": [
+                {
+                    "locale": "de", "route": "/",
+                    "records": ["i18n/pilot/de/current-home.json", "i18n/pilot/de/second-home.json"],
+                },
+                {
+                    "locale": "es", "route": "/about/",
+                    "record": "i18n/pilot/es/duplicate-about.json", "entry_count": 2,
+                },
+            ],
+            "superseded": [{
+                "locale": "de", "route": "/",
+                "record": "i18n/pilot/de/old-home.json",
+                "superseded_by": ["i18n/pilot/de/current-home.json"],
+            }],
+        }
+
+        lines = MODULE.format_advisory_review_routes(
+            audit, ["de", "es"], ["/", "/about/"],
+        )
+        output = "\n".join(lines)
+
+        self.assertIn(
+            "/: de: i18n/pilot/de/current-home.json; duplicate: current records: "
+            "i18n/pilot/de/current-home.json, i18n/pilot/de/second-home.json; "
+            "superseded: i18n/pilot/de/old-home.json -> i18n/pilot/de/current-home.json "
+            "| es: i18n/pilot/es/current-home.json",
+            output,
+        )
+        self.assertIn("de: MISSING (no current review record)", output)
+        self.assertIn(
+            "es: MISSING (no current review record); duplicate: repeated entries in "
+            "i18n/pilot/es/duplicate-about.json (2 entries)",
+            output,
+        )
+
+    def test_text_report_does_not_change_check_exit_status(self):
+        config = {
+            "blocking_locales": ["fr"],
+            "advisory_content_coverage_locales": ["de", "es"],
+            "in_scope_routes": ["/"],
+        }
+        results = {
+            "missing": [], "stale": [], "needs_baseline": [], "target_changed": [],
+            "source_coverage_gaps": [],
+            "advisory_review_evidence": {
+                "current_pairs": [],
+                "missing": [{"locale": "de", "route": "/"}, {"locale": "es", "route": "/"}],
+                "duplicates": [],
+                "superseded": [], "unmatched": [], "invalid_records": [],
+            },
+            "policy": {
+                "blocking_locales": ["fr"],
+                "blocking_items": [{"locale": "fr", "route": "/"}],
+            },
+        }
+        output = io.StringIO()
+        with patch.object(MODULE, "load_site_config", return_value=config), patch.object(
+            MODULE, "load_results", return_value=results
+        ), contextlib.redirect_stdout(output):
+            status = MODULE.main(["--mode", "check", "--format", "text"])
+
+        self.assertEqual(1, status)
+        self.assertIn("/: de: MISSING (no current review record) | es: MISSING", output.getvalue())
+
     def test_advisory_review_audit_reports_missing_duplicate_and_superseded_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -95,6 +170,76 @@ class I18nReleaseTests(unittest.TestCase):
             Path(report["unmatched"][0]["record"]).name,
         )
 
+    def test_advisory_review_audit_excludes_malformed_records_from_current_pairs(self):
+        malformed_cases = [
+            (
+                "reviewed_on",
+                "2026-02-30",
+                "reviewed_on must be a real ISO calendar date",
+            ),
+            (
+                "source_sha256",
+                "not-a-sha256",
+                "source_sha256 is missing or malformed",
+            ),
+            (
+                "target_path",
+                "de/wrong/index.html",
+                "route is out of scope or target_path does not match the configured locale",
+            ),
+        ]
+
+        for field, malformed_value, expected_reason in malformed_cases:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                pilot = root / "i18n" / "pilot" / "de"
+                pilot.mkdir(parents=True)
+                source_hash = "a" * 64
+                target_hash = "b" * 64
+                (root / "i18n" / "sync-state.json").write_text(json.dumps({
+                    "schema_version": "1.0",
+                    "pages": {
+                        "/": {"targets": {"de": {
+                            "synced_source_sha256": source_hash,
+                            "target_sha256": target_hash,
+                        }}},
+                    },
+                }), encoding="utf-8")
+                record = {
+                    "language_pair": "en-US -> de-DE",
+                    "review_status": "ai-reviewed",
+                    "reviewed_on": "2026-10-13",
+                    "routes": [{
+                        "route": "/",
+                        "target_path": "de/index.html",
+                        "source_sha256": source_hash,
+                        "target_sha256": target_hash,
+                    }],
+                }
+                if field == "reviewed_on":
+                    record[field] = malformed_value
+                else:
+                    record["routes"][0][field] = malformed_value
+                record_path = pilot / "review-2026-10-13.json"
+                record_path.write_text(json.dumps(record), encoding="utf-8")
+                config = {
+                    "state_file": "i18n/sync-state.json",
+                    "in_scope_routes": ["/"],
+                    "advisory_content_coverage_locales": ["de"],
+                    "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+                }
+
+                with patch.object(MODULE, "ROOT", root):
+                    report = MODULE.audit_advisory_review_evidence(config)
+
+                self.assertEqual([], report["current_pairs"])
+                self.assertEqual([{"locale": "de", "route": "/"}], report["missing"])
+                self.assertTrue(any(
+                    item.get("record") == record_path.relative_to(root).as_posix()
+                    and expected_reason in item.get("reason", "")
+                    for item in report["invalid_records"]
+                ), report["invalid_records"])
+
     def test_content_coverage_names_missing_sections_blocks_and_protected_links(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -133,6 +278,83 @@ class I18nReleaseTests(unittest.TestCase):
             ("protected_link", "https://example.test/protected"),
             [(item["kind"], item.get("href")) for item in result["omissions"]],
         )
+
+    def test_content_block_deficits_name_retained_shortened_sections_for_advisory_locales(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>First paragraph.</p>'
+                '<p>Second paragraph.</p><h2 id="evidence">Evidence</h2>'
+                '<p>Evidence paragraph.</p></main>',
+                encoding="utf-8",
+            )
+            target.write_text(
+                '<main><h2 id="overview">Übersicht</h2><p>Erster Absatz.</p>'
+                '<h2 id="evidence">Evidenz</h2><p>Beleg.</p></main>',
+                encoding="utf-8",
+            )
+            results = {}
+            with patch.object(MODULE, "ROOT", root):
+                for locale in ("de", "es"):
+                    results[locale] = MODULE.compare_content_coverage(
+                        source,
+                        target,
+                        locale,
+                        "/about/",
+                    )
+
+        for locale, result in results.items():
+            with self.subTest(locale=locale):
+                self.assertIsNotNone(result)
+                assert result is not None
+                self.assertEqual(locale, result["locale"])
+                paragraph_gap = next(
+                    item for item in result["omissions"]
+                    if item["kind"] == "content_block" and item["block"] == "p"
+                )
+                self.assertEqual(1, paragraph_gap["omitted_count"])
+                self.assertEqual([{
+                    "heading": "Overview",
+                    "heading_id": "overview",
+                    "source_count": 2,
+                    "target_count": 1,
+                    "omitted_count": 1,
+                }], paragraph_gap["sections"])
+                self.assertIn(
+                    "sections: Overview (2 source / 1 target)",
+                    MODULE.format_coverage_omission(paragraph_gap),
+                )
+
+    def test_idless_heading_keeps_omissions_out_of_previous_reviewed_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text('<main><h2 id="reviewed">Reviewed</h2><p>One.</p><h2>Unscoped</h2><p>Missing.</p></main>', encoding="utf-8")
+            target.write_text('<main><h2 id="reviewed">Reviewed</h2><p>One.</p><h2>Unscoped</h2></main>', encoding="utf-8")
+            with patch.object(MODULE, "ROOT", root):
+                result = MODULE.compare_content_coverage(source, target, "de", "/about/")
+            paragraph_gap = next(x for x in result["omissions"] if x.get("block") == "p")
+            self.assertNotIn("sections", paragraph_gap,
+                "content after an ID-less heading cannot inherit the previous section decision")
+
+    def test_extra_target_blocks_cannot_mask_another_sections_deficit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text('<main><h2 id="a">A</h2><p>One.</p><h2 id="b">B</h2><p>Two.</p></main>', encoding="utf-8")
+            with patch.object(MODULE, "ROOT", root):
+                for extra_count in (2, 3):
+                    with self.subTest(extra_count=extra_count):
+                        target.write_text('<main><h2 id="a">A</h2>' + '<p>Extra.</p>' * extra_count + '<h2 id="b">B</h2></main>', encoding="utf-8")
+                        result = MODULE.compare_content_coverage(source, target, "de", "/about/")
+                        self.assertIsNotNone(result)
+                        paragraph_gap = next(x for x in result["omissions"] if x.get("block") == "p")
+                        self.assertEqual(1, paragraph_gap["omitted_count"])
+                        self.assertEqual(["b"], [x["heading_id"] for x in paragraph_gap["sections"]])
 
     def test_advisory_content_gaps_are_reported_without_changing_noindex_target(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -181,6 +403,190 @@ class I18nReleaseTests(unittest.TestCase):
                 for item in result["policy"]["advisory_items"]
             ))
             self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+
+    def test_shortened_sections_in_german_and_spanish_remain_advisory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "about" / "index.html"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>First.</p><p>Second.</p></main>',
+                encoding="utf-8",
+            )
+            items = []
+            for locale, heading in (("de", "Übersicht"), ("es", "Resumen")):
+                target = root / locale / "about" / "index.html"
+                target.parent.mkdir(parents=True)
+                target.write_text(
+                    f'<main><h2 id="overview">{heading}</h2><p>Translated.</p></main>',
+                    encoding="utf-8",
+                )
+                items.append({
+                    "route": "/about/",
+                    "locale": locale,
+                    "source_path": "about/index.html",
+                    "target_path": f"{locale}/about/index.html",
+                })
+            config = {
+                "blocking_locales": ["fr"],
+                "advisory_content_coverage_locales": ["de", "es"],
+                "state_file": "i18n/sync-state.json",
+                "in_scope_routes": ["/about/"],
+                "target_locales": {
+                    "de": {"locale": "de-DE", "root": "de"},
+                    "es": {"locale": "es-ES", "root": "es"},
+                    "fr": {"locale": "fr-FR", "root": "fr"},
+                },
+            }
+            detector_report = {
+                "missing": [],
+                "stale": [],
+                "needs_baseline": [],
+                "in_sync": items,
+                "orphan": [],
+            }
+            with patch.object(MODULE, "ROOT", root), patch.object(
+                MODULE, "run_detector", return_value=detector_report
+            ):
+                result = MODULE.load_results(config)
+
+        self.assertEqual([], result["policy"]["blocking_items"])
+        self.assertEqual(
+            {"de", "es"},
+            {
+                item["locale"] for item in result["policy"]["advisory_items"]
+                if item["status"] == "source_coverage_gap"
+            },
+        )
+
+    def test_coverage_dispositions_annotate_without_hiding_unresolved_report_gaps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "about" / "index.html"
+            target = root / "de" / "about" / "index.html"
+            source.parent.mkdir(parents=True)
+            target.parent.mkdir(parents=True)
+            source.write_text(
+                '<main><h2 id="overview">Overview</h2><p>One.</p><p>Two.</p>'
+                '<h2 id="missing">Missing section</h2><p>Still source-only.</p>'
+                '<a href="https://example.test/source">Source link</a></main>',
+                encoding="utf-8",
+            )
+            target_html = (
+                '<meta name="robots" content="noindex, follow">'
+                '<main><h2 id="overview">Übersicht</h2><p>Ein Absatz.</p></main>'
+            )
+            target.write_text(target_html, encoding="utf-8")
+            source_hash = MODULE.page_hash(source)
+            target_hash = MODULE.page_hash(target)
+            review_path = root / "i18n" / "pilot" / "de" / "content-coverage-review-2026-10-13.json"
+            review_path.parent.mkdir(parents=True)
+            review_path.write_text(json.dumps({
+                "language_pair": "en-US -> de-DE",
+                "record_type": "content-coverage-disposition",
+                "review_status": "ai-reviewed",
+                "reviewed_on": "2026-10-13",
+                "native_or_human_approval": False,
+                "release_accepted": False,
+                "routes": [{
+                    "route": "/about/",
+                    "locale": "de",
+                    "source_sha256": source_hash,
+                    "target_path": "de/about/index.html",
+                    "target_sha256": target_hash,
+                    "coverage_dispositions": [{
+                        "section_id": "overview",
+                        "disposition": "intentional-abridgment",
+                        "rationale": "The translated section is intentionally concise.",
+                    }],
+                    "unscoped_disposition": {
+                        "disposition": "unresolved",
+                        "rationale": "Unattributed report findings still need review.",
+                    },
+                }],
+            }), encoding="utf-8")
+            state_path = root / "i18n" / "sync-state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({
+                "schema_version": "1.0",
+                "pages": {
+                    "/about/": {"targets": {"de": {
+                        "synced_source_sha256": source_hash,
+                        "target_sha256": target_hash,
+                    }}},
+                },
+            }), encoding="utf-8")
+            gaps = [{
+                "locale": "de",
+                "route": "/about/",
+                "omissions": [
+                    {
+                        "kind": "heading",
+                        "heading": "Missing section",
+                        "heading_id": "missing",
+                    },
+                    {
+                        "kind": "content_block",
+                        "block": "p",
+                        "source_count": 2,
+                        "target_count": 1,
+                        "omitted_count": 1,
+                        "sections": [{
+                            "heading": "Overview",
+                            "heading_id": "overview",
+                            "source_count": 2,
+                            "target_count": 1,
+                            "omitted_count": 1,
+                        }],
+                    },
+                    {
+                        "kind": "protected_link",
+                        "href": "https://example.test/source",
+                    },
+                ],
+            }]
+            config = {
+                "state_file": "i18n/sync-state.json",
+                "advisory_content_coverage_locales": ["de"],
+                "advisory_coverage_review_records": {
+                    "de": "i18n/pilot/de/content-coverage-review-2026-10-13.json",
+                },
+                "target_locales": {"de": {"locale": "de-DE", "root": "de"}},
+            }
+            with patch.object(MODULE, "ROOT", root):
+                result = MODULE.apply_coverage_dispositions(gaps, config)
+                self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+                for changed_page in (source, target):
+                    with self.subTest(changed_page=changed_page.name, parent=changed_page.parent.name):
+                        original_bytes = changed_page.read_bytes()
+                        changed_page.write_bytes(original_bytes + b"\n<!-- unreviewed change -->")
+                        try:
+                            stale = MODULE.apply_coverage_dispositions(gaps, config)
+                            self.assertEqual(3, len(stale[0]["unresolved_omissions"]),
+                                "unchanged ledger hashes must not authorize dispositions for changed page bytes")
+                            self.assertEqual("unresolved",
+                                stale[0]["omissions"][1]["sections"][0]["review_disposition"]["disposition"])
+                        finally:
+                            changed_page.write_bytes(original_bytes)
+
+        self.assertEqual(3, len(result[0]["omissions"]))
+        self.assertEqual(2, len(result[0]["unresolved_omissions"]))
+        self.assertEqual(
+            "intentional-abridgment",
+            result[0]["omissions"][1]["sections"][0]["review_disposition"]["disposition"],
+        )
+        self.assertEqual(
+            "unresolved",
+            result[0]["omissions"][0]["review_disposition"]["disposition"],
+        )
+        self.assertEqual(
+            "unresolved",
+            result[0]["omissions"][2]["review_disposition"]["disposition"],
+        )
+        self.assertIn(
+            "[unresolved]",
+            MODULE.format_coverage_omission(result[0]["omissions"][2]),
+        )
 
     def test_detector_hash_is_stable_across_checkout_line_endings(self):
         with tempfile.TemporaryDirectory() as directory:

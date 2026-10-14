@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -114,6 +114,9 @@ async function openFixture({
     mode: storage === "blocked" ? "blocked" : "available",
     values: storage === "blocked" ? {} : storage,
   });
+  // setContent does not trigger init scripts. Navigate once so the supplied
+  // storage adapter exists before the reviewed runtime reads its preference.
+  await page.goto("about:blank");
   await page.setContent(withFoundation(markup, css, script), { waitUntil: "domcontentloaded" });
   return page;
 }
@@ -276,6 +279,41 @@ test("Glee and AskJamie keep their light baseline and update theme-color metadat
   }
 });
 
+test("brand fixtures restore and persist the supplied storage preference", async () => {
+  for (const brand of Object.values(BRAND_EXPECTATIONS)) {
+    const page = await openFixture({ bodyClass: brand.bodyClass, storage: { [brand.storageKey]: "dark" } });
+    try {
+      assert.equal((await readState(page, ".glee-color-toggle")).state, "dark");
+      assert.equal((await clickAndRead(page, ".glee-color-toggle")).state, "auto");
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), brand.storageKey), null);
+      await clickAndRead(page, ".glee-color-toggle");
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), brand.storageKey), "light");
+    } finally {
+      await page.close();
+    }
+  }
+});
+
+test("retained immutable theme runtime restores the reviewed brand preference", async () => {
+  const workflow = await readFile(join(repositoryRoot, ".github", "workflows", "validate.yml"), "utf8");
+  const siteRevision = workflow.match(/THEME_CONTROL_OKH_REVISION: ([a-f0-9]{40})/)?.[1];
+  const contractRevision = workflow.match(/THEME_CONTROL_CONTRACT_REVISION: ([a-f0-9]{40})/)?.[1];
+  assert.ok(siteRevision, "the retained site revision must be explicit");
+  const contract = await loadReviewedBrandThemeContract(contractRevision);
+  const { stdout: script } = await execFileAsync("git", ["show", `${siteRevision}:assets/js/app.js`],
+    { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 1024 * 1024 });
+  for (const brand of Object.values(contract.brands)) {
+    const page = await openFixture({ bodyClass: brand.bodyClass, storage: { [brand.storageKey]: "dark" }, script });
+    try {
+      const dark = await readState(page, ".glee-color-toggle");
+      assert.equal(dark.state, "dark", `${brand.name}@${siteRevision}: restore reviewed preference`);
+      assert.ok(dark.colors.every(({ content }) => content === brand.dark));
+    } finally {
+      await page.close();
+    }
+  }
+});
+
 test("brand control colors stay aligned with the reviewed theme contract", () => {
   for (const expected of Object.values(BRAND_EXPECTATIONS)) {
     assert.match(
@@ -304,8 +342,11 @@ test("browser theme constants are generated from the reviewed contract", async (
   );
 });
 
-function brandThemeContractDrift(site) {
-  const label = `${site.name} revision ${site.revision}`;
+function brandThemeContractDrift(site, brandExpectations = BRAND_EXPECTATIONS) {
+  const contractLabel = site.contractRevision
+    ? `; contract revision ${site.contractRevision}`
+    : "";
+  const label = `${site.name} revision ${site.revision}${contractLabel}`;
   const beginMarker = "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.";
   const endMarker = "// END GENERATED BRAND THEME CONFIG.";
   const start = site.script.indexOf(beginMarker);
@@ -333,7 +374,7 @@ function brandThemeContractDrift(site) {
   }
 
   const drift = [];
-  for (const [brandId, expected] of Object.entries(BRAND_EXPECTATIONS)) {
+  for (const [brandId, expected] of Object.entries(brandExpectations)) {
     const actual = actualBrands[brandId];
     if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
       drift.push(`${label}: ${brandId} is missing or is not an object; expected ${JSON.stringify(expected)}`);
@@ -348,12 +389,79 @@ function brandThemeContractDrift(site) {
     }
   }
   for (const brandId of Object.keys(actualBrands)) {
-    if (!Object.hasOwn(BRAND_EXPECTATIONS, brandId)) {
+    if (!Object.hasOwn(brandExpectations, brandId)) {
       drift.push(`${label}: unexpected generated brand ${brandId}=${JSON.stringify(actualBrands[brandId])}`);
     }
   }
   return drift;
 }
+
+async function loadReviewedBrandThemeContract(revision, repoRoot = repositoryRoot) {
+  assert.match(
+    revision || "",
+    /^[0-9a-f]{40}$/,
+    "THEME_CONTROL_CONTRACT_REVISION must be an immutable full commit SHA",
+  );
+  const { stdout: resolvedRevision } = await execFileAsync(
+    "git",
+    ["-C", repoRoot, "rev-parse", "--verify", `${revision}^{commit}`],
+  );
+  assert.equal(
+    resolvedRevision.trim(),
+    revision,
+    "THEME_CONTROL_CONTRACT_REVISION must resolve to the exact reviewed commit",
+  );
+  const { stdout } = await execFileAsync(
+    "git",
+    ["-C", repoRoot, "show", `${revision}:config/brand-theme-contract.json`],
+    { encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+  const contract = JSON.parse(stdout);
+  assert.ok(
+    contract.brands && typeof contract.brands === "object" && !Array.isArray(contract.brands),
+    `brand theme contract at ${revision} must contain a brands object`,
+  );
+  return contract;
+}
+
+test("reviewed brand contract loading ignores changes in the working tree", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "reviewed-brand-contract-"));
+  try {
+    await execFileAsync("git", ["init", "--quiet"], { cwd: temporary });
+    await execFileAsync("git", ["config", "user.email", "theme-controls@example.test"], { cwd: temporary });
+    await execFileAsync("git", ["config", "user.name", "Theme Controls Test"], { cwd: temporary });
+    await mkdir(join(temporary, "config"));
+    const reviewed = {
+      brands: {
+        glee: {
+          name: "Glee",
+          bodyClass: "glee-main",
+          storageKey: "reviewed-storage-key",
+          light: "#123456",
+          dark: "#654321",
+          colorScheme: "dark light",
+        },
+      },
+    };
+    const contractPath = join(temporary, "config", "brand-theme-contract.json");
+    await writeFile(contractPath, JSON.stringify(reviewed));
+    await execFileAsync("git", ["add", "config/brand-theme-contract.json"], { cwd: temporary });
+    await execFileAsync("git", ["commit", "-m", "review contract"], { cwd: temporary });
+    const { stdout: revision } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: temporary });
+
+    await writeFile(contractPath, JSON.stringify({ brands: { glee: { light: "#000000" } } }));
+    assert.deepEqual(
+      await loadReviewedBrandThemeContract(revision.trim(), temporary),
+      reviewed,
+    );
+    await assert.rejects(
+      () => loadReviewedBrandThemeContract("not-a-full-sha", temporary),
+      /THEME_CONTROL_CONTRACT_REVISION must be an immutable full commit SHA/,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
 
 test("brand runtime audit names site, revision, and changed contract values", () => {
   assert.deepEqual(
@@ -377,6 +485,82 @@ test("brand runtime audit names site, revision, and changed contract values", ()
   });
   assert.equal(drift.length, 1);
   assert.match(drift[0], /Glee revision b{40}: glee\.light is "#000000"; expected "#d35b2d"/);
+
+  const contractRevision = "c".repeat(40);
+  const pinnedDrift = brandThemeContractDrift({
+    name: "Glee",
+    revision: "b".repeat(40),
+    contractRevision,
+    script: outdatedScript,
+  });
+  assert.match(pinnedDrift[0], new RegExp(`Glee revision b{40}; contract revision ${contractRevision}`));
+});
+
+test("brand runtime audit reports missing and malformed generated blocks with site and immutable revision", () => {
+  const siteName = "Glee";
+  const revision = "d".repeat(40);
+  const declarationPattern = /(const BRAND_THEME_CONFIG = Object\.freeze\()[\s\S]*?(\);)/;
+  const declaration = appScript.match(declarationPattern);
+  assert.ok(declaration, "fixture must contain a generated brand configuration");
+  const originalBrands = JSON.parse(declaration[0].match(/\(([\s\S]*?)\);/)[1]);
+  const scriptWithBrands = (brands) => appScript.replace(
+    declarationPattern,
+    `$1${JSON.stringify(brands)}$2`,
+  );
+  const missingBrand = { ...originalBrands };
+  delete missingBrand.glee;
+  const unexpectedBrand = {
+    ...originalBrands,
+    unreviewed: { name: "Unreviewed" },
+  };
+  const cases = [
+    {
+      name: "missing marker",
+      script: appScript.replace(
+        "// BEGIN GENERATED BRAND THEME CONFIG. Do not edit this block.",
+        "",
+      ),
+      expectedDiagnostic: /generated brand theme block is missing or incomplete/,
+    },
+    {
+      name: "invalid generated JSON",
+      script: appScript.replace(
+        declarationPattern,
+        "$1{ invalid JSON }$2",
+      ),
+      expectedDiagnostic: /generated BRAND_THEME_CONFIG is not valid JSON/,
+    },
+    {
+      name: "missing brand",
+      script: scriptWithBrands(missingBrand),
+      expectedDiagnostic: /glee is missing or is not an object/,
+    },
+    {
+      name: "unexpected brand",
+      script: scriptWithBrands(unexpectedBrand),
+      expectedDiagnostic: /unexpected generated brand unreviewed/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const diagnostics = brandThemeContractDrift({
+      name: siteName,
+      revision,
+      script: testCase.script,
+    });
+    assert.ok(diagnostics.length > 0, `${testCase.name} must produce a diagnostic`);
+    assert.ok(
+      diagnostics.some((diagnostic) => testCase.expectedDiagnostic.test(diagnostic)),
+      `${testCase.name} diagnostic should describe the drift`,
+    );
+    for (const diagnostic of diagnostics) {
+      assert.match(
+        diagnostic,
+        new RegExp(`${siteName} revision ${revision}`),
+        `${testCase.name} diagnostic should name the site and immutable revision`,
+      );
+    }
+  }
 });
 
 test("allowlisted Pages package retains brand runtime values and a matching app.js fingerprint", async () => {
@@ -393,11 +577,11 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
   try {
     await writeSource(
       "site-src/pages.json",
-      JSON.stringify({ pages: [{ path: "index.html" }] }),
+      JSON.stringify({ pages: [{ path: "index.html" }, { path: "about/index.html" }] }),
     );
     await writeSource(
       "sitemap.xml",
-      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url></urlset>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://overkillhill.com/</loc></url><url><loc>https://overkillhill.com/about/</loc></url></urlset>',
     );
     await writeSource(
       "config/murderbird-source-archive.json",
@@ -421,6 +605,15 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
       await writeSource(path, contents);
     }
     await writeSource("index.html", await readFile(join(repositoryRoot, "index.html")));
+    const sourceApp = await readFile(join(repositoryRoot, "assets", "js", "app.js"), "utf8");
+    const sourceFingerprint = createHash("sha256")
+      .update(sourceApp.replace(/\r\n/g, "\n"))
+      .digest("hex")
+      .slice(0, 8);
+    await writeSource(
+      "about/index.html",
+      `<html><body><script src="/assets/js/app.js?v=${sourceFingerprint}"></script></body></html>`,
+    );
     await mkdir(join(source, "assets", "js"), { recursive: true });
     await copyFile(
       join(repositoryRoot, "assets", "js", "app.js"),
@@ -460,16 +653,39 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
       assert.equal(packagedBrands[brandId]?.dark, expected.dark, `${brandId} dark color`);
     }
 
-    const packagedPage = await readFile(join(output, "index.html"), "utf8");
-    const appReference = packagedPage.match(
-      /src=["']\/assets\/js\/app\.js\?v=([a-f0-9]{8})["']/,
-    );
-    assert.ok(appReference, "a packaged published page references fingerprinted app.js");
     const expectedFingerprint = createHash("sha256")
       .update(packagedApp.replace(/\r\n/g, "\n"))
       .digest("hex")
       .slice(0, 8);
-    assert.equal(appReference[1], expectedFingerprint, "page fingerprint matches packaged app.js bytes");
+    const packagedHtmlPaths = (await readdir(output, { recursive: true }))
+      .filter((path) => path.endsWith(".html"))
+      .map((path) => path.replaceAll("\\", "/"))
+      .sort();
+    const pagesWithAppReferences = [];
+    for (const path of packagedHtmlPaths) {
+      const html = await readFile(join(output, path), "utf8");
+      const appReferences = [
+        ...html.matchAll(/\b(?:src|href)=["']\/assets\/js\/app\.js(?:\?([^"']*))?["']/g),
+      ];
+      if (appReferences.length === 0) continue;
+      pagesWithAppReferences.push(path);
+      for (const appReference of appReferences) {
+        const fingerprint = appReference[1]?.match(/(?:^|&)v=([a-f0-9]{8})(?:&|$)/)?.[1];
+        assert.equal(
+          fingerprint,
+          expectedFingerprint,
+          `${path} app.js fingerprint matches packaged app.js bytes`,
+        );
+      }
+    }
+    assert.ok(
+      pagesWithAppReferences.includes("index.html"),
+      "a packaged published page references fingerprinted app.js",
+    );
+    assert.ok(
+      pagesWithAppReferences.includes("about/index.html"),
+      "the package regression covers more than the homepage",
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -705,13 +921,18 @@ test("configured sites keep foundation bytes and run against actual markup hooks
     return;
   }
   assert.equal(inputs.length, 3, "exactly OKH, Glee, and AskJamie must be configured");
+  const contractRevision = process.env.THEME_CONTROL_CONTRACT_REVISION;
+  const reviewedContract = await loadReviewedBrandThemeContract(contractRevision);
 
   console.log(
     `Theme-control audit inputs: ${inputs.map(({ name, root, revision }) => (
-      `${name}@${revision} (${root})`
+      `${name}@${revision} (contract@${contractRevision}; ${root})`
     )).join(", ")}`,
   );
-  const sites = await Promise.all(inputs.map(loadConfiguredSite));
+  const sites = await Promise.all(inputs.map(async (site) => ({
+    ...await loadConfiguredSite(site),
+    contractRevision,
+  })));
   const byName = new Map(sites.map((site) => [site.name, site]));
   for (const expectedName of FOUNDATION_SITE_NAMES) {
     assert.ok(byName.has(expectedName), `missing configured site ${expectedName}`);
@@ -728,14 +949,48 @@ test("configured sites keep foundation bytes and run against actual markup hooks
       assert.deepEqual(
         site[file],
         baseline,
-        `${site.name} foundation drift at ${site.revision}: ${file} sha256 ${sha256(site[file])}, expected ${baselineHash}`,
+        `${site.name} foundation drift at ${site.revision} (contract ${contractRevision}): ${file} sha256 ${sha256(site[file])}, expected ${baselineHash}`,
       );
     }
   }
 
   for (const site of sites) {
     const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
-    assert.ok(expected, `unknown configured site ${site.name} at foundation revision ${site.revision}`);
+    assert.ok(expected, `unknown configured site ${site.name} at foundation revision ${site.revision} (contract ${contractRevision})`);
+    // Retained release pins predate generated brand blocks. Check those
+    // immutable runtimes through their actual controls; do not advance pins
+    // merely to satisfy a newer serialization format.
+    if (site.script.includes("// BEGIN GENERATED BRAND THEME CONFIG.")) {
+      assert.deepEqual(
+        brandThemeContractDrift(site, reviewedContract.brands),
+        [],
+        `${site.name} brand runtime drift at site revision ${site.revision} (contract ${contractRevision})`,
+      );
+    }
+    for (const brand of Object.values(reviewedContract.brands)) {
+      const brandPage = await openFixture({
+        bodyClass: brand.bodyClass,
+        storage: { [brand.storageKey]: "dark" },
+        script: site.script,
+      });
+      const context = `${site.name}@${site.revision}, ${brand.name}, contract@${contractRevision}`;
+      try {
+        const dark = await readState(brandPage, ".glee-color-toggle");
+        assert.equal(dark.state, "dark", `${context}: reviewed storage key restores dark`);
+        assert.equal(dark.colorScheme, "dark", `${context}: dark scheme`);
+        assert.ok(dark.colors.length > 0, `${context}: theme metadata exists`);
+        assert.ok(dark.colors.every(({ content }) => content === brand.dark), `${context}: dark color`);
+        const auto = await clickAndRead(brandPage, ".glee-color-toggle");
+        assert.equal(auto.state, "auto", `${context}: auto transition`);
+        assert.deepEqual(auto.colors.map(({ content }) => content), [brand.light, brand.dark], `${context}: automatic colors`);
+        const light = await clickAndRead(brandPage, ".glee-color-toggle");
+        assert.equal(light.colorScheme, "light", `${context}: light scheme`);
+        assert.ok(light.colors.every(({ content }) => content === brand.light), `${context}: light color`);
+        assert.equal(await brandPage.evaluate((key) => localStorage.getItem(key), brand.storageKey), "light", `${context}: reviewed storage key persists light`);
+      } finally {
+        await brandPage.close();
+      }
+    }
     const page = await openFixture({
       markup: site.markup,
       css: site.css,
@@ -749,17 +1004,17 @@ test("configured sites keep foundation bytes and run against actual markup hooks
             : !body.classList.contains("glee-main") && !body.classList.contains("askjamie-main")
         ), expected.bodyClass),
         true,
-        `${site.name} markup hook missing at foundation revision ${site.revision}`,
+        `${site.name} markup hook missing at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
       await assert.doesNotReject(
         () => page.locator(expected.selector).waitFor({ state: "attached", timeout: 2000 }),
-        `${site.name} theme control missing at foundation revision ${site.revision}`,
+        `${site.name} theme control missing at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
       const state = await readState(page, expected.selector);
       assert.equal(
         state.state,
         site.name === "OKH" ? "system" : "auto",
-        `${site.name} theme baseline at foundation revision ${site.revision}`,
+        `${site.name} theme baseline at foundation revision ${site.revision} (contract ${contractRevision})`,
       );
     } finally {
       await page.close();

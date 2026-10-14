@@ -147,6 +147,44 @@ def duplicate_article_jsonld_root_url(raw: str, value: str) -> str:
     raise AssertionError("top-level Article JSON-LD block not found")
 
 
+def article_graph_with_conflicting_modified_date(raw: str, value: str) -> str:
+    pattern = re.compile(
+        r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>.*?</script>',
+        re.IGNORECASE | re.DOTALL,
+    )
+    for match in pattern.finditer(raw):
+        block = match.group(0)
+        open_end = block.find(">")
+        close_start = block.lower().rfind("</script>")
+        if open_end == -1 or close_start == -1:
+            continue
+        try:
+            payload = json.loads(block[open_end + 1:close_start])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or payload.get("@type") != "Article":
+            continue
+
+        first = copy.deepcopy(payload)
+        article_id = first.get("@id") or f'{first["url"]}#article'
+        first["@id"] = article_id
+        second = copy.deepcopy(first)
+        second["dateModified"] = value
+        graph_payload = {
+            "@context": payload.get("@context", "https://schema.org"),
+            "@graph": [first, second],
+        }
+        graph_block = (
+            block[:open_end + 1]
+            + "\n"
+            + json.dumps(graph_payload, ensure_ascii=False, indent=2)
+            + "\n"
+            + block[close_start:]
+        )
+        return raw[:match.start()] + graph_block + raw[match.end():]
+    raise AssertionError("top-level Article JSON-LD block not found")
+
+
 def mutate_navigation(raw: str, key: str, value: str) -> str:
     pattern = re.compile(
         rf'<link\b(?=[^>]*\brel=["\'][^"\']*\b{key}\b[^"\']*["\'])[^>]*>',
@@ -964,6 +1002,125 @@ class SEOFixtureTests(unittest.TestCase):
                 "duplicate parsing must not let a later lastmod silently win",
             )
 
+    def test_sitemap_recovery_rejects_mismatched_element_prefixes(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sitemap.xml"
+            for invalid_entry in (
+                f"<sm:url><sm:loc>{location}</sm:loc></x:url>",
+                f"<sm:url><sm:loc>{location}</x:loc></sm:url>",
+            ):
+                with self.subTest(entry=invalid_entry):
+                    path.write_text('<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:x="urn:other">' + invalid_entry + '</sm:urlset>', encoding="utf-8")
+                    entries, findings = validator._sitemap_entries_with_positions_and_findings_from_path(path)
+                    self.assertEqual([], entries)
+                    self.assertIn("mismatched", findings_text(findings))
+
+    def test_sitemap_recovery_rejects_mismatched_lastmod_names(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sitemap.xml"
+            path.write_text('<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:x="urn:other"><sm:url>'
+                f'<sm:loc>{location}</sm:loc><sm:lastmod>2026-01-01</x:lastmod>'
+                '</sm:url></sm:urlset>', encoding="utf-8")
+            entries, findings = validator._sitemap_entries_with_positions_and_findings_from_path(path)
+            self.assertIn("lastmod", findings_text(findings))
+            self.assertNotIn((1, location, "2026-01-01"), entries)
+
+    def test_multiple_lastmod_values_in_one_sitemap_entry_are_reported(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        first_date = "2026-05-24"
+        second_date = "2026-05-28"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{location}</loc>"
+                f"<lastmod>{first_date}</lastmod>"
+                f"<lastmod>{second_date}</lastmod></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(location, first_date)],
+                "the fixture must exercise the parser's existing first-value behavior",
+            )
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertEqual(len(findings), 1, findings_text(findings))
+            self.assertIn(
+                (
+                    "sitemap URL entry at position 1 must contain at most one "
+                    f"<lastmod> element; found 2 (values: '{first_date}', "
+                    f"'{second_date}')"
+                ),
+                findings_text(findings),
+            )
+
+    def test_namespace_prefixed_sitemap_tags_preserve_entries_and_diagnostics(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<sm:url><sm:loc>{location}</sm:loc>"
+                "<sm:lastmod>2026-05-24</sm:lastmod></sm:url>"
+                "<sm:url><sm:lastmod>2026-05-25</sm:lastmod></sm:url>"
+                f"<sm:url><sm:loc>{location}</sm:loc>"
+                "<sm:lastmod>2026-05-28</sm:lastmod></sm:url>"
+                "</sm:urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_with_positions_from_path(sitemap_path),
+                [(1, location, "2026-05-24"), (3, location, "2026-05-28")],
+            )
+            text = findings_text(validator.validate_sitemap_duplicates(sitemap_path))
+            self.assertIn(
+                "sitemap URL entry at position 2 must contain exactly one "
+                "<loc> element; found 0",
+                text,
+            )
+            self.assertIn(
+                f"duplicate sitemap location: {location} appears 2 times "
+                "at sitemap entry positions 1, 3",
+                text,
+            )
+            self.assertIn(
+                f"conflicting duplicate sitemap lastmod values for {location}: "
+                "position 1: '2026-05-24'; position 3: '2026-05-28'",
+                text,
+            )
+
+    def test_namespace_prefixed_sitemap_tags_survive_malformed_xml_recovery(self) -> None:
+        valid_before = f"{validator.SITE_ORIGIN}/about/"
+        valid_after = f"{validator.SITE_ORIGIN}/contact/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                f"<sm:url><sm:loc>{valid_before}</sm:loc></sm:url>"
+                "<sm:url><sm:loc>https://overkillhill.com/broken/"
+                "</sm:url>"
+                f"<sm:url><sm:loc>{valid_after}</sm:loc>"
+                "<sm:lastmod>2026-05-29</sm:lastmod></sm:url>"
+                "</sm:urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid_before, None), (valid_after, "2026-05-29")],
+            )
+            text = findings_text(validator.validate_sitemap_duplicates(sitemap_path))
+            self.assertIn(
+                "sitemap URL entry at position 2 has malformed <loc> element structure",
+                text,
+            )
+            self.assertEqual(text.count("sitemap URL entry"), 1, text)
+
     def test_identical_duplicate_sitemap_locations_are_rejected(self) -> None:
         location = "https://overkillhill.com/about/"
         with tempfile.TemporaryDirectory() as directory:
@@ -990,6 +1147,70 @@ class SEOFixtureTests(unittest.TestCase):
                 text,
             )
             self.assertNotIn("conflicting duplicate sitemap lastmod values", text)
+
+    def test_percent_encoded_unreserved_sitemap_aliases_are_duplicates(self) -> None:
+        literal_location = "https://overkillhill.com/about/"
+        encoded_location = "https://overkillhill.com/%61bout/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{literal_location}</loc>"
+                "<lastmod>2026-05-24</lastmod></url>"
+                f"<url><loc>{encoded_location}</loc>"
+                "<lastmod>2026-05-28</lastmod></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            text = findings_text(findings)
+            self.assertIn(
+                (
+                    "duplicate sitemap location after percent-encoding "
+                    "normalization: "
+                    f"{literal_location} appears 2 times at sitemap entry "
+                    "positions 1, 2"
+                ),
+                text,
+            )
+            self.assertIn(literal_location, text)
+            self.assertIn(encoded_location, text)
+            self.assertIn(
+                (
+                    f"conflicting duplicate sitemap lastmod values for "
+                    f"{literal_location}: position 1: '2026-05-24'; "
+                    "position 2: '2026-05-28'"
+                ),
+                text,
+            )
+            self.assertEqual(
+                validator.load_sitemap_entries(sitemap_path),
+                {
+                    literal_location: "2026-05-24",
+                    encoded_location: "2026-05-28",
+                },
+                "duplicate detection must not change the sitemap inventory API",
+            )
+
+    def test_percent_encoded_reserved_sitemap_routes_remain_distinct(self) -> None:
+        literal_slash_route = "https://overkillhill.com/a/b/"
+        encoded_slash_route = "https://overkillhill.com/a%2Fb/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                "<urlset>"
+                f"<url><loc>{literal_slash_route}</loc></url>"
+                f"<url><loc>{encoded_slash_route}</loc></url>"
+                "</urlset>",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                validator.validate_sitemap_duplicates(sitemap_path),
+                [],
+                "an encoded slash must not be collapsed into a route separator",
+            )
 
     def test_sitemap_url_blocks_require_exactly_one_usable_location(self) -> None:
         valid_before = f"{validator.SITE_ORIGIN}/about/"
@@ -1096,6 +1317,91 @@ class SEOFixtureTests(unittest.TestCase):
                 validator._sitemap_entries_from_path(sitemap_path),
                 [(valid, None)],
                 "an unclosed final URL block must not enter the usable inventory",
+            )
+
+    def test_broken_sitemap_document_boundaries_are_reported(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        cases = (
+            (
+                "missing-opening-urlset",
+                f"<url><loc>{valid}</loc></url></urlset>",
+                "found 0 opening and 1 closing",
+            ),
+            (
+                "missing-closing-urlset",
+                f"<urlset><url><loc>{valid}</loc></url>",
+                "found 1 opening and 0 closing",
+            ),
+            (
+                "multiple-urlset-roots",
+                (
+                    f"<urlset><url><loc>{valid}</loc></url></urlset>"
+                    "<urlset></urlset>"
+                ),
+                "found 2 opening and 2 closing",
+            ),
+            (
+                "url-entry-outside-urlset",
+                (
+                    f"<urlset></urlset><url><loc>{valid}</loc></url>"
+                ),
+                "sitemap URL entries must be inside the <urlset> document boundaries",
+            ),
+            (
+                "mismatched-urlset-prefixes",
+                (
+                    '<a:urlset xmlns:a="urn:a" xmlns:b="urn:b">'
+                    f"<url><loc>{valid}</loc></url></b:urlset>"
+                ),
+                "sitemap document has malformed <urlset> boundaries",
+            ),
+            (
+                "wrong-document-root",
+                f"<sitemap><url><loc>{valid}</loc></url></sitemap>",
+                "sitemap document root must be <urlset>",
+            ),
+        )
+
+        for case, sitemap, expected_error in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                sitemap_path = Path(directory) / "sitemap.xml"
+                sitemap_path.write_text(sitemap, encoding="utf-8")
+
+                entries, findings = (
+                    validator._sitemap_entries_with_positions_and_findings_from_path(
+                        sitemap_path
+                    )
+                )
+                text = findings_text(findings)
+                self.assertIn(expected_error, text)
+                self.assertTrue(
+                    entries,
+                    "the fixture should retain any recoverable entry to prove "
+                    "a partial inventory cannot hide the wrapper failure",
+                )
+                self.assertIn(
+                    expected_error,
+                    findings_text(validator.validate_sitemap_duplicates(sitemap_path)),
+                )
+
+    def test_urlset_markup_in_comments_does_not_satisfy_document_boundaries(self) -> None:
+        valid = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            sitemap_path = Path(directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                f"<!-- <urlset> --><url><loc>{valid}</loc></url></urlset>",
+                encoding="utf-8",
+            )
+
+            findings = validator.validate_sitemap_duplicates(sitemap_path)
+            self.assertIn(
+                "found 0 opening and 1 closing",
+                findings_text(findings),
+            )
+            self.assertEqual(
+                validator._sitemap_entries_from_path(sitemap_path),
+                [(valid, None)],
+                "recoverable URLs must not make a missing document wrapper pass",
             )
 
     def test_public_inventory_excludes_test_fixtures(self) -> None:
@@ -1222,6 +1528,149 @@ class SEOFixtureTests(unittest.TestCase):
                     findings_text(findings),
                 )
 
+    def test_locale_robots_boundary_mismatches_are_reported_on_pilot_subpages(self) -> None:
+        manifest = json.loads(
+            (ROOT / "i18n" / "pilot" / "manifest.json").read_text(encoding="utf-8")
+        )
+        locales = manifest["locales"]
+        indexable_locale = next(
+            locale for locale, entry in locales.items() if entry["indexable"]
+        )
+        draft_locale = next(
+            locale for locale, entry in locales.items() if not entry["indexable"]
+        )
+
+        def non_home_page(locale: str) -> dict:
+            entry = locales[locale]
+            return next(
+                page
+                for page in entry["pages"]
+                if page["source_route"] != "/"
+                and page.get("indexable", entry["indexable"]) == entry["indexable"]
+            )
+
+        indexable_page = non_home_page(indexable_locale)
+        draft_page = non_home_page(draft_locale)
+        self.assertEqual(
+            indexable_page["source_route"],
+            draft_page["source_route"],
+            "pilot mismatch cases should exercise the same non-home source route",
+        )
+
+        cases = (
+            (
+                indexable_page,
+                True,
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                draft_page,
+                False,
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+        for page, declared_indexable, robots_value, expected_boundary in cases:
+            relative_path = page["target_path"]
+            with self.subTest(relative_path=relative_path):
+                path = ROOT / relative_path
+                contract = self.locale_contract[relative_path]
+                self.assertEqual(contract["indexable"], declared_indexable)
+
+                original_raw = path.read_text(encoding="utf-8")
+                original_parser = parse_html(original_raw)
+                self.assertEqual(not original_parser.is_noindex, declared_indexable)
+                self.assertFalse(
+                    validator.validate_generated_seo(path, original_parser, None, contract),
+                    f"valid pilot subpage boundary should pass: {relative_path}",
+                )
+
+                if not declared_indexable:
+                    self.assertTrue(
+                        original_parser.is_noindex,
+                        f"draft subpage control must remain noindex: {relative_path}",
+                    )
+
+                mutated_raw = mutate_meta(original_raw, "meta:robots", robots_value)
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(mutated_raw),
+                    None,
+                    contract,
+                )
+                self.assertIn(
+                    f"{relative_path}: robots indexing boundary mismatch: {expected_boundary}",
+                    findings_text(findings),
+                )
+
+    def test_locale_robots_use_loaded_page_indexability_override(self) -> None:
+        manifest = {
+            "locales": {
+                "fr": {
+                    "indexable": True,
+                    "metadata_source": "localized-page",
+                    "pages": [
+                        {"target_path": "fr/index.html"},
+                        {
+                            "target_path": "fr/contact/index.html",
+                            "indexable": False,
+                        },
+                    ],
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "locale-manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with patch.object(validator, "LOCALE_MANIFEST", manifest_path):
+                contract, load_findings = validator.load_locale_seo_contract()
+
+        self.assertFalse(load_findings, findings_text(load_findings))
+        self.assertTrue(contract["fr/index.html"]["indexable"])
+        self.assertFalse(contract["fr/contact/index.html"]["indexable"])
+
+        cases = (
+            (
+                "fr/index.html",
+                True,
+                "index, follow",
+                "noindex, follow",
+                "manifest=indexable, rendered=noindex",
+            ),
+            (
+                "fr/contact/index.html",
+                False,
+                "noindex, follow",
+                "index, follow",
+                "manifest=noindex, rendered=indexable",
+            ),
+        )
+        for relative_path, indexable, valid_robots, invalid_robots, boundary in cases:
+            with self.subTest(relative_path=relative_path):
+                path = ROOT / relative_path
+                page_contract = contract[relative_path]
+                self.assertEqual(page_contract["indexable"], indexable)
+
+                raw = path.read_text(encoding="utf-8")
+                valid_page = parse_html(mutate_meta(raw, "meta:robots", valid_robots))
+                self.assertFalse(
+                    validator.validate_generated_seo(path, valid_page, None, page_contract),
+                    f"robots metadata should match the loaded page contract: {relative_path}",
+                )
+
+                invalid_page = parse_html(mutate_meta(raw, "meta:robots", invalid_robots))
+                findings = validator.validate_generated_seo(
+                    path,
+                    invalid_page,
+                    None,
+                    page_contract,
+                )
+                expected_finding = (
+                    f"{relative_path}: robots indexing boundary mismatch: {boundary}"
+                )
+                self.assertIn(expected_finding, findings_text(findings))
+
     def test_indexable_locale_keeps_localized_metadata_ownership(self) -> None:
         relative_path = "fr/index.html"
         path = ROOT / relative_path
@@ -1303,6 +1752,58 @@ class SEOFixtureTests(unittest.TestCase):
             parser,
         )
         self.assert_rejected(findings, mutation["expected"])
+        diagnostic = findings_text(findings)
+        self.assertIn(articles[0]["@id"], diagnostic)
+        self.assertIn(articles[0]["url"], diagnostic)
+        self.assertIn(mutation["value"], diagnostic)
+
+    def test_three_duplicate_article_urls_report_all_values_by_identity(self) -> None:
+        shared_id = "https://overkillhill.com/writings/shared-identity/#article"
+        matching_url = "https://overkillhill.com/writings/shared-identity/"
+        conflicting_url = "https://overkillhill.com/writings/conflicting/"
+        distinct_url = "https://overkillhill.com/writings/distinct/"
+        shared_article = {
+            "@type": "Article",
+            "@id": shared_id,
+            "datePublished": "2026-04-07",
+            "dateModified": "2026-05-24",
+        }
+        articles = [
+            {**shared_article, "headline": "First representation", "url": matching_url},
+            {**shared_article, "headline": "Second representation", "url": matching_url},
+            {**shared_article, "headline": "Third representation", "url": conflicting_url},
+            {
+                "@type": "Article",
+                "@id": "https://overkillhill.com/writings/distinct/#article",
+                "headline": "Distinct article",
+                "datePublished": "2026-04-07",
+                "dateModified": "2026-05-24",
+                "url": distinct_url,
+            },
+        ]
+        parser = parse_html(
+            '<script type="application/ld+json">'
+            + json.dumps({"@graph": articles})
+            + "</script>"
+        )
+
+        findings = validator.validate_article_jsonld_dates(
+            "three-duplicate-articles.fixture",
+            parser,
+        )
+
+        self.assertEqual(len(findings), 1, findings_text(findings))
+        self.assert_rejected(
+            findings,
+            "conflicting duplicate Article JSON-LD url values",
+        )
+        diagnostic = findings_text(findings)
+        self.assertIn(shared_id, diagnostic)
+        self.assertIn(
+            repr([matching_url, matching_url, conflicting_url]),
+            diagnostic,
+        )
+        self.assertNotIn(distinct_url, diagnostic)
 
     def test_noindex_duplicate_article_url_conflict_remains_exempt(self) -> None:
         page = self.pages_by_route["/writings/biases-as-constants/"]
@@ -1424,6 +1925,15 @@ class SEOFixtureTests(unittest.TestCase):
             f'<meta name="robots" content="{robots_fixture["noindex"]}"></head>',
             1,
         )
+        unrelated_meta_across_tags_conflict = across_tags_conflict.replace(
+            '<meta name="robots" content="index, follow">',
+            (
+                '<meta name="description" content="Unrelated metadata">\n'
+                '<meta property="og:title" content="Unrelated title">\n'
+                '<meta name="robots" content="index, follow">'
+            ),
+            1,
+        )
         conflict_cases = (
             (
                 "across tags on a noindex page",
@@ -1450,6 +1960,13 @@ class SEOFixtureTests(unittest.TestCase):
                 across_tags_conflict,
                 (robots_fixture["index"], robots_fixture["noindex"]),
             ),
+            (
+                "robots tag positions ignore unrelated metadata",
+                index_path,
+                index_page,
+                unrelated_meta_across_tags_conflict,
+                (robots_fixture["index"], robots_fixture["noindex"]),
+            ),
         )
         for case, path, page, raw, expected_values in conflict_cases:
             with self.subTest(case=case):
@@ -1468,7 +1985,8 @@ class SEOFixtureTests(unittest.TestCase):
                     conflict.page,
                     path.relative_to(ROOT).as_posix(),
                 )
-                for value in expected_values:
+                for position, value in enumerate(expected_values, start=1):
+                    self.assertIn(f"robots tag #{position}=", conflict.msg)
                     self.assertIn(value, conflict.msg)
 
         consistent_cases = (
@@ -1562,6 +2080,80 @@ class SEOFixtureTests(unittest.TestCase):
         self.assertFalse(
             consistent_findings,
             "consistent duplicate noindex directives are explicitly accepted",
+        )
+
+    def test_crawler_robots_directives_must_match_page_wide_indexing_contract(self) -> None:
+        fixture = self.fixture_data["crawler_robots_contract"]
+        index_path = GENERATED_FIXTURE / "index.html.fixture"
+        index_page = self.pages_by_route["/"]
+        index_raw = index_path.read_text(encoding="utf-8")
+        draft_page = self.pages_by_route["/writings/biases-as-constants/"]
+        draft_path = ROOT / draft_page["path"]
+        draft_raw = draft_path.read_text(encoding="utf-8")
+
+        cases = (
+            (
+                "crawler-specific noindex cannot override page-wide index",
+                index_path,
+                index_page,
+                index_raw.replace(
+                    "</head>",
+                    f'<meta name="googlebot" content="{fixture["noindex"]}"></head>',
+                    1,
+                ),
+                ("robots tag #1=", "googlebot tag #1="),
+            ),
+            (
+                "crawler-specific index cannot override page-wide noindex",
+                draft_path,
+                draft_page,
+                mutate_meta(draft_raw, "meta:googlebot", fixture["index"]),
+                ("robots tag #1=", "googlebot tag #1="),
+            ),
+        )
+        for case, path, page, raw, expected_labels in cases:
+            with self.subTest(case=case):
+                findings = validator.validate_generated_seo(
+                    path,
+                    parse_html(raw),
+                    page,
+                )
+                conflicts = [
+                    finding for finding in findings
+                    if fixture["expected"] in finding.msg
+                ]
+                self.assertEqual(len(conflicts), 1, findings_text(findings))
+                for label in expected_labels:
+                    self.assertIn(label, conflicts[0].msg)
+
+        consistent_raw = index_raw.replace(
+            "</head>",
+            f'<meta name="googlebot" content="{fixture["index"]}"></head>',
+            1,
+        )
+        consistent_findings = validator.validate_generated_seo(
+            index_path,
+            parse_html(consistent_raw),
+            index_page,
+        )
+        self.assertFalse(
+            consistent_findings,
+            "matching page-wide and crawler-specific index directives are accepted",
+        )
+
+        crawler_only_raw = index_raw.replace(
+            "</head>",
+            '<meta name="googlebot" content="max-snippet:0"></head>',
+            1,
+        )
+        crawler_only_findings = validator.validate_generated_seo(
+            index_path,
+            parse_html(crawler_only_raw),
+            index_page,
+        )
+        self.assertFalse(
+            crawler_only_findings,
+            "crawler-specific presentation directives do not conflict with indexing",
         )
 
     def test_draft_article_promotion_requires_article_metadata(self) -> None:
@@ -1676,9 +2268,23 @@ class SEOFixtureTests(unittest.TestCase):
         return fixture, draft_page, promoted_page
 
     def test_article_specific_image_control_and_noindex_exemption(self) -> None:
-        _, draft_page, promoted_page = self._promoted_article_social_image_case()
+        fixture, draft_page, promoted_page = self._promoted_article_social_image_case()
         draft_path = ROOT / draft_page["path"]
-        draft_parser = parse_html(draft_path.read_text(encoding="utf-8"))
+        draft_raw = draft_path.read_text(encoding="utf-8")
+        draft_parser = parse_html(draft_raw)
+        shared_asset = (
+            ROOT / validator.SHARED_BRAND_SOCIAL_IMAGE.lstrip("/")
+        ).resolve()
+
+        for alias in fixture["aliases"]:
+            with self.subTest(image_alias=alias["id"]):
+                resolved = validator._image_asset_path(alias["value"])
+                self.assertIsNotNone(resolved)
+                self.assertEqual(
+                    resolved.resolve(),
+                    shared_asset,
+                    f"_image_asset_path did not resolve alias {alias['value']!r}",
+                )
 
         self.assertFalse(validator.is_indexable_page(draft_page))
         self.assertFalse(
@@ -1689,6 +2295,30 @@ class SEOFixtureTests(unittest.TestCase):
             validator.validate_generated_seo(draft_path, draft_parser, draft_page),
             "generated noindex Article drafts using the shared brand image remain exempt",
         )
+
+        for alias in fixture["aliases"]:
+            with self.subTest(noindex_alias=alias["id"]):
+                alias_draft = copy.deepcopy(draft_page)
+                alias_draft["meta:og:image"] = alias["value"]
+                alias_draft["meta:twitter:image"] = alias["value"]
+                self.assertFalse(
+                    validator.validate_source_seo_contract([alias_draft]),
+                    "noindex source Article drafts using a shared-image alias remain exempt",
+                )
+
+                alias_raw = mutate_meta(
+                    mutate_meta(draft_raw, "meta:og:image", alias["value"]),
+                    "meta:twitter:image",
+                    alias["value"],
+                )
+                self.assertFalse(
+                    validator.validate_generated_seo(
+                        draft_path,
+                        parse_html(alias_raw),
+                        alias_draft,
+                    ),
+                    "noindex generated Article drafts using a shared-image alias remain exempt",
+                )
 
         source_findings = validator.validate_source_seo_contract([promoted_page])
         self.assertFalse(
@@ -1711,16 +2341,24 @@ class SEOFixtureTests(unittest.TestCase):
     def test_promoted_article_shared_brand_image_rejected_in_source(self) -> None:
         fixture, _, promoted_page = self._promoted_article_social_image_case()
         for field in ("meta:og:image", "meta:twitter:image"):
-            for url_kind in ("absolute_url", "local_url"):
+            url_cases = [
+                (url_kind, fixture[url_kind])
+                for url_kind in ("absolute_url", "local_url")
+            ] + [
+                (alias["id"], alias["value"])
+                for alias in fixture["aliases"]
+            ]
+            for url_kind, url in url_cases:
                 with self.subTest(field=field, url_kind=url_kind):
                     mutated_page = copy.deepcopy(promoted_page)
-                    mutated_page[field] = fixture[url_kind]
+                    mutated_page[field] = url
                     findings = validator.validate_source_seo_contract(
                         [mutated_page]
                     )
                     self.assert_rejected(
                         findings,
-                        f"{fixture['expected_source']}: {field}",
+                        f"{fixture['expected_source']}: {field} "
+                        f"({url})",
                     )
 
     def test_promoted_article_shared_brand_image_rejected_in_generated_html(self) -> None:
@@ -1728,12 +2366,19 @@ class SEOFixtureTests(unittest.TestCase):
         generated_path = GENERATED_FIXTURE / "article.html.fixture"
         original_raw = generated_path.read_text(encoding="utf-8")
         for field in ("meta:og:image", "meta:twitter:image"):
-            for url_kind in ("absolute_url", "local_url"):
+            url_cases = [
+                (url_kind, fixture[url_kind])
+                for url_kind in ("absolute_url", "local_url")
+            ] + [
+                (alias["id"], alias["value"])
+                for alias in fixture["aliases"]
+            ]
+            for url_kind, url in url_cases:
                 with self.subTest(field=field, url_kind=url_kind):
                     mutated_raw = mutate_meta(
                         original_raw,
                         field,
-                        fixture[url_kind],
+                        url,
                     )
                     findings = validator.validate_generated_seo(
                         generated_path,
@@ -1742,7 +2387,8 @@ class SEOFixtureTests(unittest.TestCase):
                     )
                     self.assert_rejected(
                         findings,
-                        f"{fixture['expected_generated']}: {field}",
+                        f"{fixture['expected_generated']}: {field} "
+                        f"({url})",
                     )
 
     def assert_rejected(self, findings: list, expected: str) -> None:
@@ -2071,6 +2717,77 @@ class SEOFixtureTests(unittest.TestCase):
                 else:
                     self.assert_rejected(findings, mutation["expected"])
 
+    def test_duplicate_article_dates_accept_matching_offsets_only(self) -> None:
+        page = self.pages_by_route["/writings/first-diagram-is-a-liar/"]
+        sources = (
+            (ROOT / "site-src" / "pages" / page["path"]).with_suffix(
+                ".extras.html"
+            ),
+            GENERATED_FIXTURE / "article.html.fixture",
+        )
+        cases = {
+            "datePublished": (
+                "2026-04-07T12:00:00Z",
+                "2026-04-07T14:00:00+02:00",
+                "2026-04-07T14:00:01+02:00",
+            ),
+            "dateModified": (
+                "2026-05-24T00:00:00Z",
+                "2026-05-24T05:30:00+05:30",
+                "2026-05-24T05:30:01+05:30",
+            ),
+        }
+
+        for path in sources:
+            original_raw = path.read_text(encoding="utf-8")
+            original_parser = parse_html(original_raw)
+            for field, (first, same_instant, different_instant) in cases.items():
+                for second, should_pass in (
+                    (same_instant, True),
+                    (different_instant, False),
+                ):
+                    with self.subTest(
+                        path=path.name,
+                        field=field,
+                        second=second,
+                    ):
+                        first_raw = mutate_jsonld_field(original_raw, field, first)
+                        duplicated_raw = duplicate_article_jsonld(
+                            first_raw, field, second
+                        )
+                        parser = parse_html(duplicated_raw)
+                        articles = article_jsonld_nodes(duplicated_raw)
+                        self.assertEqual(len(articles), 2)
+                        self.assertEqual(
+                            {article[field] for article in articles},
+                            {first, second},
+                        )
+                        self.assertEqual(
+                            original_parser.meta,
+                            parser.meta,
+                            "duplicate-date fixture changed page metadata",
+                        )
+                        self.assertEqual(
+                            original_parser.is_noindex,
+                            parser.is_noindex,
+                            "duplicate-date fixture changed the indexing boundary",
+                        )
+
+                        findings = validator.validate_article_jsonld_dates(
+                            path.name,
+                            parser,
+                        )
+                        duplicate_message = (
+                            f"conflicting duplicate Article JSON-LD {field} values"
+                        )
+                        if should_pass:
+                            self.assertNotIn(
+                                duplicate_message,
+                                findings_text(findings),
+                            )
+                        else:
+                            self.assert_rejected(findings, duplicate_message)
+
     def test_duplicate_article_jsonld_dates_rejected_in_source_extras(self) -> None:
         mutation = self.fixture_data["duplicate_article_date_mismatch"]
         page = self.pages_by_route[mutation["route"]]
@@ -2121,6 +2838,70 @@ class SEOFixtureTests(unittest.TestCase):
             parse_html(mutated_raw),
             page["meta:article:published_time"],
         )
+        self.assert_rejected(findings, mutation["expected"])
+
+    def test_graph_duplicate_article_modified_date_rejected_in_source_extras(self) -> None:
+        mutation = self.fixture_data["duplicate_article_modified_date_mismatch"]
+        page = self.pages_by_route[mutation["route"]]
+        path = (ROOT / "site-src" / "pages" / page["path"]).with_suffix(".extras.html")
+        original_raw = path.read_text(encoding="utf-8")
+        original_articles = article_jsonld_nodes(original_raw)
+        self.assertEqual(len(original_articles), 1)
+
+        mutated_raw = article_graph_with_conflicting_modified_date(
+            original_raw,
+            mutation["value"],
+        )
+        mutated_articles = article_jsonld_nodes(mutated_raw)
+        self.assertEqual(len(mutated_articles), 2)
+        self.assertEqual(
+            mutated_articles[0]["@id"],
+            mutated_articles[1]["@id"],
+            "source graph fixture must duplicate the Article identity",
+        )
+        self.assertEqual(
+            {article["dateModified"] for article in mutated_articles},
+            {original_articles[0]["dateModified"], mutation["value"]},
+        )
+        for article in mutated_articles:
+            self.assertEqual(
+                article["headline"],
+                original_articles[0]["headline"],
+                "source graph fixture changed Article headline prose",
+            )
+            self.assertEqual(
+                article["description"],
+                original_articles[0]["description"],
+                "source graph fixture changed Article description prose",
+            )
+
+        indexing_fields = {
+            key: value
+            for key, value in page.items()
+            if key in ("meta:robots", "meta:googlebot", "meta:bingbot")
+        }
+        self.assertEqual(
+            indexing_fields,
+            {
+                "meta:robots": (
+                    "index, follow, max-image-preview:large, max-snippet:-1, "
+                    "max-video-preview:-1"
+                ),
+                "meta:googlebot": "index, follow",
+                "meta:bingbot": "index, follow",
+            },
+            "source graph fixture changed the manifest robots/indexing fields",
+        )
+
+        original_read_text = Path.read_text
+
+        def read_source(path_to_read, *args, **kwargs):
+            if path_to_read == path:
+                return mutated_raw
+            return original_read_text(path_to_read, *args, **kwargs)
+
+        with patch.object(Path, "read_text", read_source):
+            findings = validator.validate_article_jsonld_source([page])
         self.assert_rejected(findings, mutation["expected"])
 
     def test_duplicate_article_jsonld_root_url_rejected_in_source_extras(self) -> None:
@@ -2494,6 +3275,49 @@ class SEOFixtureTests(unittest.TestCase):
                 )
                 self.assert_rejected(findings, expected)
 
+    def test_sitemap_xml_timezone_offset_survives_generated_validation(self) -> None:
+        page = self.pages_by_route["/writings/first-diagram-is-a-liar/"]
+        path = GENERATED_FIXTURE / "article.html.fixture"
+        raw = path.read_text(encoding="utf-8")
+        sitemap_lastmod = "2026-05-24T05:30:00+05:30"
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            sitemap_path = Path(temporary_directory) / "sitemap.xml"
+            sitemap_path.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+                "  <url>\n"
+                f"    <loc>{page['canonical']}</loc>\n"
+                f"    <lastmod>{sitemap_lastmod}</lastmod>\n"
+                "  </url>\n"
+                "</urlset>\n",
+                encoding="utf-8",
+            )
+            sitemap_entries = validator.load_sitemap_entries(sitemap_path)
+
+        self.assertEqual(sitemap_entries[page["canonical"]], sitemap_lastmod)
+        for date_modified, should_pass in (
+            ("2026-05-24T00:00:00Z", True),
+            ("2026-05-24T00:00:01Z", False),
+        ):
+            with self.subTest(date_modified=date_modified):
+                parser = parse_html(
+                    mutate_jsonld_field(raw, "dateModified", date_modified)
+                )
+                findings = validator.validate_generated_seo(
+                    path,
+                    parser,
+                    page,
+                    sitemap_entries=sitemap_entries,
+                )
+                if should_pass:
+                    self.assertFalse(findings, findings_text(findings))
+                else:
+                    self.assert_rejected(
+                        findings,
+                        "article JSON-LD dateModified does not match sitemap lastmod",
+                    )
+
     def test_article_sitemap_date_parity_in_generated_metadata(self) -> None:
         fixture = self.fixture_data["article_sitemap_date_parity"]
         page = self.pages_by_route[fixture["route"]]
@@ -2650,6 +3474,55 @@ class SEOFixtureTests(unittest.TestCase):
         self.assert_rejected(
             findings,
             "conflicting duplicate Article JSON-LD dateModified values",
+        )
+
+    def test_graph_duplicate_article_published_date_rejected_in_generated_metadata(self) -> None:
+        baseline_path = GENERATED_FIXTURE / "article.html.fixture"
+        path = GENERATED_FIXTURE / "article-graph-published-date-conflict.html.fixture"
+        baseline_raw = baseline_path.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
+        baseline_parser = parse_html(baseline_raw)
+        parser = parse_html(raw)
+        articles = article_jsonld_nodes(raw)
+
+        self.assertEqual(len(articles), 2)
+        self.assertEqual(
+            {article["@id"] for article in articles},
+            {"https://overkillhill.com/writings/first-diagram-is-a-liar/#article"},
+        )
+        self.assertEqual(
+            {article["datePublished"] for article in articles},
+            {"2026-04-07", "2026-04-08"},
+        )
+        self.assertEqual(
+            {article["dateModified"] for article in articles},
+            {"2026-05-24"},
+        )
+        self.assertEqual(
+            baseline_raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            raw.split("<body>", 1)[1].split("</body>", 1)[0],
+            "graph fixture changed the generated article body",
+        )
+        self.assertEqual(
+            baseline_parser.meta,
+            parser.meta,
+            "graph fixture changed generated indexing or other metadata",
+        )
+        self.assertEqual(["index, follow"], parser.meta.get("robots"))
+        self.assertEqual(
+            baseline_parser.is_noindex,
+            parser.is_noindex,
+            "graph fixture changed the indexing boundary",
+        )
+
+        findings = validator.validate_generated_seo(
+            path,
+            parser,
+            self.pages_by_route["/writings/first-diagram-is-a-liar/"],
+        )
+        self.assert_rejected(
+            findings,
+            "conflicting duplicate Article JSON-LD datePublished values",
         )
 
     def test_duplicate_article_jsonld_root_url_rejected_in_generated_metadata(self) -> None:

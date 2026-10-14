@@ -319,8 +319,13 @@ def find_html_files() -> list[Path]:
 
 def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
     """Return one plain-text sitemap location or its structural problem."""
-    loc_openings = list(re.finditer(r"<loc\b[^>]*>", block, flags=re.IGNORECASE))
-    loc_closings = list(re.finditer(r"</loc\s*>", block, flags=re.IGNORECASE))
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    loc_openings = list(re.finditer(
+        rf"<(?P<qname>{qname_prefix}loc)\b[^>]*>", block, flags=re.IGNORECASE
+    ))
+    loc_closings = list(re.finditer(
+        rf"</(?P<qname>{qname_prefix}loc)\s*>", block, flags=re.IGNORECASE
+    ))
     if len(loc_openings) != 1:
         return None, f"must contain exactly one <loc> element; found {len(loc_openings)}"
     if len(loc_closings) != 1:
@@ -328,6 +333,8 @@ def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
 
     loc_opening = loc_openings[0]
     loc_closing = loc_closings[0]
+    if loc_opening.group("qname") != loc_closing.group("qname"):
+        return None, "has mismatched opening and closing <loc> qualified names"
     if loc_closing.start() < loc_opening.end():
         return None, "has malformed <loc> element structure"
 
@@ -344,8 +351,11 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
     """Find URL blocks, reporting broken boundaries and recovering at the next opener."""
     blocks: list[tuple[int, str | None, str | None]] = []
     position = 0
-    active: tuple[int, int] | None = None
-    for match in re.finditer(r"</?url\b[^>]*>", text, flags=re.IGNORECASE):
+    active: tuple[int, int, str] | None = None
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    for match in re.finditer(
+        rf"</?(?P<qname>{qname_prefix}url)\b[^>]*>", text, flags=re.IGNORECASE
+    ):
         token = match.group(0)
         if token.startswith("</"):
             if active is None:
@@ -356,29 +366,144 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
                     "has a closing </url> without an opening <url>",
                 ))
             else:
-                active_position, content_start = active
+                active_position, content_start, opening_name = active
+                matched_name = opening_name == match.group("qname")
                 blocks.append((
                     active_position,
-                    text[content_start:match.start()],
-                    None,
+                    text[content_start:match.start()] if matched_name else None,
+                    None if matched_name else "has mismatched opening and closing <url> qualified names",
                 ))
                 active = None
             continue
 
         if active is not None:
-            active_position, _ = active
+            active_position, _, _ = active
             blocks.append((
                 active_position,
                 None,
                 "is missing closing </url> before the next <url>",
             ))
         position += 1
-        active = (position, match.end())
+        active = (position, match.end(), match.group("qname"))
 
     if active is not None:
-        active_position, _ = active
+        active_position, _, _ = active
         blocks.append((active_position, None, "is missing closing </url>"))
     return blocks
+
+
+def _sitemap_lastmod_values_from_block(block: str) -> tuple[int, list[str]]:
+    """Count lastmod elements and return the plain-text values that can be read."""
+    markup = re.sub(
+        r"<!--.*?-->|<!\[CDATA\[.*?\]\]>",
+        lambda match: " " * len(match.group(0)),
+        block,
+        flags=re.DOTALL,
+    )
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    openings = list(re.finditer(
+        rf"<{qname_prefix}lastmod(?=[\s/>])[^>]*>",
+        markup,
+        flags=re.IGNORECASE,
+    ))
+    values = [
+        unescape(match.group("value").strip())
+        for match in re.finditer(
+            rf"<(?P<opening>{qname_prefix}lastmod)(?=[\s/>])[^>]*>(?P<value>[^<]*)"
+            rf"</(?P<closing>{qname_prefix}lastmod)(?=[\s>])\s*>",
+            markup,
+            flags=re.IGNORECASE,
+        )
+        if match.group("opening") == match.group("closing")
+    ]
+    return len(openings), values
+
+
+def _sitemap_document_boundary_findings(
+    text: str,
+    *,
+    well_formed: bool,
+) -> list[Finding]:
+    """Report broken urlset document boundaries independently of URL blocks."""
+    # Ignore text that only resembles markup inside comments, CDATA, or an XML
+    # declaration so those strings cannot satisfy the document-boundary check.
+    markup = re.sub(
+        r"<!--.*?-->|<!\[CDATA\[.*?\]\]>|<\?.*?\?>",
+        lambda match: " " * len(match.group(0)),
+        text,
+        flags=re.DOTALL,
+    )
+    qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
+    urlset_pattern = re.compile(
+        rf"<(?P<closing>/)?(?P<name>{qname_prefix}urlset)\b"
+        r"(?P<attributes>[^>]*)>"
+    )
+    urlset_tags = list(urlset_pattern.finditer(markup))
+    opening_tags = [
+        match for match in urlset_tags
+        if match.group("closing") is None
+    ]
+    closing_tags = [
+        match for match in urlset_tags
+        if match.group("closing") is not None
+    ]
+
+    findings: list[Finding] = []
+    if well_formed:
+        # A parsed XML document can still be well-formed but use the wrong
+        # document element; entries beneath that wrapper are not a sitemap.
+        first_element = re.search(
+            r"<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\b",
+            markup,
+        )
+        if first_element is not None and first_element.group(1).split(":")[-1] != "urlset":
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                "sitemap document root must be <urlset>",
+            ))
+
+    if len(opening_tags) != 1 or len(closing_tags) != 1:
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            (
+                "sitemap document must contain exactly one opening <urlset> "
+                "and one closing </urlset> boundary; found "
+                f"{len(opening_tags)} opening and {len(closing_tags)} closing"
+            ),
+        ))
+        return findings
+
+    opening = opening_tags[0]
+    closing = closing_tags[0]
+    if (
+        opening.group("attributes").rstrip().endswith("/")
+        or closing.group("attributes").strip()
+        or opening.group("name") != closing.group("name")
+        or closing.start() < opening.end()
+    ):
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            "sitemap document has malformed <urlset> boundaries",
+        ))
+        return findings
+
+    url_tag_pattern = re.compile(
+        rf"</?{qname_prefix}url\b[^>]*>",
+        flags=re.IGNORECASE,
+    )
+    if any(
+        match.start() < opening.end() or match.end() > closing.start()
+        for match in url_tag_pattern.finditer(markup)
+    ):
+        findings.append(Finding(
+            "ERROR",
+            "sitemap.xml",
+            "sitemap URL entries must be inside the <urlset> document boundaries",
+        ))
+    return findings
 
 
 def _sitemap_entries_with_positions_and_findings_from_path(
@@ -394,9 +519,36 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         # Keep the recovery parser for malformed XML so existing diagnostics
         # can identify and skip individual broken URL blocks.
         document = None
+    findings = _sitemap_document_boundary_findings(
+        text,
+        well_formed=document is not None,
+    )
+    url_blocks = _sitemap_url_blocks(text)
+    for position, block, boundary_error in url_blocks:
+        if block is None or boundary_error is not None:
+            continue
+        lastmod_count, lastmod_values = _sitemap_lastmod_values_from_block(block)
+        if lastmod_count == 1 and len(lastmod_values) != 1:
+            findings.append(Finding(
+                "ERROR", "sitemap.xml",
+                f"sitemap URL entry at position {position} has malformed or mismatched <lastmod> element structure",
+            ))
+        if lastmod_count > 1:
+            details = (
+                f" (values: {', '.join(repr(value) for value in lastmod_values)})"
+                if len(lastmod_values) == lastmod_count
+                else ""
+            )
+            findings.append(Finding(
+                "ERROR",
+                "sitemap.xml",
+                (
+                    f"sitemap URL entry at position {position} must contain at "
+                    f"most one <lastmod> element; found {lastmod_count}{details}"
+                ),
+            ))
     if document is not None:
         entries = []
-        findings = []
         for entry in document.entries:
             if entry.issue is not None:
                 findings.append(Finding(
@@ -410,8 +562,7 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         return entries, findings
 
     entries: list[tuple[int, str, str | None]] = []
-    findings: list[Finding] = []
-    for position, block, boundary_error in _sitemap_url_blocks(text):
+    for position, block, boundary_error in url_blocks:
         if boundary_error is not None:
             findings.append(Finding(
                 "ERROR",
@@ -431,17 +582,11 @@ def _sitemap_entries_with_positions_and_findings_from_path(
             continue
         if loc is None:
             continue
-        lastmod_match = re.search(
-            r"<lastmod\b[^>]*>([^<]*)</lastmod>",
-            block,
-            flags=re.IGNORECASE,
-        )
+        _, lastmod_values = _sitemap_lastmod_values_from_block(block)
         entries.append((
             position,
             loc,
-            unescape(lastmod_match.group(1).strip())
-            if lastmod_match is not None
-            else None,
+            lastmod_values[0] if lastmod_values else None,
         ))
     return entries, findings
 
@@ -475,36 +620,90 @@ def load_sitemap_entries(sitemap_path: Path = SITEMAP) -> dict[str, str | None]:
     return entries
 
 
+def _normalize_sitemap_location_for_duplicates(location: str) -> str:
+    """Normalize equivalent percent-encoding without decoding reserved bytes.
+
+    RFC 3986 treats percent-encoded unreserved characters as equivalent to
+    their literal spelling. Reserved characters such as an encoded slash are
+    retained because decoding them can change the route structure.
+    """
+    def normalize_component(value: str) -> str:
+        def replace_escape(match: re.Match[str]) -> str:
+            byte = int(match.group(1), 16)
+            character = chr(byte)
+            if character.isascii() and (
+                character.isalnum() or character in "-._~"
+            ):
+                return character
+            return f"%{byte:02X}"
+
+        return re.sub(r"%([0-9a-fA-F]{2})", replace_escape, value)
+
+    parsed = urlparse(location)
+    return parsed._replace(
+        path=normalize_component(parsed.path),
+        params=normalize_component(parsed.params),
+        query=normalize_component(parsed.query),
+        fragment=normalize_component(parsed.fragment),
+    ).geturl()
+
+
 def validate_sitemap_duplicates(sitemap_path: Path = SITEMAP) -> list[Finding]:
-    """Reject duplicate sitemap locations before consumers build a date map."""
+    """Reject duplicate sitemap locations before consumers build a date map.
+
+    Equivalent percent-encoded spellings of unreserved URL characters share a
+    duplicate key; encoded reserved characters remain distinct.
+    """
     entries, findings = _sitemap_entries_with_positions_and_findings_from_path(sitemap_path)
     occurrences: dict[str, list[tuple[int, str | None]]] = {}
     for position, loc, lastmod in entries:
-        occurrences.setdefault(loc, []).append((position, lastmod))
+        key = _normalize_sitemap_location_for_duplicates(loc)
+        occurrences.setdefault(key, []).append((position, lastmod))
 
-    for loc in sorted(occurrences):
-        entries = occurrences[loc]
-        if len(entries) < 2:
+    for normalized_location in sorted(occurrences):
+        matching_entries = occurrences[normalized_location]
+        if len(matching_entries) < 2:
             continue
-        positions = ", ".join(str(position) for position, _ in entries)
+        positions = ", ".join(
+            str(position) for position, _ in matching_entries
+        )
+        source_locations = [
+            loc
+            for _, loc, _ in entries
+            if _normalize_sitemap_location_for_duplicates(loc)
+            == normalized_location
+        ]
+        distinct_source_locations = sorted(set(source_locations))
+        if len(distinct_source_locations) == 1:
+            duplicate_message = (
+                f"duplicate sitemap location: {normalized_location} appears "
+                f"{len(matching_entries)} times at sitemap entry positions "
+                f"{positions}"
+            )
+        else:
+            sources = ", ".join(repr(loc) for loc in distinct_source_locations)
+            duplicate_message = (
+                "duplicate sitemap location after percent-encoding "
+                f"normalization: {normalized_location} appears "
+                f"{len(matching_entries)} times at sitemap entry positions "
+                f"{positions} (source locations: {sources})"
+            )
         findings.append(Finding(
             "ERROR",
             "sitemap.xml",
-            (
-                f"duplicate sitemap location: {loc} appears {len(entries)} times "
-                f"at sitemap entry positions {positions}"
-            ),
+            duplicate_message,
         ))
-        if len({lastmod for _, lastmod in entries}) > 1:
+        if len({lastmod for _, lastmod in matching_entries}) > 1:
             dated_entries = "; ".join(
                 f"position {position}: {lastmod!r}"
-                for position, lastmod in entries
+                for position, lastmod in matching_entries
             )
             findings.append(Finding(
                 "ERROR",
                 "sitemap.xml",
                 (
-                    f"conflicting duplicate sitemap lastmod values for {loc}: "
+                    "conflicting duplicate sitemap lastmod values for "
+                    f"{normalized_location}: "
                     f"{dated_entries}"
                 ),
             ))
@@ -855,7 +1054,8 @@ def validate_article_social_image(
             findings.append(Finding(
                 "ERROR",
                 location,
-                f"indexable {page_label} Article uses shared brand social image: {key}",
+                f"indexable {page_label} Article uses shared brand social image: "
+                f"{key} ({values.get(key, '')})",
             ))
     return findings
 
@@ -1075,12 +1275,18 @@ def validate_duplicate_article_jsonld_urls(
         urls_by_identity.setdefault(identity, []).append(url)
 
     findings: list[Finding] = []
-    for urls in urls_by_identity.values():
+    for identity, urls in urls_by_identity.items():
         if len(set(urls)) > 1:
+            identity_detail = (
+                f" for shared Article @id {identity[1]!r}"
+                if identity[0] == "@id"
+                else ""
+            )
             findings.append(Finding(
                 "ERROR",
                 location,
-                f"conflicting duplicate Article JSON-LD url values: {urls!r}",
+                f"conflicting duplicate Article JSON-LD url values"
+                f"{identity_detail}: {urls!r}",
             ))
     return findings
 
@@ -1104,7 +1310,10 @@ def validate_article_jsonld_dates(
         if isinstance(article.get("datePublished"), str)
         and article["datePublished"]
     ]
-    if len(published_dates) > 1 and len(set(published_dates)) > 1:
+    if len(published_dates) > 1 and any(
+        not _article_date_values_match(published_dates[0], value)
+        for value in published_dates[1:]
+    ):
         findings.append(Finding(
             "ERROR",
             location,
@@ -1117,7 +1326,10 @@ def validate_article_jsonld_dates(
         if isinstance(article.get("dateModified"), str)
         and article["dateModified"]
     ]
-    if len(modified_dates) > 1 and len(set(modified_dates)) > 1:
+    if len(modified_dates) > 1 and any(
+        not _article_date_values_match(modified_dates[0], value)
+        for value in modified_dates[1:]
+    ):
         findings.append(Finding(
             "ERROR",
             location,
@@ -1450,22 +1662,35 @@ def validate_source_seo_contract(pages: list[dict]) -> list[Finding]:
 
 def validate_robots_indexing_directives(
     location: str,
-    robots_values: list[str],
+    meta_values: dict[str, list[str]],
 ) -> list[Finding]:
-    """Reject rendered robots values that disagree on index versus noindex."""
-    robots_tokens = [robots_indexing_tokens(value) for value in robots_values]
-    if not {"index", "noindex"}.issubset(set().union(*robots_tokens)):
+    """Reject page-wide and crawler-specific robots indexing disagreements."""
+    robot_meta = {
+        name: values
+        for name, values in meta_values.items()
+        if name == "robots"
+        or name.endswith("bot")
+        or "bot-" in name
+        or "bot_" in name
+    }
+    directives = [
+        (name, position, value, robots_indexing_tokens(value))
+        for name, values in robot_meta.items()
+        for position, value in enumerate(values, start=1)
+    ]
+    tokens = set().union(*(entry[3] for entry in directives)) if directives else set()
+    if not {"index", "noindex"}.issubset(tokens):
         return []
-    conflicting_values = [
-        value
-        for value, tokens in zip(robots_values, robots_tokens)
-        if tokens.intersection(ROBOTS_INDEXING_TOKENS)
+    conflicting_tags = [
+        f"{name} tag #{position}={value!r}"
+        for name, position, value, value_tokens in directives
+        if value_tokens.intersection(ROBOTS_INDEXING_TOKENS)
     ]
     return [Finding(
         "ERROR",
         location,
-        "conflicting robots index/noindex directives in rendered content values: "
-        f"{conflicting_values!r}",
+        "conflicting robots index/noindex directives in rendered content tags: "
+        + ", ".join(conflicting_tags),
     )]
 
 
@@ -1483,7 +1708,7 @@ def validate_generated_seo(
         if locale_page is not None:
             findings = validate_robots_indexing_directives(
                 rel,
-                parser.meta.get("robots", []),
+                parser.meta,
             )
             manifest_boundary = (
                 "indexable" if locale_page.get("indexable") else "noindex"
@@ -1524,8 +1749,7 @@ def validate_generated_seo(
         for key, entries in parser.meta.items()
     }
     findings = validate_organization_nodes(rel, parser)
-    robots_values = parser.meta.get("robots", [])
-    findings.extend(validate_robots_indexing_directives(rel, robots_values))
+    findings.extend(validate_robots_indexing_directives(rel, parser.meta))
     manifest_boundary = "indexable" if is_indexable_page(manifest_page) else "noindex"
     rendered_boundary = "noindex" if parser.is_noindex else "indexable"
     if rendered_boundary != manifest_boundary:

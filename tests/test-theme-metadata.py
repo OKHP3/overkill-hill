@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -55,26 +56,75 @@ class BrandThemeMetadataTests(unittest.TestCase):
 
     def test_contract_loader_rejects_duplicate_brand_object_key(self) -> None:
         glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = f'{{\n  "brands": {{\n    "glee": {glee},\n    "glee": {glee}\n  }}\n}}'
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brand-theme-contract.json"
-            path.write_text(
-                f'{{"brands":{{"glee":{glee},"glee":{glee}}}}}',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(ValueError, r"duplicate brand entry 'glee'"):
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
                 validator.load_brand_theme_contract(path)
+        message = str(raised.exception)
+        duplicate_key_offset = source.rfind('"glee"')
+        duplicate_key_column = duplicate_key_offset - source.rfind(
+            "\n", 0, duplicate_key_offset
+        )
+        self.assertIn("duplicate brand entry 'glee'", message)
+        self.assertIn("JSON path /brands/glee", message)
+        self.assertIn(f"line 4, column {duplicate_key_column}", message)
 
     def test_contract_loader_names_brand_with_duplicate_property_key(self) -> None:
+        source = (
+            '{\n  "brands": {\n    "glee": {\n      "name": "Glee",\n'
+            '      "name": "Hidden"\n    }\n  }\n}'
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brand-theme-contract.json"
-            path.write_text(
-                '{"brands":{"glee":{"name":"Glee","name":"Hidden"}}}',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(
-                ValueError, r"brand 'glee' has duplicate JSON key 'name'"
-            ):
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
                 validator.load_brand_theme_contract(path)
+        duplicate_key_offset = source.rfind('"name"')
+        duplicate_key_column = duplicate_key_offset - source.rfind(
+            "\n", 0, duplicate_key_offset
+        )
+        message = str(raised.exception)
+        self.assertIn("brand 'glee' has duplicate JSON key 'name'", message)
+        self.assertIn("JSON path /brands/glee/name", message)
+        self.assertIn(f"line 5, column {duplicate_key_column}", message)
+
+    def test_contract_loader_reports_duplicate_key_at_contract_root(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = (
+            '{\n  "version": 1,\n  "version": 2,\n'
+            f'  "brands": {{"glee": {glee}}}\n}}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
+                validator.load_brand_theme_contract(path)
+
+        message = str(raised.exception)
+        self.assertIn("duplicate JSON key 'version'", message)
+        self.assertIn("at JSON root", message)
+        self.assertIn("JSON path /version", message)
+
+    def test_contract_loader_reports_duplicate_key_in_non_brand_object(self) -> None:
+        glee = json.dumps(BRAND_THEME_CONTRACT["glee"], separators=(",", ":"))
+        source = (
+            '{\n  "brands": {"glee": '
+            f'{glee}'
+            '},\n  "metadata": {\n    "owner": "first",\n'
+            '    "owner": "second"\n  }\n}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
+                validator.load_brand_theme_contract(path)
+
+        message = str(raised.exception)
+        self.assertIn("duplicate JSON key 'owner'", message)
+        self.assertIn("at metadata", message)
+        self.assertIn("JSON path /metadata/owner", message)
 
     def test_contract_reports_all_malformed_entries_and_fields_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
@@ -99,8 +149,61 @@ class BrandThemeMetadataTests(unittest.TestCase):
             with self.subTest(error=expected):
                 self.assertIn(expected, message)
 
+    def test_contract_reports_duplicate_identifiers_alongside_field_errors(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["name"] = contract["glee"]["name"]
+        contract["askjamie"]["bodyClass"] = contract["glee"]["bodyClass"]
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["dark"] = "#bad"
+
+        with self.assertRaises(ValueError) as raised:
+            validator.validate_brand_theme_contract({"brands": contract})
+
+        message = str(raised.exception)
+        expected_errors = (
+            "brand 'glee' has invalid light color 'orange'",
+            "brand 'askjamie' has invalid dark color '#bad'",
+            "brand 'askjamie' duplicates brand name 'Glee' from brand 'glee'",
+            "brand 'askjamie' duplicates body class 'glee-main' from brand 'glee'",
+        )
+        for expected in expected_errors:
+            with self.subTest(error=expected):
+                self.assertIn(expected, message)
+
+    def test_contract_rejects_duplicate_storage_keys(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"brand 'askjamie' duplicates storage key .* from brand 'glee'",
+        ):
+            validator.validate_brand_theme_contract({"brands": contract})
+
+    def test_contract_loader_accepts_whitespace_before_colons(self) -> None:
+        source = json.dumps(
+            {"brands": BRAND_THEME_CONTRACT, "metadata": {"entries": [{"owner": "fixture"}]}},
+            indent=2, separators=(",", " \t : "),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            self.assertEqual(validator.load_brand_theme_contract(path), BRAND_THEME_CONTRACT)
+
+    def test_duplicate_key_diagnostics_survive_whitespace_before_colons(self) -> None:
+        source = (
+            '{"brands" : ' + json.dumps(BRAND_THEME_CONTRACT)
+            + ', "metadata" : {"entries" : [{"owner" : "first", "owner" : "second"}]}}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, r"JSON path /metadata/entries/0/owner"):
+                validator.load_brand_theme_contract(path)
+
     def test_release_validator_fails_with_aggregated_brand_errors(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
         contract["glee"]["light"] = "orange"
         contract["askjamie"]["dark"] = "#bad"
         with tempfile.TemporaryDirectory() as directory:
@@ -132,8 +235,65 @@ runpy.run_path(sys.argv[3], run_name="__main__")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+        self.assertIn(
+            "brand 'askjamie' duplicates storage key",
+            result.stderr,
+        )
         self.assertIn("brand 'glee' has invalid light color 'orange'", result.stderr)
         self.assertIn("brand 'askjamie' has invalid dark color '#bad'", result.stderr)
+
+    def test_theme_generator_preserves_app_js_when_multi_brand_contract_is_invalid(self) -> None:
+        contract = deepcopy(BRAND_THEME_CONTRACT)
+        contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]
+        contract["glee"]["light"] = "orange"
+        contract["askjamie"]["colorScheme"] = "solarized"
+        contract["askjamie"]["dark"] = "#bad"
+        contract["broken"] = "not an object"
+
+        with tempfile.TemporaryDirectory(prefix="theme-generator-invalid-contract-") as directory:
+            root = Path(directory)
+            scripts_dir = root / "scripts"
+            config_dir = root / "config"
+            app_path = root / "assets" / "js" / "app.js"
+            scripts_dir.mkdir()
+            config_dir.mkdir()
+            app_path.parent.mkdir(parents=True)
+            shutil.copy2(
+                ROOT / "scripts" / "generate-theme-controls.py",
+                scripts_dir / "generate-theme-controls.py",
+            )
+            shutil.copy2(
+                ROOT / "scripts" / "brand_theme.py",
+                scripts_dir / "brand_theme.py",
+            )
+            shutil.copy2(ROOT / "assets" / "js" / "app.js", app_path)
+            contract_path = config_dir / "brand-theme-contract.json"
+            contract_path.write_text(
+                json.dumps({"brands": contract}), encoding="utf-8"
+            )
+            app_before = app_path.read_bytes()
+
+            result = subprocess.run(
+                [sys.executable, str(scripts_dir / "generate-theme-controls.py")],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("ERROR: Invalid brand theme contract", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            expected_errors = (
+                "brand 'askjamie' duplicates storage key",
+                "brand 'glee' has invalid light color 'orange'",
+                "brand 'askjamie' has invalid dark color '#bad'",
+                "brand 'askjamie' has invalid 'colorScheme' value 'solarized'",
+                "brand 'broken' must be a JSON object",
+            )
+            for expected in expected_errors:
+                with self.subTest(error=expected):
+                    self.assertIn(expected, result.stderr)
+            self.assertEqual(app_path.read_bytes(), app_before)
 
     def test_contract_reports_missing_required_field_by_brand(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
