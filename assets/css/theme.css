@@ -3432,6 +3432,27 @@ html[data-theme="light"] .pf-boundary-label--private    { color: #475569; }
   -webkit-overflow-scrolling: touch;
 }
 
+/* Preserve the generated AskJamie maps' scrolling specificity. */
+.askjamie-main .universe-map-generated .mermaid-scroll-wrap {
+  overflow-x: auto;
+}
+
+/* Keep the existing AskJamie failure notice outside its hidden diagram shell. */
+.askjamie-main .mermaid-render-status {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 18px;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.askjamie-main .mermaid-render-status[hidden] {
+  display: none;
+}
+
 .mermaid-noscript {
   margin-top: 1rem;
   padding: 1rem 1.25rem;
@@ -8067,8 +8088,14 @@ html[data-color-scheme="dark"] .askjamie-main .mermaid .edgePath path {
 
 /* Reserve a minimum diagram height while Mermaid loads. The rendered SVG
    determines the final height without imposing a fixed aspect ratio. */
-.askjamie-hero--universe .mermaid-scroll-wrap {
-  min-height: 14rem;
+.askjamie-main .askjamie-hero--universe .mermaid-scroll-wrap {
+  min-height: 22rem;
+}
+
+@media (max-width: 640px) {
+  .askjamie-main .askjamie-hero--universe .mermaid-scroll-wrap {
+    min-height: 18rem;
+  }
 }
 
 @media (min-width: 900px) {
