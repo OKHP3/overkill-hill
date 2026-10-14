@@ -476,6 +476,33 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
                 self.assertIn(diagnostic, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
 
+    def test_locale_checker_reports_malformed_sitemap_without_traceback(self) -> None:
+        sitemap = self.fixture / "locale-sitemap.xml"
+        sitemap.write_text("<urlset><url><loc>https://example.test/</urlset>", encoding="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(self.fixture / "scripts" / "check-locale-links.py"),
+                "--manifest",
+                str(self.fixture / "locale-manifest.json"),
+                "--sitemap",
+                str(sitemap),
+                "--search-index",
+                str(self.fixture / "search-index.fr.json"),
+            ],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertIn("Locale link check failed:\n", result.stderr)
+        self.assertIn(f"cannot read sitemap {sitemap}:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_locale_checker_reports_all_incomplete_locale_declarations(self) -> None:
         manifest = self.fixture / "locale-manifest.json"
         manifest.write_text(
