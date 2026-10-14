@@ -49,8 +49,8 @@ class ContentCoverageParser(HTMLParser):
                 "ordinal": str(self.heading_counts[tag]),
                 "text": "",
             }
-            if self.current_heading["id"]:
-                self.active_section_id = self.current_heading["id"]
+            self.active_section_id = self.current_heading["id"]
+            if self.active_section_id:
                 self.section_headings[self.active_section_id] = self.current_heading
         elif tag in {"p", "li", "blockquote", "figure", "table"}:
             self.content_blocks[tag] = self.content_blocks.get(tag, 0) + 1

@@ -407,13 +407,14 @@ def _sitemap_lastmod_values_from_block(block: str) -> tuple[int, list[str]]:
         flags=re.IGNORECASE,
     ))
     values = [
-        unescape(match.group(1).strip())
+        unescape(match.group("value").strip())
         for match in re.finditer(
-            rf"<{qname_prefix}lastmod(?=[\s/>])[^>]*>([^<]*)"
-            rf"</{qname_prefix}lastmod(?=[\s>])\s*>",
+            rf"<(?P<opening>{qname_prefix}lastmod)(?=[\s/>])[^>]*>(?P<value>[^<]*)"
+            rf"</(?P<closing>{qname_prefix}lastmod)(?=[\s>])\s*>",
             markup,
             flags=re.IGNORECASE,
         )
+        if match.group("opening") == match.group("closing")
     ]
     return len(openings), values
 
@@ -527,6 +528,11 @@ def _sitemap_entries_with_positions_and_findings_from_path(
         if block is None or boundary_error is not None:
             continue
         lastmod_count, lastmod_values = _sitemap_lastmod_values_from_block(block)
+        if lastmod_count == 1 and len(lastmod_values) != 1:
+            findings.append(Finding(
+                "ERROR", "sitemap.xml",
+                f"sitemap URL entry at position {position} has malformed or mismatched <lastmod> element structure",
+            ))
         if lastmod_count > 1:
             details = (
                 f" (values: {', '.join(repr(value) for value in lastmod_values)})"
@@ -576,18 +582,11 @@ def _sitemap_entries_with_positions_and_findings_from_path(
             continue
         if loc is None:
             continue
-        lastmod_match = re.search(
-            r"<(?:[A-Za-z_][\w.-]*:)?lastmod\b[^>]*>([^<]*)"
-            r"</(?:[A-Za-z_][\w.-]*:)?lastmod>",
-            block,
-            flags=re.IGNORECASE,
-        )
+        _, lastmod_values = _sitemap_lastmod_values_from_block(block)
         entries.append((
             position,
             loc,
-            unescape(lastmod_match.group(1).strip())
-            if lastmod_match is not None
-            else None,
+            lastmod_values[0] if lastmod_values else None,
         ))
     return entries, findings
 

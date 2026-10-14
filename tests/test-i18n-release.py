@@ -327,6 +327,19 @@ class I18nReleaseTests(unittest.TestCase):
                     MODULE.format_coverage_omission(paragraph_gap),
                 )
 
+    def test_idless_heading_keeps_omissions_out_of_previous_reviewed_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text('<main><h2 id="reviewed">Reviewed</h2><p>One.</p><h2>Unscoped</h2><p>Missing.</p></main>', encoding="utf-8")
+            target.write_text('<main><h2 id="reviewed">Reviewed</h2><p>One.</p><h2>Unscoped</h2></main>', encoding="utf-8")
+            with patch.object(MODULE, "ROOT", root):
+                result = MODULE.compare_content_coverage(source, target, "de", "/about/")
+            paragraph_gap = next(x for x in result["omissions"] if x.get("block") == "p")
+            self.assertNotIn("sections", paragraph_gap,
+                "content after an ID-less heading cannot inherit the previous section decision")
+
     def test_extra_target_blocks_cannot_mask_another_sections_deficit(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -114,6 +114,9 @@ async function openFixture({
     mode: storage === "blocked" ? "blocked" : "available",
     values: storage === "blocked" ? {} : storage,
   });
+  // setContent does not trigger init scripts. Navigate once so the supplied
+  // storage adapter exists before the reviewed runtime reads its preference.
+  await page.goto("about:blank");
   await page.setContent(withFoundation(markup, css, script), { waitUntil: "domcontentloaded" });
   return page;
 }
@@ -270,6 +273,41 @@ test("Glee and AskJamie keep their light baseline and update theme-color metadat
         { media: "(prefers-color-scheme: light)", content: expected.light },
         { media: "(prefers-color-scheme: dark)", content: expected.dark },
       ], `${brand} auto metadata`);
+    } finally {
+      await page.close();
+    }
+  }
+});
+
+test("brand fixtures restore and persist the supplied storage preference", async () => {
+  for (const brand of Object.values(BRAND_EXPECTATIONS)) {
+    const page = await openFixture({ bodyClass: brand.bodyClass, storage: { [brand.storageKey]: "dark" } });
+    try {
+      assert.equal((await readState(page, ".glee-color-toggle")).state, "dark");
+      assert.equal((await clickAndRead(page, ".glee-color-toggle")).state, "auto");
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), brand.storageKey), null);
+      await clickAndRead(page, ".glee-color-toggle");
+      assert.equal(await page.evaluate((key) => localStorage.getItem(key), brand.storageKey), "light");
+    } finally {
+      await page.close();
+    }
+  }
+});
+
+test("retained immutable theme runtime restores the reviewed brand preference", async () => {
+  const workflow = await readFile(join(repositoryRoot, ".github", "workflows", "validate.yml"), "utf8");
+  const siteRevision = workflow.match(/THEME_CONTROL_OKH_REVISION: ([a-f0-9]{40})/)?.[1];
+  const contractRevision = workflow.match(/THEME_CONTROL_CONTRACT_REVISION: ([a-f0-9]{40})/)?.[1];
+  assert.ok(siteRevision, "the retained site revision must be explicit");
+  const contract = await loadReviewedBrandThemeContract(contractRevision);
+  const { stdout: script } = await execFileAsync("git", ["show", `${siteRevision}:assets/js/app.js`],
+    { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 1024 * 1024 });
+  for (const brand of Object.values(contract.brands)) {
+    const page = await openFixture({ bodyClass: brand.bodyClass, storage: { [brand.storageKey]: "dark" }, script });
+    try {
+      const dark = await readState(page, ".glee-color-toggle");
+      assert.equal(dark.state, "dark", `${brand.name}@${siteRevision}: restore reviewed preference`);
+      assert.ok(dark.colors.every(({ content }) => content === brand.dark));
     } finally {
       await page.close();
     }

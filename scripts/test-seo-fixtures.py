@@ -1016,6 +1016,17 @@ class SEOFixtureTests(unittest.TestCase):
                     self.assertEqual([], entries)
                     self.assertIn("mismatched", findings_text(findings))
 
+    def test_sitemap_recovery_rejects_mismatched_lastmod_names(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sitemap.xml"
+            path.write_text('<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:x="urn:other"><sm:url>'
+                f'<sm:loc>{location}</sm:loc><sm:lastmod>2026-01-01</x:lastmod>'
+                '</sm:url></sm:urlset>', encoding="utf-8")
+            entries, findings = validator._sitemap_entries_with_positions_and_findings_from_path(path)
+            self.assertIn("lastmod", findings_text(findings))
+            self.assertNotIn((1, location, "2026-01-01"), entries)
+
     def test_multiple_lastmod_values_in_one_sitemap_entry_are_reported(self) -> None:
         location = f"{validator.SITE_ORIGIN}/about/"
         first_date = "2026-05-24"
