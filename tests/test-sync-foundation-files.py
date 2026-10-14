@@ -359,15 +359,18 @@ class SyncFoundationSafetyTests(unittest.TestCase):
             revision = site_revisions.get(name) or git(repo, "rev-parse", "HEAD")
             pins.append(f"{name}={revision}")
         source = self.repos["overkill-hill"]
+        source_revision = git(source, "rev-parse", "HEAD")
         expected_fingerprints = {
-            asset: hashlib.sha256((source / asset).read_bytes()).hexdigest()
+            asset: hashlib.sha256(subprocess.check_output(
+                ["git", "show", f"{source_revision}:{asset}"], cwd=source,
+            )).hexdigest()
             for _, asset in drift
         }
         report_path = self.root / "multiple-mismatches-report.json"
         result = self.invoke(
             "--verify",
             "--source-repo", "overkill-hill",
-            "--source-revision", git(source, "rev-parse", "HEAD"),
+            "--source-revision", source_revision,
             *sum((["--site-revision", pin] for pin in pins), []),
             "--report-file", str(report_path),
         )

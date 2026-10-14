@@ -621,6 +621,7 @@ test("allowlisted Pages package retains brand runtime values and a matching app.
       .slice(0, 8);
     const packagedHtmlPaths = (await readdir(output, { recursive: true }))
       .filter((path) => path.endsWith(".html"))
+      .map((path) => path.replaceAll("\\", "/"))
       .sort();
     const pagesWithAppReferences = [];
     for (const path of packagedHtmlPaths) {
@@ -918,11 +919,40 @@ test("configured sites keep foundation bytes and run against actual markup hooks
   for (const site of sites) {
     const expected = DEFAULT_SITE_ROOTS.find(({ name }) => name === site.name);
     assert.ok(expected, `unknown configured site ${site.name} at foundation revision ${site.revision} (contract ${contractRevision})`);
-    assert.deepEqual(
-      brandThemeContractDrift(site, reviewedContract.brands),
-      [],
-      `${site.name} brand runtime drift at site revision ${site.revision} (contract ${contractRevision})`,
-    );
+    // Retained release pins predate generated brand blocks. Check those
+    // immutable runtimes through their actual controls; do not advance pins
+    // merely to satisfy a newer serialization format.
+    if (site.script.includes("// BEGIN GENERATED BRAND THEME CONFIG.")) {
+      assert.deepEqual(
+        brandThemeContractDrift(site, reviewedContract.brands),
+        [],
+        `${site.name} brand runtime drift at site revision ${site.revision} (contract ${contractRevision})`,
+      );
+    }
+    for (const brand of Object.values(reviewedContract.brands)) {
+      const brandPage = await openFixture({
+        bodyClass: brand.bodyClass,
+        storage: { [brand.storageKey]: "dark" },
+        script: site.script,
+      });
+      const context = `${site.name}@${site.revision}, ${brand.name}, contract@${contractRevision}`;
+      try {
+        const dark = await readState(brandPage, ".glee-color-toggle");
+        assert.equal(dark.state, "dark", `${context}: reviewed storage key restores dark`);
+        assert.equal(dark.colorScheme, "dark", `${context}: dark scheme`);
+        assert.ok(dark.colors.length > 0, `${context}: theme metadata exists`);
+        assert.ok(dark.colors.every(({ content }) => content === brand.dark), `${context}: dark color`);
+        const auto = await clickAndRead(brandPage, ".glee-color-toggle");
+        assert.equal(auto.state, "auto", `${context}: auto transition`);
+        assert.deepEqual(auto.colors.map(({ content }) => content), [brand.light, brand.dark], `${context}: automatic colors`);
+        const light = await clickAndRead(brandPage, ".glee-color-toggle");
+        assert.equal(light.colorScheme, "light", `${context}: light scheme`);
+        assert.ok(light.colors.every(({ content }) => content === brand.light), `${context}: light color`);
+        assert.equal(await brandPage.evaluate((key) => localStorage.getItem(key), brand.storageKey), "light", `${context}: reviewed storage key persists light`);
+      } finally {
+        await brandPage.close();
+      }
+    }
     const page = await openFixture({
       markup: site.markup,
       css: site.css,

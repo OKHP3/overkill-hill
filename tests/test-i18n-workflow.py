@@ -75,6 +75,7 @@ class I18nWorkflowTests(unittest.TestCase):
                 ".agents/skills/okhp3-i18n-page-sync/scripts/i18n-page-sync.py",
                 "i18n/sync.config.json", config["state_file"], config["search_index"],
             }
+            paths.update(config.get("advisory_coverage_review_records", {}).values())
             for route in config["in_scope_routes"]:
                 page = (route.strip("/") + "/index.html").lstrip("/")
                 paths.add(page)
