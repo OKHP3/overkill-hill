@@ -41,7 +41,13 @@ const reportArg = process.argv.find((arg) => arg.startsWith("--report="));
 const fixtureSummaryArg = process.argv.find((arg) => arg.startsWith("--fixture-summary="));
 const summaryArg = process.argv.find((arg) => arg.startsWith("--summary="));
 const artifactUrlArg = process.argv.find((arg) => arg.startsWith("--artifact-url="));
-const externalBudgetArg = process.argv.find((arg) => arg.startsWith("--external-budget-ms="));
+const externalBudgetArguments = process.argv.filter(
+  (arg) => arg.startsWith("--external-budget-ms="),
+);
+if (externalBudgetArguments.length > 1) {
+  throw new Error("--external-budget-ms may be specified only once");
+}
+const externalBudgetArg = externalBudgetArguments[0];
 const externalHealthMode =
   process.argv.includes("--external-health") || process.argv.includes("--check-external");
 const browserArguments = process.argv.filter(

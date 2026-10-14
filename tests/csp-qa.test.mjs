@@ -2828,6 +2828,35 @@ test("rejects invalid external-health budgets before browser startup or report c
   }
 });
 
+test("rejects repeated external-health budgets before browser startup or report creation", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-duplicate-budget-"));
+  const repeatedValues = [
+    ["1500", "3000"],
+    ["1500", "1500"],
+  ];
+  try {
+    for (const [index, values] of repeatedValues.entries()) {
+      const reportPath = join(reportDirectory, `report-${index}.json`);
+      const result = await runCspQaCommand([
+        "--external-health",
+        "--paths=/external-healthy-only.html",
+        ...values.map((value) => `--external-budget-ms=${value}`),
+        `--report=${reportPath}`,
+      ]);
+      assert.equal(result.status, 1, `values=${values.join(",")}\n${result.output}`);
+      assert.match(
+        result.output,
+        /--external-budget-ms may be specified only once/,
+        `values=${values.join(",")}\n${result.output}`,
+      );
+      assert.doesNotMatch(result.output, /Browser engine:|External health:/);
+      assert.equal(existsSync(reportPath), false, `values=${values.join(",")}`);
+    }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 // Exercise the actual CLI report and deadline logic with deterministic clocks
 // and launch boundaries, without platform-specific fake browser executables.
 async function simulateExternalHealth({
