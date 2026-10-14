@@ -2519,13 +2519,13 @@ test("keeps HTTP status and route summaries isolated across failing dependencies
       return line;
     };
     const unavailableLine = lineFor("/shared.png");
-    assert.match(unavailableLine, /HTTP status: 503/);
-    assert.doesNotMatch(unavailableLine, /404|external-not-found\.html/);
+    assert.match(unavailableLine, /; HTTP status: 503$/);
+    assert.doesNotMatch(unavailableLine, /external-not-found\.html/);
     assert.match(unavailableLine, /external-outage-shared\.html/);
 
     const notFoundLine = lineFor("/not-found.png");
-    assert.match(notFoundLine, /HTTP status: 404/);
-    assert.doesNotMatch(notFoundLine, /503|external-outage-shared\.html/);
+    assert.match(notFoundLine, /; HTTP status: 404$/);
+    assert.doesNotMatch(notFoundLine, /external-outage-shared\.html/);
     assert.match(notFoundLine, /external-not-found\.html/);
 
     const report = JSON.parse(await readFile(reportPath, "utf8"));
