@@ -1274,6 +1274,24 @@ test("rejects an unsupported external-health browser before launch", async () =>
   assert.doesNotMatch(result.output, /Browser engine:/);
 });
 
+test("rejects empty entries in explicit external-health route lists before browser launch", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-empty-route-entry-"));
+  const reportPath = join(reportDirectory, "report.json");
+  try {
+    const result = await runCspQaCommand([
+      "--external-health",
+      "--paths=/one,,/two",
+      `--report=${reportPath}`,
+    ]);
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /--paths must not contain empty route entries/);
+    assert.doesNotMatch(result.output, /Browser engine:|External health:/);
+    assert.equal(existsSync(reportPath), false);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("rejects non-Chromium selection outside external-health", async () => {
   const result = await runCspQaCommand([
     "--paths=/external-csp-blocked.html",

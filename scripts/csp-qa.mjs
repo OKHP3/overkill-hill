@@ -77,9 +77,13 @@ function loadPublicPaths() {
   if (pathsArg) {
     const paths = pathsArg.slice("--paths=".length)
       .split(",")
-      .map((path) => path.trim())
-      .filter(Boolean);
-    if (!paths.length) throw new Error("--paths must contain at least one route");
+      .map((path) => path.trim());
+    if (!paths.some(Boolean)) {
+      throw new Error("--paths must contain at least one route");
+    }
+    if (paths.some((path) => !path)) {
+      throw new Error("--paths must not contain empty route entries");
+    }
     return [...new Set(paths.map((path) => {
       const url = new URL(path, baseUrl);
       if (url.origin !== baseOrigin || !path.startsWith("/") || url.search || url.hash) {
