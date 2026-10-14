@@ -468,6 +468,7 @@ jobs:
           node tests/test-reveal-browser.mjs
           node tests/test-ask-contrast-browser.mjs
           node tests/test-brandguard-breadcrumb-browser.mjs
+          node tests/test-ask-transition-browser.mjs
 
       - name: Run WCAG contrast audit
         id: contrast
