@@ -7908,6 +7908,37 @@ html body.askjamie-main {
   height: auto;
 }
 
+/* The BrandGuard critical shell keeps its crumb logo compact on mobile.
+   Reassert that exception after the shared hero-logo rule above. */
+@media (max-width: 899px) {
+  .askjamie-main.askjamie-brandguard-page .askjamie-logo--crumb {
+    margin-bottom: 0;
+  }
+
+  .askjamie-main.askjamie-brandguard-page .askjamie-logo--crumb img {
+    max-width: 7.5rem;
+  }
+
+  .askjamie-main.askjamie-brandguard-page .askjamie-breadcrumb .breadcrumb-label {
+    min-width: 15.25rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .askjamie-main.askjamie-brandguard-page .askjamie-breadcrumb .breadcrumb-label,
+  .askjamie-main:has(.brandguard-demo-notice) .askjamie-breadcrumb .breadcrumb-label {
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .askjamie-main.askjamie-brandguard-page .askjamie-breadcrumb .breadcrumb-separator,
+  .askjamie-main:has(.brandguard-demo-notice) .askjamie-breadcrumb .breadcrumb-separator {
+    display: none;
+  }
+}
+
 /* ===================================================================== */
 /* AskJamie – Mermaid layout + mid‑century teal skin                     */
 /* ===================================================================== */
