@@ -1639,6 +1639,133 @@ class SummaryTests(unittest.TestCase):
                             summary_result.stdout,
                         )
 
+    def test_failed_phone_size_qa_stays_failed_when_both_optional_report_sets_are_absent(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        phone_qa = step('Check phone-size overflow on every shipped page')
+        report_check = step('Check local QA report sets')
+        upload = step('Upload local QA reports')
+        summary = step('Summarize local QA report artifact')
+        self.assertIn('npm run test:phone-overflow', phone_qa)
+        self.assertIn('npm run test:responsive', phone_qa)
+        self.assertIn('npm run test:toc', phone_qa)
+        self.assertNotIn('continue-on-error: true', phone_qa)
+        self.assertIn('if: always()', report_check)
+        self.assertIn('if: always()', upload)
+        self.assertIn('if-no-files-found: warn', upload)
+        self.assertNotIn('continue-on-error: true', upload)
+        self.assertIn('if: always()', summary)
+
+        def shell_command(step_source, label):
+            run_block = re.search(
+                r'(?ms)^        run: \|\n((?:^          .*\n?)+)',
+                step_source,
+            )
+            self.assertIsNotNone(run_block, f'{label} must use a literal shell block')
+            return '\n'.join(line[10:] for line in run_block.group(1).splitlines())
+
+        report_check_command = shell_command(report_check, 'local QA report check')
+        summary_command = shell_command(summary, 'local QA summary')
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            responsive_dir = root / 'test-results/responsive-qa'
+            static_dir = root / 'test-results/audit-site'
+            output_path = root / 'github-output.txt'
+            summary_path = root / 'github-step-summary.md'
+            output_path.write_text('', encoding='utf-8')
+            summary_path.write_text('', encoding='utf-8')
+
+            # Simulate a failed browser QA command that produced neither optional report set.
+            originating_check = subprocess.run(
+                ['bash', '-c', 'exit 23'],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(originating_check.returncode, 0)
+            self.assertFalse(responsive_dir.exists())
+            self.assertFalse(static_dir.exists())
+
+            environment = os.environ.copy()
+            environment['GITHUB_OUTPUT'] = str(output_path)
+            report_check_result = subprocess.run(
+                ['bash', '-e', '-o', 'pipefail', '-c', report_check_command],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                report_check_result.returncode,
+                0,
+                report_check_result.stdout + report_check_result.stderr,
+            )
+            output_values = dict(
+                line.split('=', 1)
+                for line in output_path.read_text(encoding='utf-8').splitlines()
+            )
+            self.assertEqual(
+                output_values,
+                {'responsive_found': 'false', 'static_found': 'false'},
+            )
+
+            # Model the hosted upload action's warning-only behavior for absent paths.
+            upload_result = (
+                0
+                if responsive_dir.exists() or static_dir.exists()
+                or 'if-no-files-found: warn' in upload
+                else 1
+            )
+            self.assertEqual(upload_result, 0, 'missing optional reports must not fail upload')
+
+            environment.update({
+                'GITHUB_STEP_SUMMARY': str(summary_path),
+                'LOCAL_QA_ARTIFACT_URL': '',
+                'LOCAL_QA_RESPONSIVE_FOUND': output_values['responsive_found'],
+                'LOCAL_QA_STATIC_FOUND': output_values['static_found'],
+                'LOCAL_QA_ARTIFACT_RETENTION_DAYS': '7',
+            })
+            summary_result = subprocess.run(
+                ['bash', '-e', '-o', 'pipefail', '-c', summary_command],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                summary_result.returncode,
+                0,
+                summary_result.stdout + summary_result.stderr,
+            )
+            rendered = summary_path.read_text(encoding='utf-8')
+            self.assertIn('- Responsive browser reports: not found', rendered)
+            self.assertIn('- Static audit reports: not found', rendered)
+
+            # A successful warning-only upload and summary cannot clear a prior failed step.
+            workflow_result = (
+                'failure'
+                if originating_check.returncode != 0
+                or report_check_result.returncode != 0
+                or upload_result != 0
+                or summary_result.returncode != 0
+                else 'success'
+            )
+            self.assertEqual(
+                workflow_result,
+                'failure',
+                'the failed phone-size QA command must remain a failed workflow',
+            )
+
     def test_failed_csp_fixtures_upload_only_the_short_lived_focused_report(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
         match = re.search(
