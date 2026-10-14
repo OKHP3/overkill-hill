@@ -865,23 +865,29 @@ test("keeps every browser diagnostic category visible in the focused summary", a
     pass: false,
     errors: ["NETWORK: new browser diagnostic | preserve this"],
   }];
+  const fixtureReport = `${JSON.stringify({
+    version: 1,
+    mode: "csp-fixtures",
+    fixtures,
+  })}\n`;
 
   try {
-    const rawReport = `${JSON.stringify({
-      version: 1,
-      mode: "csp-fixtures",
-      fixtures,
-    })}\n`;
-    await writeFile(reportPath, rawReport);
+    await writeFile(reportPath, fixtureReport);
 
     const result = await runFixtureSummary(reportPath, summaryPath);
     assert.equal(result.status, 0, result.output);
+    const savedFixtureReport = await readFile(reportPath, "utf8");
+    assert.equal(
+      savedFixtureReport,
+      fixtureReport,
+      "writing the Markdown summary must not change the original fixture JSON",
+    );
+    assert.deepEqual(
+      JSON.parse(savedFixtureReport).fixtures[0].errors,
+      fixtures[0].errors,
+      "the raw fixture JSON must retain repeated browser diagnostic evidence",
+    );
     const summary = await readFile(summaryPath, "utf8");
-
-    assert.equal(await readFile(reportPath, "utf8"), rawReport,
-      "summary generation must leave the raw fixture report unchanged");
-    assert.deepEqual(JSON.parse(await readFile(reportPath, "utf8")).fixtures[0].errors,
-      fixtures[0].errors, "the raw report must retain repeated browser diagnostics");
 
     const combinedRow = summary
       .split("\n")
