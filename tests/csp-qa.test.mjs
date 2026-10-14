@@ -3001,6 +3001,44 @@ test("attributes mixed HTTP responses to the actual failing route", async () => 
   }
 });
 
+test("summarizes distinct HTTP errors once for a shared dependency", async () => {
+  const routeStatuses = { "/not-found/": 404, "/unavailable/": 503 };
+  const { report, exitCode, logs } = await simulateExternalHealth({
+    budget: 20000, routeStatuses,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+  assert.equal(report.summary.externalOutages, 1);
+  assert.equal(report.externalOutages.length, 1);
+
+  const [dependency] = report.dependencies;
+  assert.equal(dependency.url, "https://third.example/late.png");
+  assert.equal(dependency.state, "unavailable");
+  assert.deepEqual(
+    dependency.responses.map(({ route, status }) => ({ route, status })),
+    Object.entries(routeStatuses).map(([route, status]) => ({ route, status })),
+  );
+  assert.deepEqual(
+    dependency.routeOutcomes.map(({ route, state, responses }) => ({
+      route,
+      state,
+      statuses: responses.map(({ status }) => status),
+    })),
+    [
+      { route: "/not-found/", state: "unavailable", statuses: [404] },
+      { route: "/unavailable/", state: "unavailable", statuses: [503] },
+    ],
+  );
+
+  const diagnostic = logs.find((line) => line.includes("EXTERNAL OUTAGE:"));
+  assert.ok(diagnostic, JSON.stringify(logs));
+  assert.match(diagnostic, /HTTP error on route\(s\): \/not-found\/, \/unavailable\//);
+  assert.match(diagnostic, /HTTP statuses: 404, 503/);
+  assert.equal((diagnostic.match(/404/g) || []).length, 1);
+  assert.equal((diagnostic.match(/503/g) || []).length, 1);
+});
+
 test("records the selected browser build without affecting outage classification", async () => {
   const { report, exitCode } = await simulateExternalHealth({
     budget: 20000,
