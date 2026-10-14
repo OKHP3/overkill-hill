@@ -1869,6 +1869,67 @@ class SummaryTests(unittest.TestCase):
             workflow.index('Upload failed CSP fixture report'),
         )
 
+    def test_successful_csp_check_without_report_skips_failure_only_evidence_steps(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+
+        def step(name):
+            match = re.search(
+                rf'(?ms)^      - name: {re.escape(name)}\n'
+                r'(.*?)(?=^      - name: |\Z)',
+                workflow,
+            )
+            self.assertIsNotNone(match, f'missing workflow step: {name}')
+            return match.group(1)
+
+        warning = step('Explain missing focused CSP fixture report')
+        upload = step('Upload failed CSP fixture report')
+        summary = step('Summarize failed CSP fixture regressions')
+        preserve = step('Preserve CSP fixture regression failure')
+        failure_condition = "if: always() && steps.csp-fixtures.outcome == 'failure'"
+        missing_report_condition = (
+            failure_condition + " && !hashFiles('csp-fixture-report.json')"
+        )
+
+        self.assertIn(failure_condition, warning)
+        self.assertIn(missing_report_condition, warning)
+        for optional_step in (upload, summary, preserve):
+            self.assertIn(failure_condition, optional_step)
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / 'csp-fixture-report.json'
+            successful_check = subprocess.run(
+                ['bash', '-c', 'exit 0'],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                successful_check.returncode,
+                0,
+                successful_check.stdout + successful_check.stderr,
+            )
+            fixture_outcome = 'success'
+            self.assertFalse(report_path.exists())
+
+            # Mirror the workflow predicates to ensure a successful result with
+            # no optional report cannot enter any failure-only evidence step.
+            missing_report_warning_runs = (
+                fixture_outcome == 'failure' and not report_path.exists()
+            )
+            failure_only_steps_run = {
+                name: fixture_outcome == 'failure'
+                for name in ('upload', 'summary', 'failure preservation')
+            }
+            self.assertFalse(missing_report_warning_runs)
+            self.assertEqual(
+                failure_only_steps_run,
+                {
+                    'upload': False,
+                    'summary': False,
+                    'failure preservation': False,
+                },
+            )
+
     def test_failed_csp_check_without_report_stays_failed_after_optional_evidence_steps(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
 
