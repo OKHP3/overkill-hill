@@ -85,8 +85,14 @@ function loadPublicPaths() {
       throw new Error("--paths must not contain empty route entries");
     }
     return [...new Set(paths.map((path) => {
+      if (path.includes("?")) {
+        throw new Error(`Invalid --paths route: query strings are not allowed: ${path}`);
+      }
+      if (path.includes("#")) {
+        throw new Error(`Invalid --paths route: fragments are not allowed: ${path}`);
+      }
       const url = new URL(path, baseUrl);
-      if (url.origin !== baseOrigin || !path.startsWith("/") || url.search || url.hash) {
+      if (url.origin !== baseOrigin || !path.startsWith("/")) {
         throw new Error(`Invalid --paths route: ${path}`);
       }
       return url.pathname || "/";

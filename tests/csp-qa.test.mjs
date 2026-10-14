@@ -1292,6 +1292,44 @@ test("rejects empty entries in explicit external-health route lists before brows
   }
 });
 
+test("rejects query strings and fragments in explicit routes before browser launch", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-invalid-route-url-parts-"));
+  const invalidRoutes = [
+    {
+      route: "/external-healthy-only.html?cache-buster=1",
+      diagnostic: /Invalid --paths route: query strings are not allowed:/,
+    },
+    {
+      route: "/external-healthy-only.html#section",
+      diagnostic: /Invalid --paths route: fragments are not allowed:/,
+    },
+    {
+      route: "/external-healthy-only.html?",
+      diagnostic: /Invalid --paths route: query strings are not allowed:/,
+    },
+    {
+      route: "/external-healthy-only.html#",
+      diagnostic: /Invalid --paths route: fragments are not allowed:/,
+    },
+  ];
+  try {
+    for (const [index, { route, diagnostic }] of invalidRoutes.entries()) {
+      const reportPath = join(reportDirectory, `report-${index}.json`);
+      const result = await runCspQaCommand([
+        "--external-health",
+        `--paths=${route}`,
+        `--report=${reportPath}`,
+      ]);
+      assert.equal(result.status, 1, `route=${route}\n${result.output}`);
+      assert.match(result.output, diagnostic, `route=${route}\n${result.output}`);
+      assert.doesNotMatch(result.output, /Browser engine:|External health:/);
+      assert.equal(existsSync(reportPath), false, `invalid route=${route}`);
+    }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("rejects non-Chromium selection outside external-health", async () => {
   const result = await runCspQaCommand([
     "--paths=/external-csp-blocked.html",
