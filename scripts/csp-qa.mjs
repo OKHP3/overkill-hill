@@ -939,10 +939,15 @@ async function runExternalHealth() {
   const browserStartupTimeoutMs = Math.max(1, overallDeadline - Date.now());
   let browser;
   try {
-    browser = await externalHealthBrowserType.launch({
+    const launchOptions = {
       headless: true,
       timeout: browserStartupTimeoutMs,
-    });
+    };
+    if (browserName === "chromium" && process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE) {
+      launchOptions.executablePath = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+      launchOptions.args = ["--no-sandbox"];
+    }
+    browser = await externalHealthBrowserType.launch(launchOptions);
   } catch (error) {
     const startupTimedOut =
       Date.now() >= overallDeadline ||
