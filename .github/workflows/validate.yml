@@ -28,6 +28,7 @@ jobs:
     # Cancel obsolete PR validation only. Caller names separate reusable runs;
     # push/dispatch run IDs keep retries from canceling another release.
     env:
+      LOCAL_QA_ARTIFACT_RETENTION_DAYS: 7
       THEME_CONTROL_OKH_REVISION: 0ee6bc875a183ca2e065448d01fe97da62fc1ff7
       THEME_CONTROL_GLEE_REVISION: f5689fe4852b72e5d584db9d8f87cac9121b87c4
       THEME_CONTROL_ASKJAMIE_REVISION: e800d4aebf0dc2543c5ced295ec78d10ba192473
@@ -419,7 +420,7 @@ jobs:
             test-results/responsive-qa/
             test-results/audit-site/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: ${{ env.LOCAL_QA_ARTIFACT_RETENTION_DAYS }}
 
       - name: Summarize local QA report artifact
         if: always()
@@ -443,7 +444,8 @@ jobs:
             fi
             echo
             if [ -n "$LOCAL_QA_ARTIFACT_URL" ]; then
-              printf '[Download local QA reports](%s)\n' "$LOCAL_QA_ARTIFACT_URL"
+              printf '[Download local QA reports](%s) (retained for %s days)\n' \
+                "$LOCAL_QA_ARTIFACT_URL" "$LOCAL_QA_ARTIFACT_RETENTION_DAYS"
             else
               echo "No local QA artifact URL was returned; review the upload step if report files were expected."
             fi

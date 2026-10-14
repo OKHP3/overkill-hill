@@ -1403,7 +1403,7 @@ class SummaryTests(unittest.TestCase):
                 )
                 self.assertRegex(
                     step,
-                    r'(?m)^          retention-days: [1-9][0-9]*$',
+                    r'(?m)^          retention-days: (?:[1-9][0-9]*|\$\{\{ env\.LOCAL_QA_ARTIFACT_RETENTION_DAYS \}\})$',
                 )
 
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
@@ -1414,7 +1414,10 @@ class SummaryTests(unittest.TestCase):
         )
         self.assertIsNotNone(local_qa, 'missing local QA evidence upload step')
         self.assertIn('if-no-files-found: warn', local_qa.group(1))
-        self.assertIn('retention-days: 7', local_qa.group(1))
+        self.assertIn(
+            'retention-days: ${{ env.LOCAL_QA_ARTIFACT_RETENTION_DAYS }}',
+            local_qa.group(1),
+        )
         self.assertIn('test-results/responsive-qa/', local_qa.group(1))
         self.assertIn('test-results/audit-site/', local_qa.group(1))
         self.assertIn('id: upload-local-qa-reports', local_qa.group(1))
@@ -1436,6 +1439,21 @@ class SummaryTests(unittest.TestCase):
         self.assertIsNotNone(upload, 'missing local QA artifact upload')
         self.assertIsNotNone(summary, 'missing local QA artifact summary')
         self.assertIn('if-no-files-found: warn', upload.group(1))
+        job_env = re.search(
+            r'(?ms)^    env:\n(.*?)(?=^    concurrency:|\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(job_env, 'missing validation job environment')
+        retention = re.search(
+            r'(?m)^      LOCAL_QA_ARTIFACT_RETENTION_DAYS: ([1-9][0-9]*)$',
+            job_env.group(1),
+        )
+        self.assertIsNotNone(retention, 'missing local QA artifact retention setting')
+        retention_days = retention.group(1)
+        self.assertIn(
+            'retention-days: ${{ env.LOCAL_QA_ARTIFACT_RETENTION_DAYS }}',
+            upload.group(1),
+        )
         self.assertIn('if: always()', summary.group(1))
         self.assertIn(
             'steps.upload-local-qa-reports.outputs.artifact-url',
@@ -1449,6 +1467,10 @@ class SummaryTests(unittest.TestCase):
         command = '\n'.join(
             line[10:] for line in run_block.group(1).splitlines()
         )
+        self.assertIn(
+            '"$LOCAL_QA_ARTIFACT_RETENTION_DAYS"',
+            command,
+        )
 
         with tempfile.TemporaryDirectory() as directory:
             summary_path = Path(directory) / 'github-step-summary.md'
@@ -1461,6 +1483,7 @@ class SummaryTests(unittest.TestCase):
                     environment = os.environ.copy()
                     environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
                     environment['LOCAL_QA_ARTIFACT_URL'] = artifact_url
+                    environment['LOCAL_QA_ARTIFACT_RETENTION_DAYS'] = retention_days
                     result = subprocess.run(
                         ['bash', '-e', '-o', 'pipefail', '-c', command],
                         cwd=ROOT,
@@ -1472,12 +1495,18 @@ class SummaryTests(unittest.TestCase):
                     rendered = summary_path.read_text(encoding='utf-8')
                     if artifact_url:
                         self.assertIn(
+                            f'(retained for {retention_days} days)',
+                            rendered,
+                        )
+                    if artifact_url:
+                        self.assertIn(
                             f'[Download local QA reports]({artifact_url})',
                             rendered,
                         )
                     else:
                         self.assertIn('No local QA artifact URL was returned', rendered)
                         self.assertNotIn('[Download local QA reports]', rendered)
+                        self.assertNotIn('(retained for ', rendered)
 
     def test_local_qa_report_summary_identifies_complete_and_partial_report_sets(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
