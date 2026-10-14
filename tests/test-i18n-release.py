@@ -556,6 +556,14 @@ class I18nReleaseTests(unittest.TestCase):
             with patch.object(MODULE, "ROOT", root):
                 result = MODULE.apply_coverage_dispositions(gaps, config)
                 self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+                residual_gaps = [{**gaps[0], "omissions": [{
+                    **gaps[0]["omissions"][1], "source_count": 3,
+                    "target_count": 1, "omitted_count": 2,
+                }]}]
+                residual = MODULE.apply_coverage_dispositions(residual_gaps, config)
+                self.assertEqual(1, len(residual[0]["unresolved_omissions"]),
+                    "unscoped missing blocks remain unresolved even when identified sections are accepted abridgments")
+                self.assertEqual(1, residual[0]["omissions"][0]["unscoped_omitted_count"])
                 for changed_page in (source, target):
                     with self.subTest(changed_page=changed_page.name, parent=changed_page.parent.name):
                         original_bytes = changed_page.read_bytes()

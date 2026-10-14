@@ -342,6 +342,14 @@ def apply_coverage_dispositions(
                     sections.append(section)
                 omission["sections"] = sections
                 if sections:
+                    attributed_deficit = sum(max(0,
+                        section.get("source_count", 0) - section.get("target_count", 0)
+                    ) for section in sections)
+                    residual = max(0, omission.get("source_count", 0)
+                        - omission.get("target_count", 0) - attributed_deficit)
+                    omission["unscoped_omitted_count"] = residual
+                    if residual:
+                        omission["unscoped_review_disposition"] = unscoped
                     omission["review_disposition"] = {
                         "disposition": (
                             "intentional-abridgment"
@@ -350,9 +358,10 @@ def apply_coverage_dispositions(
                                 == "intentional-abridgment"
                                 for section in sections
                             )
+                            and (not residual or unscoped["disposition"] == "intentional-abridgment")
                             else "unresolved"
                         ),
-                        "rationale": "See the route-and-section decisions attached to each section.",
+                        "rationale": "See the section decisions and any remaining unscoped deficit.",
                     }
             if "review_disposition" not in omission:
                 omission["review_disposition"] = unscoped
@@ -396,6 +405,9 @@ def format_coverage_omission(omission: dict[str, Any]) -> str:
             for section in sections
         )
         detail += f"; sections: {section_details}"
+    if omission.get("unscoped_omitted_count"):
+        detail += (f"; unscoped: {omission['unscoped_omitted_count']} "
+            f"[{omission['unscoped_review_disposition']['disposition']}]")
     disposition = omission.get("review_disposition", {}).get("disposition", "unresolved")
     detail += f" [{disposition}]"
     return detail
