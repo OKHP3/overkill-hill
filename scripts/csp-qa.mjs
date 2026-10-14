@@ -249,11 +249,16 @@ function writeFixtureSummary(reportPath) {
   }
 
   const fixtures = reportStatus === "available" ? report.fixtures : [];
+  const passCount = fixtures.filter((fixture) => fixture.pass === true).length;
+  const failCount = fixtures.filter((fixture) => fixture.pass === false).length;
   const lines = [
     "## CSP fixture diagnostics",
     "",
     "Focused CSP fixture regressions failed. The full browser output remains in the check log.",
     "",
+    ...(fixtures.length
+      ? [`Fixture totals: **${passCount} PASS**, **${failCount} FAIL**.`, ""]
+      : []),
     "| Fixture | Result | Diagnostic categories | Key browser diagnostic |",
     "| --- | --- | --- | --- |",
   ];

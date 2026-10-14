@@ -814,7 +814,9 @@ test("shows explicit pass and fail results for a mixed focused fixture report", 
       mode: "csp-fixtures",
       fixtures: [
         { path: "/passing.html", pass: true, errors: [] },
+        { path: "/also-passing.html", pass: true, errors: [] },
         { path: "/failing.html", pass: false, errors: ["CSP: blocked"] },
+        { path: "/also-failing.html", pass: false, errors: ["CSP: inline script blocked"] },
       ],
     })}\n`);
 
@@ -829,6 +831,11 @@ test("shows explicit pass and fail results for a mixed focused fixture report", 
       summary,
       /\| \/failing\.html \| FAIL \| CSP \| CSP: blocked \|/,
     );
+    assert.match(
+      summary,
+      /\| \/also-failing\.html \| FAIL \| CSP \| CSP: inline script blocked \|/,
+    );
+    assert.match(summary, /Fixture totals: \*\*2 PASS\*\*, \*\*2 FAIL\*\*\./);
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
