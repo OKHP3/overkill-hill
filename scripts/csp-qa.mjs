@@ -243,7 +243,26 @@ function writeFixtureSummary(reportPath) {
   ) {
     reportStatus = "malformed";
     reportError = "Focused CSP fixture report is malformed: expected an object with a fixtures array.";
-  } else if (reportStatus === "available" && report.fixtures.length === 0) {
+  } else if (reportStatus === "available") {
+    const unsupportedFields = [];
+    if (report.version !== 1) {
+      const foundVersion = report.version === undefined
+        ? "missing"
+        : JSON.stringify(report.version);
+      unsupportedFields.push(`version (expected 1; found ${foundVersion})`);
+    }
+    if (report.mode !== "csp-fixtures") {
+      const foundMode = report.mode === undefined
+        ? "missing"
+        : JSON.stringify(report.mode);
+      unsupportedFields.push(`mode (expected csp-fixtures; found ${foundMode})`);
+    }
+    if (unsupportedFields.length) {
+      reportStatus = "unsupported";
+      reportError = `Focused CSP fixture report uses unsupported ${unsupportedFields.join(" and ")}.`;
+    }
+  }
+  if (reportStatus === "available" && report.fixtures.length === 0) {
     reportStatus = "empty";
     reportError = "Focused CSP fixture report is empty: no fixture results were recorded.";
   }

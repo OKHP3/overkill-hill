@@ -719,6 +719,61 @@ test("links the focused CSP summary to its uploaded artifact", async () => {
   }
 });
 
+test("marks unsupported focused CSP report formats unavailable and preserves artifact links", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-unsupported-"));
+  const reportPath = join(reportDirectory, "fixture-report.json");
+  const summaryPath = join(reportDirectory, "summary.md");
+  const artifactUrl = "https://github.com/example/site/actions/runs/123/artifacts/456";
+  const unsupportedFormats = [
+    {
+      version: 2,
+      mode: "csp-fixtures",
+      expected: /unsupported version \(expected 1; found 2\)/,
+    },
+    {
+      version: 1,
+      mode: "future-fixtures",
+      expected: /unsupported mode \(expected csp-fixtures; found "future-fixtures"\)/,
+    },
+    {
+      version: 2,
+      mode: "future-fixtures",
+      expected: /unsupported version \(expected 1; found 2\) and mode \(expected csp-fixtures; found "future-fixtures"\)/,
+    },
+  ];
+
+  try {
+    for (const format of unsupportedFormats) {
+      await writeFile(reportPath, `${JSON.stringify({
+        version: format.version,
+        mode: format.mode,
+        fixtures: [{ path: "/unsupported.html", pass: false, errors: ["CSP: blocked"] }],
+      })}\n`);
+      await writeFile(summaryPath, "");
+
+      const result = await runFixtureSummary(reportPath, summaryPath, artifactUrl);
+      assert.equal(result.status, 0, result.output);
+      const summary = await readFile(summaryPath, "utf8");
+      assert.match(
+        summary,
+        /\| unavailable \| UNKNOWN \| unknown \| Focused CSP fixture report uses unsupported /,
+      );
+      assert.match(summary, format.expected);
+      assert.doesNotMatch(summary, /\/unsupported\.html|Fixture totals:/);
+      assert.match(
+        summary,
+        new RegExp(
+          String.raw`Focused CSP evidence artifact: \[csp-fixture-report\.json\]\(` +
+          artifactUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+          String.raw`\)`,
+        ),
+      );
+    }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 
 test("keeps the focused CSP summary useful without an uploaded artifact", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-missing-"));
