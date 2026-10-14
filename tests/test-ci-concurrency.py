@@ -315,6 +315,79 @@ class ConcurrencyTests(unittest.TestCase):
             self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
             self.assertIn('FAILED; could not fetch from', evidence)
 
+    def test_theme_control_fetch_helper_records_a_successful_pinned_revision_offline(self):
+        source = job(VALIDATE, 'validate')
+        fetch_step = step(source, 'Verify pinned theme-control foundation revisions are fetchable')
+        function_match = re.search(
+            r'(?ms)^          verify_revision\(\) \{\n.*?^          \}',
+            fetch_step,
+        )
+        self.assertIsNotNone(function_match, 'missing workflow verify_revision helper')
+        helper = textwrap.dedent(function_match.group(0))
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture_repository = root / 'foundation'
+            fixture_repository.mkdir()
+            subprocess.run(
+                ['git', 'init', '--quiet', str(fixture_repository)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            fixture_file = fixture_repository / 'foundation.txt'
+            fixture_file.write_text('pinned foundation fixture\n', encoding='utf-8')
+            subprocess.run(
+                ['git', '-C', str(fixture_repository), 'add', 'foundation.txt'],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            commit_environment = os.environ.copy()
+            commit_environment.update({
+                'GIT_AUTHOR_NAME': 'Fixture',
+                'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
+                'GIT_COMMITTER_NAME': 'Fixture',
+                'GIT_COMMITTER_EMAIL': 'fixture@example.invalid',
+            })
+            subprocess.run(
+                ['git', '-C', str(fixture_repository), 'commit', '--quiet', '-m', 'fixture'],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=commit_environment,
+            )
+            revision = subprocess.run(
+                ['git', '-C', str(fixture_repository), 'rev-parse', 'HEAD'],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+            environment = os.environ.copy()
+            environment['RUNNER_TEMP'] = str(root / 'runner-temp')
+            script = (
+                'set -euo pipefail\n'
+                f'{helper}\n'
+                'verify_revision "FixtureSite" "THEME_CONTROL_FIXTURE_REVISION" '
+                f'"{fixture_repository}" "{revision}"\n'
+            )
+            result = subprocess.run(
+                ['bash', '-c', script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
+            self.assertEqual(
+                evidence,
+                f'Fetch check: FixtureSite '
+                f'(THEME_CONTROL_FIXTURE_REVISION={revision}): PASS; fetched {revision}\n',
+            )
+
     def test_theme_control_revision_mismatch_records_fetched_sha_and_continues(self):
         fetch_step = step(
             job(VALIDATE, 'validate'),
