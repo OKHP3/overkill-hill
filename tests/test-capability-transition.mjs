@@ -155,5 +155,69 @@ try {
   await page.goto(base + '/');
   assert.equal(await page.locator('.capability-transition-notice').isVisible(), true, 'Announcement remains readable without JavaScript');
   await noScript.close();
-  console.log('PASS: Continue, Close and Escape restore visible focus across desktop/mobile and normal/blocked storage; prior-control restoration, persistence, route scope and no-JS behavior remain intact.');
+  // CSS-only fixture for the existing Glee native-dialog contract. Real sibling
+  // runtime acceptance is separate; this prevents future stylesheet regression.
+  for (const width of [320, 1280]) for (const reducedMotion of ['reduce', 'no-preference']) {
+    const context = await browser.newContext({ viewport: { width, height: 480 }, reducedMotion });
+    const page = await context.newPage();
+    await page.route('**/glee-transition-style-fixture', route => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><link rel="stylesheet" href="/assets/css/theme.css"></head>
+        <body class="glee-main"><main><aside class="glee-transition-notice">
+        <p class="glee-transition-title">Transition information</p>
+        <div class="glee-transition-actions"><a href="#content">Read the plan</a>
+        <button class="glee-transition-reopen" hidden>Show notice</button></div></aside>
+        <h1 id="content">Preserved content</h1></main>
+        <div class="construction-overlay">Legacy notice</div>
+        <dialog class="glee-transition-dialog"><div class="glee-transition-dialog-content">
+        <h2>Existing transition</h2>${'<p>Keep the information available.</p>'.repeat(12)}
+        <div class="glee-transition-actions"><a class="btn" href="#content">Read the plan</a>
+        <button class="btn" autofocus>Continue browsing</button></div></div></dialog></body></html>`,
+    }));
+    await page.goto(base + '/glee-transition-style-fixture');
+    const label = `Glee styles, ${width}px, ${reducedMotion}`;
+    assert.equal(await page.locator('.glee-transition-reopen').isVisible(), false, `${label}: unavailable reopen stays hidden`);
+    assert.equal(await page.locator('.construction-overlay').isVisible(), false, `${label}: native notice replaces the legacy overlay`);
+    assert.equal(await page.locator('dialog').isVisible(), false, `${label}: closed dialog stays hidden`);
+    await page.locator('dialog').evaluate(el => el.showModal());
+    const layout = await page.locator('dialog').evaluate(el => {
+      const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+      return { x: r.x, y: r.y, right: r.right, bottom: r.bottom,
+        padding: getComputedStyle(el.firstElementChild).paddingTop,
+        border: s.borderTopWidth, overflow: s.overflowY, animation: s.animationName,
+        scrollable: el.scrollHeight > el.clientHeight,
+        target: [...el.querySelectorAll('a,button')].map(e => e.getBoundingClientRect().height) };
+    });
+    assert.ok(layout.x >= 15 && layout.right <= width - 15, `${label}: horizontal margin`);
+    assert.ok(layout.y >= 15 && layout.bottom <= 465, `${label}: short viewport margin`);
+    assert.ok(parseFloat(layout.padding) >= 20, `${label}: readable content padding`);
+    assert.equal(layout.border, '2px', `${label}: existing modal border`);
+    assert.equal(layout.overflow, 'auto', `${label}: tall content can scroll`);
+    assert.equal(layout.scrollable, true, `${label}: overflow is actually exercised`);
+    assert.equal(layout.animation, 'none', `${label}: dialog adds no motion`);
+    assert.ok(layout.target.every(h => h >= 44), `${label}: minimum control height`);
+    const focused = await page.locator('dialog button').evaluate(el => {
+      const r = el.getBoundingClientRect(), parent = el.closest('dialog').getBoundingClientRect();
+      return document.activeElement === el && r.top >= parent.top && r.bottom <= parent.bottom;
+    });
+    assert.equal(focused, true, `${label}: autofocus scrolls the final control into view`);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('dialog').isVisible(), false, `${label}: Escape closes the dialog`);
+    assert.equal(await page.locator('.glee-transition-notice').isVisible(), true, `${label}: static notice remains`);
+    await page.locator('.glee-transition-reopen').evaluate(el => { el.hidden = false; });
+    assert.equal(await page.locator('.glee-transition-reopen').isVisible(), true, `${label}: available reopen appears`);
+    await page.locator('.glee-transition-reopen').evaluate(el => { el.hidden = true; });
+    assert.equal(await page.locator('.glee-transition-reopen').isVisible(), false, `${label}: hidden is reapplied`);
+    await page.locator('dialog').evaluate(el => el.remove());
+    assert.equal(await page.locator('.construction-overlay').isVisible(), true, `${label}: unrelated legacy overlay remains`);
+    await page.locator('body').evaluate(el => el.className = '');
+    await page.locator('body').evaluate(el => {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'glee-transition-dialog';
+      el.append(dialog);
+    });
+    assert.equal(await page.locator('.construction-overlay').isVisible(), true, `${label}: overlay outside Glee remains`);
+    await context.close();
+  }
+  console.log('PASS: primary transition behavior and four Glee stylesheet viewport/motion contracts.');
 } finally { await browser.close(); }

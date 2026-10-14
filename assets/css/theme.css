@@ -5893,6 +5893,51 @@ html body .forge-masthead :focus-visible { outline: 3px solid #ffcf91; outline-o
    ║  glee-fully.tools — scoped via .glee-main                                  ║
    ╚════════════════════════════════════════════════════════════════════════════╝ */
 
+/* Glee-fully platform transition: static disclosure plus a native modal. */
+.glee-main:has(.glee-transition-dialog) .construction-overlay { display: none; }
+.glee-main .glee-transition-notice {
+  margin-block: 1.5rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  border: 1px solid var(--color-border-subtle);
+  border-inline-start: 4px solid var(--color-accent);
+  border-radius: var(--radius-lg, 1.25rem);
+}
+.glee-main .glee-transition-title { font-size: clamp(1.3rem, 3vw, 1.8rem); font-weight: 700; margin-block: .4rem .75rem; }
+.glee-main .glee-transition-notice p { max-width: 85ch; }
+.glee-main .glee-transition-detail { font-size: .95rem; }
+.glee-main .glee-transition-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-top: 1rem; }
+.glee-main .glee-transition-actions > a,
+.glee-main .glee-transition-actions > button { min-height: 44px; display: inline-flex; align-items: center; }
+.glee-main .glee-transition-reopen { color: var(--color-fg); background: transparent; border: 1px solid var(--color-border-subtle); border-radius: .5rem; padding: .65rem 1rem; font: inherit; cursor: pointer; }
+.glee-main .glee-transition-reopen[hidden] { display: none; }
+.glee-main .glee-transition-dialog {
+  width: min(38rem, calc(100% - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-lg, 1.25rem);
+}
+.glee-main .glee-transition-dialog::backdrop { background: var(--color-bg); opacity: .85; }
+.glee-main .glee-transition-dialog-content { padding: clamp(1.25rem, 4vw, 2.25rem); }
+.glee-main .glee-transition-dialog h2 { font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.2; margin-block: .5rem 1rem; }
+.glee-main .glee-transition-dialog p { line-height: 1.65; }
+.glee-main .glee-transition-actions :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 4px; }
+.glee-main .glee-transition-dialog .btn { white-space: normal; text-align: center; justify-content: center; }
+.glee-main.glee-transition-page .hero-inner { padding-block: 2rem; }
+.glee-main.glee-transition-page .glee-hero-card { width: 100%; max-width: 56rem; margin-inline: auto; }
+.glee-main.glee-transition-page .glee-hero-card::before { transform: none; }
+.glee-main.glee-transition-page .glee-hero-card h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.16; max-width: 24ch; }
+@media (max-width: 480px) {
+  .glee-main .glee-transition-dialog .glee-transition-actions > * { width: 100%; }
+}
+
 /* Glee's controller opts in only elements outside the initial viewport.
    Initially visible content retains the readable, motionless base state. */
 @media (min-width: 1025px) and (prefers-reduced-motion: no-preference) {
