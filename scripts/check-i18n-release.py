@@ -109,30 +109,28 @@ def compare_content_coverage(
             })
     for block, source_count in source.content_blocks.items():
         target_count = target.content_blocks.get(block, 0)
-        if source_count > target_count:
+        section_deficits = []
+        for heading_id, heading in source.section_headings.items():
+            section_source_count = source.section_content_blocks.get(heading_id, {}).get(block, 0)
+            section_target_count = target.section_content_blocks.get(heading_id, {}).get(block, 0)
+            if section_source_count > section_target_count:
+                section_deficits.append({
+                    "heading": heading["text"],
+                    "heading_id": heading_id,
+                    "source_count": section_source_count,
+                    "target_count": section_target_count,
+                    "omitted_count": section_source_count - section_target_count,
+                })
+        # Extra blocks elsewhere cannot cancel a missing translated section.
+        if source_count > target_count or section_deficits:
             omission = {
                 "kind": "content_block",
                 "block": block,
                 "source_count": source_count,
                 "target_count": target_count,
-                "omitted_count": source_count - target_count,
+                "omitted_count": max(source_count - target_count,
+                    sum(section["omitted_count"] for section in section_deficits)),
             }
-            section_deficits = []
-            for heading_id, heading in source.section_headings.items():
-                section_source_count = source.section_content_blocks.get(
-                    heading_id, {}
-                ).get(block, 0)
-                section_target_count = target.section_content_blocks.get(
-                    heading_id, {}
-                ).get(block, 0)
-                if section_source_count > section_target_count:
-                    section_deficits.append({
-                        "heading": heading["text"],
-                        "heading_id": heading_id,
-                        "source_count": section_source_count,
-                        "target_count": section_target_count,
-                        "omitted_count": section_source_count - section_target_count,
-                    })
             if section_deficits:
                 omission["sections"] = section_deficits
             omissions.append(omission)

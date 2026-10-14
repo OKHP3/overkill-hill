@@ -327,6 +327,22 @@ class I18nReleaseTests(unittest.TestCase):
                     MODULE.format_coverage_omission(paragraph_gap),
                 )
 
+    def test_extra_target_blocks_cannot_mask_another_sections_deficit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.html"
+            target = root / "target.html"
+            source.write_text('<main><h2 id="a">A</h2><p>One.</p><h2 id="b">B</h2><p>Two.</p></main>', encoding="utf-8")
+            with patch.object(MODULE, "ROOT", root):
+                for extra_count in (2, 3):
+                    with self.subTest(extra_count=extra_count):
+                        target.write_text('<main><h2 id="a">A</h2>' + '<p>Extra.</p>' * extra_count + '<h2 id="b">B</h2></main>', encoding="utf-8")
+                        result = MODULE.compare_content_coverage(source, target, "de", "/about/")
+                        self.assertIsNotNone(result)
+                        paragraph_gap = next(x for x in result["omissions"] if x.get("block") == "p")
+                        self.assertEqual(1, paragraph_gap["omitted_count"])
+                        self.assertEqual(["b"], [x["heading_id"] for x in paragraph_gap["sections"]])
+
     def test_advisory_content_gaps_are_reported_without_changing_noindex_target(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

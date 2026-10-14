@@ -1002,6 +1002,20 @@ class SEOFixtureTests(unittest.TestCase):
                 "duplicate parsing must not let a later lastmod silently win",
             )
 
+    def test_sitemap_recovery_rejects_mismatched_element_prefixes(self) -> None:
+        location = f"{validator.SITE_ORIGIN}/about/"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sitemap.xml"
+            for invalid_entry in (
+                f"<sm:url><sm:loc>{location}</sm:loc></x:url>",
+                f"<sm:url><sm:loc>{location}</x:loc></sm:url>",
+            ):
+                with self.subTest(entry=invalid_entry):
+                    path.write_text('<sm:urlset xmlns:sm="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:x="urn:other">' + invalid_entry + '</sm:urlset>', encoding="utf-8")
+                    entries, findings = validator._sitemap_entries_with_positions_and_findings_from_path(path)
+                    self.assertEqual([], entries)
+                    self.assertIn("mismatched", findings_text(findings))
+
     def test_multiple_lastmod_values_in_one_sitemap_entry_are_reported(self) -> None:
         location = f"{validator.SITE_ORIGIN}/about/"
         first_date = "2026-05-24"

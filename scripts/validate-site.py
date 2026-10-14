@@ -321,10 +321,10 @@ def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
     """Return one plain-text sitemap location or its structural problem."""
     qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
     loc_openings = list(re.finditer(
-        rf"<{qname_prefix}loc\b[^>]*>", block, flags=re.IGNORECASE
+        rf"<(?P<qname>{qname_prefix}loc)\b[^>]*>", block, flags=re.IGNORECASE
     ))
     loc_closings = list(re.finditer(
-        rf"</{qname_prefix}loc\s*>", block, flags=re.IGNORECASE
+        rf"</(?P<qname>{qname_prefix}loc)\s*>", block, flags=re.IGNORECASE
     ))
     if len(loc_openings) != 1:
         return None, f"must contain exactly one <loc> element; found {len(loc_openings)}"
@@ -333,6 +333,8 @@ def _sitemap_location_from_block(block: str) -> tuple[str | None, str | None]:
 
     loc_opening = loc_openings[0]
     loc_closing = loc_closings[0]
+    if loc_opening.group("qname") != loc_closing.group("qname"):
+        return None, "has mismatched opening and closing <loc> qualified names"
     if loc_closing.start() < loc_opening.end():
         return None, "has malformed <loc> element structure"
 
@@ -349,10 +351,10 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
     """Find URL blocks, reporting broken boundaries and recovering at the next opener."""
     blocks: list[tuple[int, str | None, str | None]] = []
     position = 0
-    active: tuple[int, int] | None = None
+    active: tuple[int, int, str] | None = None
     qname_prefix = r"(?:[A-Za-z_][\w.-]*:)?"
     for match in re.finditer(
-        rf"</?{qname_prefix}url\b[^>]*>", text, flags=re.IGNORECASE
+        rf"</?(?P<qname>{qname_prefix}url)\b[^>]*>", text, flags=re.IGNORECASE
     ):
         token = match.group(0)
         if token.startswith("</"):
@@ -364,27 +366,28 @@ def _sitemap_url_blocks(text: str) -> list[tuple[int, str | None, str | None]]:
                     "has a closing </url> without an opening <url>",
                 ))
             else:
-                active_position, content_start = active
+                active_position, content_start, opening_name = active
+                matched_name = opening_name == match.group("qname")
                 blocks.append((
                     active_position,
-                    text[content_start:match.start()],
-                    None,
+                    text[content_start:match.start()] if matched_name else None,
+                    None if matched_name else "has mismatched opening and closing <url> qualified names",
                 ))
                 active = None
             continue
 
         if active is not None:
-            active_position, _ = active
+            active_position, _, _ = active
             blocks.append((
                 active_position,
                 None,
                 "is missing closing </url> before the next <url>",
             ))
         position += 1
-        active = (position, match.end())
+        active = (position, match.end(), match.group("qname"))
 
     if active is not None:
-        active_position, _ = active
+        active_position, _, _ = active
         blocks.append((active_position, None, "is missing closing </url>"))
     return blocks
 
