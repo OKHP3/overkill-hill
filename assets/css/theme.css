@@ -1345,7 +1345,7 @@ html[data-theme="light"] body:not(.glee-main):not(.askjamie-main) .hero-subline 
 /* Content never waits on JavaScript. Only a delivered intersection starts
    this finite animation; a missing or failed controller leaves it readable. */
 @media (min-width: 1025px) and (prefers-reduced-motion: no-preference) {
-  .reveal-on-scroll.is-visible {
+  body:not(.glee-main) .reveal-on-scroll.is-visible {
     animation: scroll-reveal-in 0.5s ease;
   }
 }
@@ -5892,6 +5892,14 @@ html body .forge-masthead :focus-visible { outline: 3px solid #ffcf91; outline-o
    ║  SECTION · GLEE                                                            ║
    ║  glee-fully.tools — scoped via .glee-main                                  ║
    ╚════════════════════════════════════════════════════════════════════════════╝ */
+
+/* Glee's controller opts in only elements outside the initial viewport.
+   Initially visible content retains the readable, motionless base state. */
+@media (min-width: 1025px) and (prefers-reduced-motion: no-preference) {
+  .glee-main .reveal-on-scroll.is-visible.is-reveal-animate {
+    animation: scroll-reveal-in 0.5s ease;
+  }
+}
 
 /* ── Light-mode brand surface tones ──────────────────────────────────────────
    The shared :root[data-theme="light"] sets OKH's warm-paper baseline.
