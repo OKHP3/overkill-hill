@@ -1,4 +1,4 @@
-# Shared foundation alignment handoff — 2026-10-13
+# Shared foundation alignment handoff: 2026-10-13
 
 ## Status and boundary
 
@@ -75,9 +75,9 @@ above, not from mutable site working trees.
 All nine fingerprints are distinct. The current three-site immutable
 verification therefore cannot pass.
 
-### Current Replit work and writer inventory
+### Replit planning-checkout snapshot
 
-- **Confirmed:** before creating this handoff, the Replit checkout was clean at
+- **Confirmed:** before creating this handoff, the isolated Replit planning checkout was clean at
   `8ae63957dbf9ea3559c970b83b9ff1a45375325a`. The handoff and a project-memory
   note are now the only uncommitted paths; no foundation source was edited.
   After fetching the canonical
@@ -121,7 +121,7 @@ verification therefore cannot pass.
 ### Theme stylesheet
 
 - OKH `theme.css` now contains the self-hosted font-face block. The current
-  OKH tree includes 11 WOFF2 files plus license/provenance files under
+  OKH tree includes 13 WOFF2 files plus license/provenance files under
   `assets/fonts/`; neither sibling tree has `assets/fonts/` entries or
   `@font-face` rules. Do not propagate CSS that points to absent font assets.
   Either bring the required font files and provenance/license material into
@@ -250,9 +250,11 @@ reconciliation table before editing. Use the three revisions in this document
 as the immutable comparison inputs; recheck that each is still the intended
 base at execution time.
 
-The current Replit checkout is not an implementation base: it is 23 commits
-behind current OKH `main`; its only uncommitted paths are this handoff and a
-project-memory note recording the requested Mermaid trust boundary. No source
+The isolated Replit planning checkout at the snapshot above is not an
+implementation base: it was 23 commits behind the recorded OKH `main`; its only
+uncommitted paths were this handoff and a project-memory note recording the
+requested Mermaid trust boundary. This is historical task-checkout evidence,
+not a statement about the primary Replit checkout after task application. No source
 changes or PR merges were made in this Replit task. External work should proceed
 as a separately assigned coding step; this packet does not authorize merging or
 publishing. The desired return is three scoped PR links, per-site test receipts
