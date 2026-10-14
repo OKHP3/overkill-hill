@@ -218,6 +218,21 @@ before(async () => {
       ));
       return;
     }
+    if (path === "/blocked.css" || path === "/blocked.woff2") {
+      externalFixtureObservations.push({
+        path,
+        method: request.method,
+        query: requestUrl.search,
+        status: 200,
+      });
+      response.writeHead(200, {
+        "content-type": path.endsWith(".css")
+          ? "text/css"
+          : "font/woff2",
+      });
+      response.end(path.endsWith(".css") ? "/* fixture stylesheet */" : "");
+      return;
+    }
     if (path === "/shared.png") {
       externalFixtureObservations.push({
         path,
@@ -1709,8 +1724,13 @@ test("reports CSP-blocked dependencies separately from external outages", async 
     const reportText = await readFile(reportPath, "utf8");
     const report = JSON.parse(reportText);
     const fixtureObservations = externalFixtureObservations.slice(observationStart);
+    const blockedResourcePaths = [
+      "/blocked.png",
+      "/blocked.css",
+      "/blocked.woff2",
+    ];
     const blockedEndpointRequests = fixtureObservations.filter(
-      ({ path }) => path === "/blocked.png",
+      ({ path }) => blockedResourcePaths.includes(path),
     );
     const evidenceDirectory = process.env.CSP_TASK385_EVIDENCE_DIR;
     if (evidenceDirectory) {
@@ -1731,26 +1751,52 @@ test("reports CSP-blocked dependencies separately from external outages", async 
         join(evidenceDirectory, "server-observations.json"),
         `${JSON.stringify({
           externalBaseUrl,
-          endpoint: "/blocked.png",
+          endpoints: blockedResourcePaths,
           endpointHitCount: blockedEndpointRequests.length,
           endpointRequests: blockedEndpointRequests,
           allNewExternalFixtureObservations: fixtureObservations,
-          browserRequestCount: report.dependencies.find(
-            ({ url }) => url.endsWith("/blocked.png"),
-          )?.requestCount ?? null,
+          browserRequestCounts: Object.fromEntries(blockedResourcePaths.map((path) => [
+            path,
+            report.dependencies.find(({ url }) => url.endsWith(path))?.requestCount ?? null,
+          ])),
         }, null, 2)}\n`,
       );
     }
 
-    const expectedDependencyUrl = new URL("/blocked.png", externalBaseUrl).href;
-    const expectedRequestedResourceUrl =
-      `${expectedDependencyUrl}?fixture=synthetic-csp-case`;
-    assert.ok(
-      observedCspBlockedFixtureResponse.includes(
-        `src="${expectedRequestedResourceUrl}"`,
-      ),
-      "the fixture response must request the blocked resource with its synthetic query",
-    );
+    const expectedDependencies = [
+      {
+        path: "/blocked.png",
+        request: `src="${externalBaseUrl}/blocked.png?fixture=synthetic-csp-case"`,
+        effectiveDirective: "img-src",
+        violatedDirective: "img-src",
+      },
+      {
+        path: "/blocked.css",
+        request: `href="${externalBaseUrl}/blocked.css?fixture=synthetic-csp-stylesheet"`,
+        effectiveDirective: "style-src-elem",
+        violatedDirective: "style-src-elem",
+      },
+      {
+        path: "/blocked.woff2",
+        request:
+          `url("${externalBaseUrl}/blocked.woff2?fixture=synthetic-csp-font")`,
+        effectiveDirective: "font-src",
+        violatedDirective: "font-src",
+      },
+    ].map(({ path, request, effectiveDirective, violatedDirective }) => ({
+      url: new URL(path, externalBaseUrl).href,
+      request,
+      effectiveDirective,
+      violatedDirective,
+    }));
+    for (const { request } of expectedDependencies) {
+      assert.ok(
+        observedCspBlockedFixtureResponse.includes(request),
+        `the fixture response must request the blocked resource: ${request}\n` +
+          `${observedCspBlockedFixtureResponse}\n${result.output}\n` +
+          JSON.stringify(report, null, 2),
+      );
+    }
     assert.notEqual(result.status, 0, result.output);
     assert.match(result.output, /CSP diagnostics were observed/);
     assert.doesNotMatch(result.output, /EXTERNAL OUTAGE:/);
@@ -1759,11 +1805,11 @@ test("reports CSP-blocked dependencies separately from external outages", async 
     assert.equal(report.mode, "external-health");
     assert.equal(report.status, "CSP_BLOCKED");
     assert.deepEqual(report.routes, [route]);
-    assert.equal(report.summary.cspDiagnostics, 1);
-    assert.equal(report.summary.cspEvidence, 1);
-    assert.equal(report.summary.dependencies, 1);
+    assert.equal(report.summary.cspDiagnostics, expectedDependencies.length);
+    assert.equal(report.summary.cspEvidence, expectedDependencies.length);
+    assert.equal(report.summary.dependencies, expectedDependencies.length);
     assert.equal(report.summary.externalOutages, 0);
-    assert.equal(report.summary.failureEvents, 1);
+    assert.equal(report.summary.failureEvents, expectedDependencies.length);
     assert.equal(report.summary.localFailures, 0);
     assert.equal(report.summary.timeouts, 0);
     assert.equal(report.summary.budgetExceeded, false);
@@ -1776,52 +1822,68 @@ test("reports CSP-blocked dependencies separately from external outages", async 
     assert.deepEqual(report.timeBudget.routesCutShort, []);
     assert.deepEqual(report.timeBudget.routesSkipped, []);
     assert.deepEqual(
-      report.cspEvidence.map(({ blockedURI }) => blockedURI),
-      [expectedDependencyUrl],
+      report.cspEvidence.map(({ blockedURI }) => blockedURI).sort(),
+      expectedDependencies.map(({ url }) => url).sort(),
     );
 
-    assert.equal(report.dependencies.length, 1);
-    const [blocked] = report.dependencies;
-    assert.equal(blocked.url, expectedDependencyUrl);
-    assert.equal(new URL(blocked.url).search, "");
-    assert.equal(new URL(blocked.url).hash, "");
-    assert.equal(blocked.state, "blocked-by-csp");
-    assert.equal(blocked.cspBlocked, true);
-    assert.equal(blocked.requestCount, 1);
-    assert.deepEqual(blocked.routes, [route]);
-    assert.equal(blocked.responses.length, 0);
-    assert.equal(blocked.failures.length, 1);
-    assert.equal(blocked.failures[0].route, route);
-    assert.equal(blocked.failures[0].count, 1);
-    assert.deepEqual(blocked.timeouts, []);
-    assert.equal(blocked.cspEvidence.length, 1);
-    assert.equal(blocked.cspEvidence[0].route, route);
-    assert.equal(blocked.cspEvidence[0].blockedURI, blocked.url);
-    assert.equal(blocked.cspEvidence[0].effectiveDirective, "img-src");
-    assert.equal(blocked.cspEvidence[0].violatedDirective, "img-src");
-    assert.equal(blocked.cspEvidence[0].disposition, "enforce");
+    for (const expected of expectedDependencies) {
+      const blocked = report.dependencies.find(({ url }) => url === expected.url);
+      assert.ok(blocked, JSON.stringify(report, null, 2));
+      assert.equal(new URL(blocked.url).search, "");
+      assert.equal(new URL(blocked.url).hash, "");
+      assert.equal(blocked.state, "blocked-by-csp");
+      assert.equal(blocked.cspBlocked, true);
+      assert.equal(blocked.requestCount, 1);
+      assert.deepEqual(blocked.routes, [route]);
+      assert.deepEqual(blocked.responses, []);
+      assert.equal(blocked.failures.length, 1);
+      assert.equal(blocked.failures[0].route, route);
+      assert.equal(blocked.failures[0].count, 1);
+      assert.deepEqual(blocked.timeouts, []);
+      assert.equal(blocked.cspEvidence.length, 1);
+      assert.equal(blocked.cspEvidence[0].route, route);
+      assert.equal(blocked.cspEvidence[0].blockedURI, blocked.url);
+      assert.equal(
+        blocked.cspEvidence[0].effectiveDirective,
+        expected.effectiveDirective,
+      );
+      assert.equal(
+        blocked.cspEvidence[0].violatedDirective,
+        expected.violatedDirective,
+      );
+      assert.equal(blocked.cspEvidence[0].disposition, "enforce");
 
-    assert.equal(blocked.routeOutcomes.length, 1);
-    const [routeOutcome] = blocked.routeOutcomes;
-    assert.deepEqual(
-      Object.keys(routeOutcome).sort(),
-      ["cspBlocked", "cspEvidence", "failures", "responses", "route", "state", "timeouts"],
-    );
-    assert.equal(routeOutcome.route, route);
-    assert.equal(routeOutcome.state, "blocked-by-csp");
-    assert.equal(routeOutcome.cspBlocked, true);
-    assert.deepEqual(routeOutcome.responses, []);
-    assert.equal(routeOutcome.failures.length, 1);
-    assert.equal(routeOutcome.failures[0].count, 1);
-    assert.deepEqual(routeOutcome.timeouts, []);
-    assert.equal(routeOutcome.cspEvidence.length, 1);
+      assert.equal(blocked.routeOutcomes.length, 1);
+      const [routeOutcome] = blocked.routeOutcomes;
+      assert.deepEqual(
+        Object.keys(routeOutcome).sort(),
+        ["cspBlocked", "cspEvidence", "failures", "responses", "route", "state", "timeouts"],
+      );
+      assert.equal(routeOutcome.route, route);
+      assert.equal(routeOutcome.state, "blocked-by-csp");
+      assert.equal(routeOutcome.cspBlocked, true);
+      assert.deepEqual(routeOutcome.responses, []);
+      assert.equal(routeOutcome.failures.length, 1);
+      assert.equal(routeOutcome.failures[0].count, 1);
+      assert.deepEqual(routeOutcome.timeouts, []);
+      assert.equal(routeOutcome.cspEvidence.length, 1);
+      assert.equal(
+        report.externalOutages.some(({ url }) => url === blocked.url),
+        false,
+        `CSP-only ${expected.effectiveDirective} dependency must not become an outage`,
+      );
+    }
 
     for (const evidence of [
       ...report.cspEvidence,
-      ...blocked.cspEvidence,
-      ...routeOutcome.cspEvidence,
+      ...report.dependencies.flatMap(({ cspEvidence }) => cspEvidence),
+      ...report.dependencies.flatMap(({ routeOutcomes }) =>
+        routeOutcomes.flatMap(({ cspEvidence }) => cspEvidence)),
     ]) {
-      assert.equal(evidence.blockedURI, expectedDependencyUrl);
+      assert.ok(
+        expectedDependencies.some(({ url }) => evidence.blockedURI === url),
+        `unexpected CSP blocked URI: ${evidence.blockedURI}`,
+      );
       for (const field of ["blockedURI", "documentURI", "sourceFile"]) {
         if (!evidence[field]) continue;
         const evidenceUrl = new URL(evidence[field]);
@@ -1829,11 +1891,7 @@ test("reports CSP-blocked dependencies separately from external outages", async 
         assert.equal(evidenceUrl.hash, "", `${field} must not retain a fragment`);
       }
     }
-    assert.deepEqual(
-      blockedEndpointRequests,
-      [],
-      "the CSP-blocked browser request must not reach the external fixture server",
-    );
+    assert.deepEqual(blockedEndpointRequests, [], "CSP-blocked requests must not reach the server");
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
@@ -2089,8 +2147,13 @@ for (const {
         const reportText = await readFile(reportPath, "utf8");
         const report = JSON.parse(reportText);
         const newObservations = externalFixtureObservations.slice(observationStart);
+        const blockedResourcePaths = [
+          "/blocked.png",
+          "/blocked.css",
+          "/blocked.woff2",
+        ];
         const blockedEndpointRequests = newObservations.filter(
-          ({ path }) => path === "/blocked.png",
+          ({ path }) => blockedResourcePaths.includes(path),
         );
         const sharedRequests = newObservations.filter(
           ({ path }) => path === "/shared.png",
@@ -2138,28 +2201,37 @@ for (const {
         assert.equal(report.summary.budgetExceeded, false);
         assert.equal(report.timeBudget.exceeded, false);
 
-        const cspOnly = report.dependencies.find(({ url }) => url.endsWith("/blocked.png"));
+        const cspOnlyDependencies = blockedResourcePaths.map((path) => {
+          const dependency = report.dependencies.find(({ url }) => url.endsWith(path));
+          assert.ok(dependency, `${path}\n${JSON.stringify(report, null, 2)}`);
+          return dependency;
+        });
         const shared = report.dependencies.find(({ url }) => url.endsWith("/shared.png"));
-        assert.ok(cspOnly, JSON.stringify(report, null, 2));
         assert.ok(shared, JSON.stringify(report, null, 2));
-        for (const dependency of [cspOnly, shared]) {
+        for (const dependency of [...cspOnlyDependencies, shared]) {
           const normalizedUrl = new URL(dependency.url);
           assert.equal(normalizedUrl.search, "");
           assert.equal(normalizedUrl.hash, "");
         }
 
-        assert.equal(cspOnly.state, "blocked-by-csp");
-        assert.equal(cspOnly.cspBlocked, true);
-        assert.deepEqual(cspOnly.responses, []);
-        assert.deepEqual(
-          cspOnly.routeOutcomes.map(({ route, state }) => ({ route, state })),
-          [{ route: routePaths[0], state: "blocked-by-csp" }],
-        );
-        assert.equal(
-          report.externalOutages.some(({ url }) => url === cspOnly.url),
-          false,
-          "a CSP-only dependency must not appear as an external outage",
-        );
+        for (const cspOnly of cspOnlyDependencies) {
+          assert.equal(cspOnly.state, "blocked-by-csp");
+          assert.equal(cspOnly.cspBlocked, true);
+          assert.deepEqual(cspOnly.responses, []);
+          assert.deepEqual(
+            cspOnly.routeOutcomes.map(({ route, state }) => ({ route, state })),
+            [{ route: routePaths[0], state: "blocked-by-csp" }],
+          );
+          assert.ok(
+            cspOnly.cspEvidence.some(({ blockedURI }) => blockedURI === cspOnly.url),
+            `${name} must retain CSP evidence for ${cspOnly.url}`,
+          );
+          assert.equal(
+            report.externalOutages.some(({ url }) => url === cspOnly.url),
+            false,
+            `CSP-only dependency ${cspOnly.url} must not appear as an external outage`,
+          );
+        }
 
         assert.equal(shared.state, "unavailable");
         assert.equal(shared.cspBlocked, true);

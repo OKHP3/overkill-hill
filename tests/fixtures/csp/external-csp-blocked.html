@@ -4,7 +4,20 @@
     <meta charset="utf-8">
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self'"
+      content="default-src 'self'; img-src 'self'; style-src 'unsafe-inline'; font-src 'self'"
+    >
+    <style>
+      @font-face {
+        font-family: "FixtureExternalFont";
+        src: url("__EXTERNAL_BASE_URL__/blocked.woff2?fixture=synthetic-csp-font") format("woff2");
+      }
+      main {
+        font-family: "FixtureExternalFont", sans-serif;
+      }
+    </style>
+    <link
+      rel="stylesheet"
+      href="__EXTERNAL_BASE_URL__/blocked.css?fixture=synthetic-csp-stylesheet"
     >
     <title>CSP-blocked external dependency fixture</title>
   </head>
@@ -12,6 +25,7 @@
     <main>
       <h1>CSP-blocked external dependency fixture</h1>
       <img src="__EXTERNAL_BASE_URL__/blocked.png?fixture=synthetic-csp-case" alt="blocked dependency">
+      <p>External font fixture text</p>
     </main>
   </body>
 </html>
