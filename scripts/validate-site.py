@@ -512,7 +512,16 @@ def _sitemap_entries_with_positions_and_findings_from_path(
     """Read valid location/date entries and report unusable URL blocks."""
     if not sitemap_path.exists():
         return [], []
-    text = sitemap_path.read_text(encoding="utf-8")
+    try:
+        text = sitemap_path.read_text(encoding="utf-8")
+    except UnicodeError:
+        return [], [
+            Finding(
+                "ERROR",
+                str(sitemap_path),
+                "sitemap is not valid UTF-8",
+            )
+        ]
     try:
         document = parse_sitemap_xml(text)
     except ET.ParseError:

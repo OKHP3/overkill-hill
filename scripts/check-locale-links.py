@@ -133,6 +133,8 @@ def load_manifest(path: Path) -> dict:
 def sitemap_locations(path: Path) -> list[str]:
     try:
         document = parse_sitemap_xml(path.read_text(encoding="utf-8"))
+    except UnicodeError as exc:
+        raise ValueError(f"sitemap {path} is not valid UTF-8") from exc
     except (OSError, ElementTree.ParseError) as exc:
         raise ValueError(f"cannot read sitemap {path}: {exc}") from exc
     return list(document.locations)

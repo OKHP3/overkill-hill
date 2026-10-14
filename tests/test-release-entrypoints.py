@@ -503,6 +503,52 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         self.assertIn(f"cannot read sitemap {sitemap}:", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
+    def test_locale_checker_reports_invalid_utf8_sitemap_without_traceback(self) -> None:
+        sitemap = self.fixture / "locale-sitemap.xml"
+        sitemap.write_bytes(b"<urlset>\xff</urlset>")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(self.fixture / "scripts" / "check-locale-links.py"),
+                "--manifest",
+                str(self.fixture / "locale-manifest.json"),
+                "--sitemap",
+                str(sitemap),
+                "--search-index",
+                str(self.fixture / "search-index.fr.json"),
+            ],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertIn("Locale link check failed:\n", result.stderr)
+        self.assertIn(f"sitemap {sitemap} is not valid UTF-8", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotIn("UnicodeDecodeError", result.stderr)
+
+    def test_validate_site_reports_invalid_utf8_sitemap_without_traceback(self) -> None:
+        sitemap = self.fixture / "sitemap.xml"
+        sitemap.write_bytes(b"<urlset>\xff</urlset>")
+        result = subprocess.run(
+            [sys.executable, str(self.fixture / "scripts" / "validate-site.py")],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        output = result.stdout + result.stderr
+        self.assertIn(f"{sitemap}: sitemap is not valid UTF-8", output)
+        self.assertNotIn("Traceback", output)
+        self.assertNotIn("UnicodeDecodeError", output)
+
     def test_locale_checker_reports_all_incomplete_locale_declarations(self) -> None:
         manifest = self.fixture / "locale-manifest.json"
         manifest.write_text(
