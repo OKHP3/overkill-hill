@@ -53,6 +53,45 @@ function makeSearchEntries() {
   return entries;
 }
 
+for (const overlayMode of [true, false]) {
+  test(`search leaves composing and modified input keys to the browser (${overlayMode ? "overlay" : "page"})`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    try {
+      await page.goto(`${baseUrl}${overlayMode ? "/prompt-forge/" : "/search/"}`);
+      await dismissAnnouncement(page);
+      if (overlayMode) await page.locator(".okh-search-trigger").click();
+      const input = page.locator(overlayMode ? ".okh-search-input" : "#search-page-input");
+      const results = page.locator(overlayMode ? ".okh-search-results" : "#search-results");
+      await input.fill("FoundRy");
+      await results.locator('.okh-search-result[href="/projects/found-ry/"]').waitFor();
+      const searchUrl = page.url();
+      for (const options of [
+        { key: "ArrowDown", isComposing: true },
+        { key: "ArrowUp", keyCode: 229 },
+        { key: "ArrowDown", ctrlKey: true },
+        { key: "ArrowDown", metaKey: true },
+        { key: "ArrowDown", altKey: true },
+        { key: "ArrowDown", shiftKey: true },
+        { key: "Enter", isComposing: true },
+      ]) {
+        await input.focus();
+        const state = await input.evaluate((element, options) => {
+          const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...options });
+          element.dispatchEvent(event);
+          return { prevented: event.defaultPrevented, inputFocused: document.activeElement === element };
+        }, options);
+        assert.deepEqual(state, { prevented: false, inputFocused: true }, JSON.stringify(options));
+        assert.equal(page.url(), searchUrl);
+      }
+      await input.press("ArrowDown");
+      assert.equal(await results.locator('.okh-search-result:focus').count(), 1);
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`${baseUrl}/projects/found-ry/`);
+    } finally { await browser.close(); }
+  });
+}
+
 for (const width of [1280, 320]) {
   for (const overlayMode of [true, false]) {
     test(`FoundRy joined name finds its published project (${width}px, ${overlayMode ? "overlay" : "page"})`, async () => {

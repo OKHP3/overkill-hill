@@ -980,6 +980,8 @@ document.addEventListener("DOMContentLoaded", () => {
       results[Math.min(index, results.length - 1)].focus();
     }
     input.addEventListener("keydown", event => {
+      // Let text composition and modified editing shortcuts keep input focus.
+      if (event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const current = links().findIndex(link => link.getAttribute("data-active") === "true");
