@@ -281,9 +281,15 @@ def load_coverage_dispositions(config: Dict[str, Any]) -> dict[tuple[str, str], 
             ledger_target = (
                 ledger.get("pages", {}).get(route, {}).get("targets", {}).get(locale, {})
             )
+            source_path = ROOT / f"{route.strip('/') + '/' if route.strip('/') else ''}index.html"
+            target_path = ROOT / expected_target
             current = (
                 entry["source_sha256"] == ledger_target.get("synced_source_sha256")
                 and entry["target_sha256"] == ledger_target.get("target_sha256")
+                and source_path.is_file()
+                and target_path.is_file()
+                and entry["source_sha256"] == page_hash(source_path)
+                and entry["target_sha256"] == page_hash(target_path)
             )
             dispositions[(locale, route)] = {
                 "record": record_name,
@@ -297,7 +303,7 @@ def load_coverage_dispositions(config: Dict[str, Any]) -> dict[tuple[str, str], 
                     if current
                     else {
                         "disposition": "unresolved",
-                        "rationale": "The review hashes do not match the current sync ledger; its decisions are not applied.",
+                        "rationale": "The review hashes do not match the current page bytes and sync ledger; its decisions are not applied.",
                     }
                 ),
             }

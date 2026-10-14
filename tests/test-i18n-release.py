@@ -527,6 +527,18 @@ class I18nReleaseTests(unittest.TestCase):
             with patch.object(MODULE, "ROOT", root):
                 result = MODULE.apply_coverage_dispositions(gaps, config)
                 self.assertEqual(target_html, target.read_text(encoding="utf-8"))
+                for changed_page in (source, target):
+                    with self.subTest(changed_page=changed_page.name, parent=changed_page.parent.name):
+                        original_bytes = changed_page.read_bytes()
+                        changed_page.write_bytes(original_bytes + b"\n<!-- unreviewed change -->")
+                        try:
+                            stale = MODULE.apply_coverage_dispositions(gaps, config)
+                            self.assertEqual(3, len(stale[0]["unresolved_omissions"]),
+                                "unchanged ledger hashes must not authorize dispositions for changed page bytes")
+                            self.assertEqual("unresolved",
+                                stale[0]["omissions"][1]["sections"][0]["review_disposition"]["disposition"])
+                        finally:
+                            changed_page.write_bytes(original_bytes)
 
         self.assertEqual(3, len(result[0]["omissions"]))
         self.assertEqual(2, len(result[0]["unresolved_omissions"]))
