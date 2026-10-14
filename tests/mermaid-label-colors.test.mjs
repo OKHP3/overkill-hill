@@ -97,9 +97,12 @@ test('Mermaid HTML labels retain their assigned colors across page palettes', as
       assert.equal(await diagrams.count(), 3, 'all three architecture families present');
       for (let index = 0; index < 3; index++) {
         await diagrams.nth(index).scrollIntoViewIfNeeded();
-        await diagrams.nth(index).locator('svg').waitFor();
+        await diagrams.nth(index).locator(':scope > svg').waitFor();
       }
-      await diagrams.nth(2).locator('svg[aria-roledescription="architecture"] text').first().waitFor();
+      const architectureSvg = diagrams.nth(2).locator(':scope > svg');
+      await architectureSvg.locator('svg').first().waitFor();
+      assert.ok(await architectureSvg.locator('svg').count() > 0, 'nested architecture icon SVGs exercise the outer-diagram selector');
+      await architectureSvg.locator('text').first().waitFor();
       const labels = await diagrams.locator('.nodeLabel p, .edgeLabel p').evaluateAll(elements => elements.map(p => {
         const shape = p.closest('g.node, g.cluster')?.querySelector('rect, polygon, circle, path');
         return { text: p.textContent, foreground: getComputedStyle(p).color, assigned: getComputedStyle(p.closest('.nodeLabel, .edgeLabel')).color, fill: shape ? getComputedStyle(shape).fill : getComputedStyle(p).backgroundColor };
@@ -109,7 +112,7 @@ test('Mermaid HTML labels retain their assigned colors across page palettes', as
         assert.equal(label.foreground, label.assigned, `${theme}: ${label.text} follows its label carrier`);
         if (label.fill) assert.ok(contrast(label.foreground, label.fill) >= 4.5, `${theme}: ${label.text} has readable text/background contrast`);
       }
-      const architecture = await diagrams.nth(2).locator('svg text').evaluateAll(elements => elements.map(e => ({text: e.textContent, fill: getComputedStyle(e).fill})));
+      const architecture = await architectureSvg.locator('text').evaluateAll(elements => elements.map(e => ({text: e.textContent, fill: getComputedStyle(e).fill})));
       assert.ok(architecture.length >= 30, 'architecture SVG text path rendered');
       assert.ok(architecture.every(label => label.fill !== 'rgb(0, 0, 0)'), 'architecture text retains its assigned foreground');
       await page.locator('.theme-toggle').click();
