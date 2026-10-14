@@ -230,6 +230,12 @@ def locale_specs(manifest: dict, findings: list[str] | None = None) -> list[dict
     locale = manifest.get("target_locale")
     pages = manifest.get("pages")
     if isinstance(locale, str) and locale and isinstance(pages, list):
+        if not pages:
+            error = f"manifest locale {locale!r} pages must be a non-empty list"
+            if findings is None:
+                raise ValueError(error)
+            fail(findings, error)
+            return []
         return [{
             "locale": locale,
             "pages": pages,
