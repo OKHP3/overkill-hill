@@ -65,12 +65,22 @@ MIXED_CONFLICTING_KEYS = (
 def social_card_tags(*, duplicate: str | None = None) -> str:
     fields = [
         ("og:image", f'<meta property="og:image" content="{SOCIAL_IMAGE}">'),
-        ("og:image:alt", '<meta property="og:image:alt" content="Fixture social preview">'),
+        (
+            "og:image:alt",
+            '<meta property="og:image:alt" content="Fixture &amp; social preview">'
+            if duplicate == "equivalent-entities"
+            else '<meta property="og:image:alt" content="Fixture social preview">',
+        ),
         ("og:image:width", '<meta property="og:image:width" content="1536">'),
         ("og:image:height", '<meta property="og:image:height" content="1024">'),
         ("og:image:type", '<meta property="og:image:type" content="image/png">'),
         ("twitter:image", f'<meta name="twitter:image" content="{SOCIAL_IMAGE}">'),
-        ("twitter:image:alt", '<meta name="twitter:image:alt" content="Fixture social preview">'),
+        (
+            "twitter:image:alt",
+            '<meta name="twitter:image:alt" content="Fixture &amp; social preview">'
+            if duplicate == "equivalent-entities"
+            else '<meta name="twitter:image:alt" content="Fixture social preview">',
+        ),
     ]
     mixed_duplicates = {
         "og:image": "identical",
@@ -81,6 +91,8 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
     }
     if duplicate == "identical":
         duplicate_modes = {key: "identical" for key in SOCIAL_CARD_DUPLICATE_KEYS}
+    elif duplicate == "equivalent-entities":
+        duplicate_modes = {"og:image:alt": "equivalent-entities"}
     elif duplicate == "mixed":
         duplicate_modes = mixed_duplicates
     elif duplicate == "three-values":
@@ -99,6 +111,10 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
         if key in duplicate_modes:
             if duplicate_modes[key] == "identical":
                 tags.append(tag)
+            elif duplicate_modes[key] == "equivalent-entities":
+                tags.append(
+                    '<meta property="og:image:alt" content="Fixture &#38; social preview">'
+                )
             elif duplicate_modes[key] == "three-values":
                 tags.extend(
                     f'<meta property="{key}" content="{value}">'
@@ -320,6 +336,14 @@ class SocialCardDuplicateTests(unittest.TestCase):
 
         self.assertEqual(0, exit_code, stdout + stderr)
 
+    def test_site_release_command_allows_equivalent_entity_encoded_duplicates(self):
+        exit_code, stdout, stderr = self._run_site_command(
+            duplicate="equivalent-entities",
+            noindex=False,
+        )
+
+        self.assertEqual(0, exit_code, stdout + stderr)
+
     def test_site_release_command_reports_each_mixed_duplicate_conflict(self):
         exit_code, stdout, stderr = self._run_site_command(
             duplicate="mixed",
@@ -462,6 +486,14 @@ class SocialCardDuplicateTests(unittest.TestCase):
     def test_locale_release_command_allows_identical_duplicates(self):
         exit_code, output = self._run_locale_command(
             duplicate="identical",
+            noindex=False,
+        )
+
+        self.assertEqual(0, exit_code, output)
+
+    def test_locale_release_command_allows_equivalent_entity_encoded_duplicates(self):
+        exit_code, output = self._run_locale_command(
+            duplicate="equivalent-entities",
             noindex=False,
         )
 
