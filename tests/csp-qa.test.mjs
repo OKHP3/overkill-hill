@@ -2904,7 +2904,10 @@ async function simulateExternalHealth({
   await runInNewContext(`${declarations}\nrunExternalHealth();`, {
     URL, Date: { now: () => now }, process: isolatedProcess,
     chromium: browserType, firefox: browserType, webkit: browserType,
-    console: { log: (message) => logs.push(message), error() {} },
+    console: {
+      log: (message) => logs.push(message),
+      error: (message) => logs.push(message),
+    },
     writeFileSync: (path, content) => {
       assert.equal(path, "memory.json"); report = JSON.parse(content);
     },
@@ -2973,12 +2976,31 @@ test("reports browser startup timeout without platform executables", async () =>
 });
 
 test("distinguishes ordinary browser launch failure from exhausted budget", async () => {
-  const { report, exitCode } = await simulateExternalHealth({ budget: 500, startup: "error" });
+  const { report, exitCode, logs } = await simulateExternalHealth({
+    budget: 500,
+    startup: "error",
+  });
   assert.equal(exitCode, 1);
   assert.equal(report.status, "BROWSER_START_FAILURE");
-  assert.equal(report.browserStartupFailure.kind, "launch-error");
+  assert.deepEqual(report.browserStartupFailure, {
+    phase: "browser-startup",
+    kind: "launch-error",
+    timeoutMs: 500,
+    message: "synthetic missing executable",
+  });
+  assert.equal(report.timeBudget.elapsedMs, 0);
   assert.equal(report.timeBudget.exceeded, false);
+  assert.deepEqual(report.timeBudget.routesCutShort, []);
+  assert.deepEqual(report.timeBudget.routesSkipped, []);
   assert.equal(report.summary.routes, 0);
+  assert.equal(report.summary.budgetExceeded, false);
+  assert.equal(report.summary.routesCutShortByBudget, 0);
+  assert.equal(report.summary.routesSkippedByBudget, 0);
+  assert.match(logs.join("\n"), /BROWSER START FAILURE: synthetic missing executable/);
+  assert.doesNotMatch(
+    logs.join("\n"),
+    /BROWSER START TIMEOUT|EXTERNAL HEALTH TIME BUDGET|routes? checked/i,
+  );
 });
 
 test("records exhausted budget on the final route after late healthy response", async () => {
