@@ -204,7 +204,7 @@ def run_index_freshness_check(index_path: Path, locale: str, findings: list[str]
         fail(findings, f"locale search index is stale: {detail[-1] if detail else 'build check failed'}")
 
 
-def locale_specs(manifest: dict) -> list[dict]:
+def locale_specs(manifest: dict, findings: list[str] | None = None) -> list[dict]:
     """Normalize legacy one-locale and current multi-locale pilot manifests."""
     locale = manifest.get("target_locale")
     pages = manifest.get("pages")
@@ -225,13 +225,16 @@ def locale_specs(manifest: dict) -> list[dict]:
         raise ValueError("multi-locale manifest locales must be an object")
 
     specs: list[dict] = []
+    errors: list[str] = []
     for locale in target_locales:
         entry = locales.get(locale) if isinstance(locale, str) else None
         if not isinstance(locale, str) or not locale or not isinstance(entry, dict):
-            raise ValueError(f"manifest locale entry is missing or invalid: {locale!r}")
+            errors.append(f"manifest locale entry is missing or invalid: {locale!r}")
+            continue
         pages = entry.get("pages")
         if not isinstance(pages, list) or not pages:
-            raise ValueError(f"manifest locale {locale!r} pages must be a non-empty list")
+            errors.append(f"manifest locale {locale!r} pages must be a non-empty list")
+            continue
         specs.append({
             "locale": locale,
             "pages": pages,
@@ -239,6 +242,11 @@ def locale_specs(manifest: dict) -> list[dict]:
             "indexable": entry.get("indexable"),
             "metadata_source": entry.get("metadata_source"),
         })
+    if errors:
+        if findings is None:
+            raise ValueError("; ".join(errors))
+        for error in errors:
+            fail(findings, error)
     return specs
 
 
@@ -449,7 +457,7 @@ def validate(
         urls = set()
 
     try:
-        specs = locale_specs(manifest)
+        specs = locale_specs(manifest, findings)
     except ValueError as exc:
         fail(findings, f"invalid locale manifest {manifest_path}: {exc}")
         return findings
