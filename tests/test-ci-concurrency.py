@@ -315,6 +315,119 @@ class ConcurrencyTests(unittest.TestCase):
             self.assertIn('FixtureSite (THEME_CONTROL_FIXTURE_REVISION=', evidence)
             self.assertIn('FAILED; could not fetch from', evidence)
 
+    def test_theme_control_revision_mismatch_records_fetched_sha_and_continues(self):
+        fetch_step = step(
+            job(VALIDATE, 'validate'),
+            'Verify pinned theme-control foundation revisions are fetchable',
+        )
+        run_marker = '        run: |\n'
+        self.assertIn(run_marker, fetch_step, 'missing pinned foundation fetch shell script')
+        script = textwrap.dedent(fetch_step.split(run_marker, 1)[1])
+
+        expected = {
+            'FixtureOKH': '1' * 40,
+            'FixtureGlee': '2' * 40,
+            'FixtureAskJamie': '4' * 40,
+        }
+        fetched = {
+            'FixtureOKH': expected['FixtureOKH'],
+            'FixtureGlee': '3' * 40,
+            'FixtureAskJamie': expected['FixtureAskJamie'],
+        }
+        sites = [
+            {
+                'name': site,
+                'revisionVariable': f'THEME_CONTROL_{site.upper()}_REVISION',
+                'repository': f'fixture/{site.lower()}',
+            }
+            for site in expected
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / 'config' / 'theme-control-sites.json'
+            config.parent.mkdir()
+            config.write_text(json.dumps({'sites': sites}), encoding='utf-8')
+            bin_directory = root / 'bin'
+            bin_directory.mkdir()
+            git_stub = bin_directory / 'git'
+            git_stub.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    [[ "$1" == "-C" ]] || exit 90
+                    probe_dir="$2"
+                    site="${probe_dir##*/}"
+                    shift 2
+                    case "$1" in
+                      init) exit 0 ;;
+                      fetch)
+                        printf '%s\\n' "$site" >> "$GIT_FIXTURE_LOG"
+                        exit 0
+                        ;;
+                      rev-parse)
+                        case "$site" in
+                          FixtureOKH) printf '%s\\n' "$FIXTURE_OKH_FETCHED" ;;
+                          FixtureGlee) printf '%s\\n' "$FIXTURE_GLEE_FETCHED" ;;
+                          FixtureAskJamie) printf '%s\\n' "$FIXTURE_ASKJAMIE_FETCHED" ;;
+                          *) exit 91 ;;
+                        esac
+                        ;;
+                      *) exit 92 ;;
+                    esac
+                    """
+                ),
+                encoding='utf-8',
+            )
+            git_stub.chmod(0o755)
+
+            environment = os.environ.copy()
+            environment.update({
+                'PATH': f'{bin_directory}{os.pathsep}{environment["PATH"]}',
+                'RUNNER_TEMP': str(root / 'runner-temp'),
+                'GIT_FIXTURE_LOG': str(root / 'fetch-attempts.txt'),
+                'FIXTURE_OKH_FETCHED': fetched['FixtureOKH'],
+                'FIXTURE_GLEE_FETCHED': fetched['FixtureGlee'],
+                'FIXTURE_ASKJAMIE_FETCHED': fetched['FixtureAskJamie'],
+            })
+            for site, revision in expected.items():
+                environment[f'THEME_CONTROL_{site.upper()}_REVISION'] = revision
+
+            result = subprocess.run(
+                ['bash', '-c', script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            evidence = (root / 'theme-control-revisions.txt').read_text(encoding='utf-8')
+            mismatch = (
+                f'Fetch check: FixtureGlee '
+                f'(THEME_CONTROL_FIXTUREGLEE_REVISION={expected["FixtureGlee"]}): '
+                f'FAILED; fetched unexpected revision {fetched["FixtureGlee"]} '
+                'from https://github.com/fixture/fixtureglee.git'
+            )
+            self.assertIn(mismatch, evidence)
+            self.assertIn(
+                f'Fetch check: FixtureOKH '
+                f'(THEME_CONTROL_FIXTUREOKH_REVISION={expected["FixtureOKH"]}): '
+                f'PASS; fetched {fetched["FixtureOKH"]}',
+                evidence,
+            )
+            self.assertIn(
+                f'Fetch check: FixtureAskJamie '
+                f'(THEME_CONTROL_FIXTUREASKJAMIE_REVISION={expected["FixtureAskJamie"]}): '
+                f'PASS; fetched {fetched["FixtureAskJamie"]}',
+                evidence,
+            )
+            self.assertEqual(
+                (root / 'fetch-attempts.txt').read_text(encoding='utf-8').splitlines(),
+                ['FixtureOKH', 'FixtureGlee', 'FixtureAskJamie'],
+            )
+
     def test_theme_control_sites_use_all_reviewed_checkout_revisions(self):
         source = job(VALIDATE, 'validate')
         theme_step = step(source, 'Run shared theme-control regressions')
