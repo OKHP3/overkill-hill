@@ -29,6 +29,7 @@ const fixtureFiles = new Map([
   ["/external-csp-shared.html", "external-csp-shared.html"],
   ["/external-outage-shared.html", "external-outage-shared.html"],
   ["/external-outage-shared-second.html", "external-outage-shared-second.html"],
+  ["/external-not-found.html", "external-not-found.html"],
   ["/external-csp-network-shared.html", "external-csp-network-shared.html"],
   ["/external-network-failure-network-shared.html", "external-network-failure-network-shared.html"],
   ["/external-delayed-outage.html", "external-delayed-outage.html"],
@@ -182,6 +183,12 @@ before(async () => {
       externalFixtureObservations.push({ path, method: request.method, status: 503 });
       response.writeHead(503, { "content-type": "text/plain" });
       response.end("fixture dependency intentionally unavailable");
+      return;
+    }
+    if (path === "/not-found.png") {
+      externalFixtureObservations.push({ path, method: request.method, status: 404 });
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("fixture dependency intentionally missing");
       return;
     }
     if (path === "/aborted.png") {
@@ -1990,6 +1997,81 @@ test("shows every route receiving an HTTP error from a shared dependency", async
       assert.ok(routeOutcome, JSON.stringify(outage.routeOutcomes, null, 2));
       assert.equal(routeOutcome.state, "unavailable");
       assert.ok(routeOutcome.responses.some(({ status }) => status === 503));
+    }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("keeps HTTP status and route summaries isolated across failing dependencies", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-independent-http-outages-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const routes = [
+    "/external-outage-shared.html",
+    "/external-not-found.html",
+  ];
+  try {
+    const result = await runCspQa(routes.join(","), [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    assert.notEqual(result.status, 0, result.output);
+
+    const outageLines = result.output
+      .split("\n")
+      .filter((line) => line.includes("EXTERNAL OUTAGE:"));
+    assert.equal(outageLines.length, 2, result.output);
+    const lineFor = (urlSuffix) => {
+      const line = outageLines.find((value) => value.includes(urlSuffix));
+      assert.ok(line, `missing outage line for ${urlSuffix}\n${outageLines.join("\n")}`);
+      return line;
+    };
+    const unavailableLine = lineFor("/shared.png");
+    assert.match(unavailableLine, /; HTTP status: 503$/);
+    assert.doesNotMatch(unavailableLine, /external-not-found\.html/);
+    assert.match(unavailableLine, /external-outage-shared\.html/);
+
+    const notFoundLine = lineFor("/not-found.png");
+    assert.match(notFoundLine, /; HTTP status: 404$/);
+    assert.doesNotMatch(notFoundLine, /external-outage-shared\.html/);
+    assert.match(notFoundLine, /external-not-found\.html/);
+
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    assert.deepEqual(report.routes, routes);
+    assert.equal(report.summary.externalOutages, 2);
+    assert.equal(report.externalOutages.length, 2);
+    for (const { url, route, status, otherRoute, otherStatus } of [
+      {
+        url: "/shared.png",
+        route: "/external-outage-shared.html",
+        status: 503,
+        otherRoute: "/external-not-found.html",
+        otherStatus: 404,
+      },
+      {
+        url: "/not-found.png",
+        route: "/external-not-found.html",
+        status: 404,
+        otherRoute: "/external-outage-shared.html",
+        otherStatus: 503,
+      },
+    ]) {
+      const dependency = report.externalOutages.find((item) => item.url.endsWith(url));
+      assert.ok(dependency, JSON.stringify(report.externalOutages, null, 2));
+      assert.deepEqual(dependency.routes, [route]);
+      assert.deepEqual(dependency.responses.map(({ route: value, status: code }) => ({
+        route: value,
+        status: code,
+      })), [{ route, status }]);
+      assert.deepEqual(
+        dependency.routeOutcomes.map(({ route: value, responses }) => ({
+          route: value,
+          statuses: responses.map(({ status: code }) => code),
+        })),
+        [{ route, statuses: [status] }],
+      );
+      assert.ok(!dependency.routes.includes(otherRoute));
+      assert.ok(!dependency.responses.some(({ status: code }) => code === otherStatus));
     }
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
