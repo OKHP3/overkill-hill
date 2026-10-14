@@ -328,13 +328,17 @@ class SocialCardDuplicateTests(unittest.TestCase):
                 output,
             )
 
-    def test_site_release_command_exempts_noindex_pilot_duplicate(self):
-        exit_code, stdout, stderr = self._run_site_command(
-            duplicate="conflict",
-            noindex=True,
-        )
+    def test_site_release_command_exempts_noindex_pilot_duplicates_for_each_field(self):
+        for key in SOCIAL_CARD_DUPLICATE_KEYS:
+            with self.subTest(key=key):
+                exit_code, stdout, stderr = self._run_site_command(
+                    duplicate=key,
+                    noindex=True,
+                )
 
-        self.assertEqual(0, exit_code, stdout + stderr)
+                output = stdout + stderr
+                self.assertEqual(0, exit_code, output)
+                self.assertNotIn("conflicting duplicate social-card metadata", output)
 
     def _run_locale_command(
         self,
@@ -456,13 +460,16 @@ class SocialCardDuplicateTests(unittest.TestCase):
                 output,
             )
 
-    def test_locale_release_command_exempts_noindex_pilot_duplicate(self):
-        exit_code, output = self._run_locale_command(
-            duplicate="conflict",
-            noindex=True,
-        )
+    def test_locale_release_command_exempts_noindex_pilot_duplicates_for_each_field(self):
+        for key in SOCIAL_CARD_DUPLICATE_KEYS:
+            with self.subTest(key=key):
+                exit_code, output = self._run_locale_command(
+                    duplicate=key,
+                    noindex=True,
+                )
 
-        self.assertEqual(0, exit_code, output)
+                self.assertEqual(0, exit_code, output)
+                self.assertNotIn("conflicting duplicate social-card metadata", output)
 
 
 if __name__ == "__main__":
