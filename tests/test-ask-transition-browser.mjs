@@ -10,12 +10,22 @@ let count = 0;
 try {
   for (const brand of ['askjamie-main', '', 'glee-main']) {
     for (const width of [320, 1280]) {
-      for (const theme of ['light', 'dark']) {
-        const context = await browser.newContext({ viewport: { width, height: 480 }, reducedMotion: 'reduce' });
+      for (const mode of [
+        { theme: 'light', preference: 'light', os: 'dark' },
+        { theme: 'dark', preference: 'dark', os: 'light' },
+        { theme: 'light', preference: 'auto', os: 'light' },
+        { theme: 'dark', preference: 'auto', os: 'dark' },
+      ]) {
+        const context = await browser.newContext({ viewport: { width, height: 480 }, reducedMotion: 'reduce', colorScheme: mode.os });
         const page = await context.newPage();
+        // Sibling brands retain data-theme=light and use data-color-scheme
+        // for explicit choices; auto removes that attribute and follows the OS.
+        const attributes = brand
+          ? `data-theme="light"${mode.preference === 'auto' ? '' : ` data-color-scheme="${mode.preference}"`}`
+          : `data-theme="${mode.theme}"`;
         await page.route('**/*', route => route.request().url().endsWith('/theme.css')
           ? route.fulfill({ contentType: 'text/css', body: css })
-          : route.fulfill({ contentType: 'text/html', body: `<!doctype html><html data-theme="${theme}"><head>
+          : route.fulfill({ contentType: 'text/html', body: `<!doctype html><html ${attributes}><head>
             <meta charset="utf-8"><link rel="stylesheet" href="/theme.css"></head><body class="${brand}">
             <section class="capability-transition"><h2>Platform transition</h2><p>The notice stays available.</p>
             <button class="btn btn-quiet" data-transition-open hidden>Review the update</button><a href="/story/">Read the story</a></section>
@@ -31,7 +41,7 @@ try {
           await page.locator('dialog').evaluate(el => el.showModal());
           const state = await page.locator('dialog').evaluate(el => {
             const s = getComputedStyle(el), r = el.getBoundingClientRect();
-            return { border: s.borderTopWidth, borderColor: s.borderTopColor, width: r.width,
+            return { border: s.borderTopWidth, borderColor: s.borderTopColor, background: s.backgroundColor, color: s.color, width: r.width,
               top: r.top, bottom: r.bottom, left: r.left, right: r.right, overflow: s.overflowY,
               maxHeight: s.maxHeight, scrollable: el.scrollHeight > el.clientHeight,
               innerPadding: getComputedStyle(el.firstElementChild).paddingTop };
@@ -42,6 +52,8 @@ try {
           if (brand === 'askjamie-main') {
             assert.equal(state.border, '5px');
             assert.equal(state.borderColor, 'rgb(45, 111, 126)');
+            assert.equal(state.background, mode.theme === 'dark' ? 'rgb(42, 39, 36)' : 'rgb(253, 251, 247)', 'Ask dialog uses the actual selected palette');
+            assert.equal(state.color, mode.theme === 'dark' ? 'rgb(232, 228, 224)' : 'rgb(46, 43, 41)', 'Ask dialog text uses the actual selected palette');
             assert.ok(state.width <= 640 && state.width <= width - 32);
             assert.equal(state.innerPadding, width === 320 ? '20px' : '40px');
           } else {
