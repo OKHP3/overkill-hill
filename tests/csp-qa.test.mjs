@@ -119,6 +119,23 @@ async function serveFixture(request, response) {
     return;
   }
 
+  if (
+    path === "/external-redirect-healthy-one.html" ||
+    path === "/external-redirect-healthy-two.html"
+  ) {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    response.end(`<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Healthy redirect fixture</title></head>
+  <body>
+    <main><h1>Healthy redirect fixture</h1>
+      <img src="${externalBaseUrl}/redirect.png" alt="healthy redirected dependency">
+    </main>
+  </body>
+</html>`);
+    return;
+  }
+
   const fixtureName = fixtureFiles.get(path);
   if (fixtureName) {
     const fixture = await readFile(join(fixtureDirectory, fixtureName), "utf8");
@@ -173,6 +190,15 @@ before(async () => {
   externalServer = createServer((request, response) => {
     const requestUrl = new URL(request.url, "http://external-fixture");
     const path = requestUrl.pathname;
+    if (path === "/redirect.png") {
+      externalFixtureObservations.push({ path, method: request.method, status: 302 });
+      response.writeHead(302, {
+        location: "/healthy.png",
+        "content-type": "text/plain",
+      });
+      response.end("fixture dependency moved permanently for this request");
+      return;
+    }
     if (path === "/healthy.png") {
       externalFixtureObservations.push({ path, method: request.method, status: 200 });
       response.writeHead(200, { "content-type": "image/png" });
@@ -1349,6 +1375,80 @@ test("retains successful shared dependency evidence for two healthy routes", asy
       assert.equal(typeof response.statusText, "string", routeOutcome.route);
       assert.ok(response.statusText.length > 0, routeOutcome.route);
     }
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("retains each route's successful redirect chain without creating outages or duplicate outcomes", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-healthy-redirect-routes-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const routes = [
+    "/external-redirect-healthy-one.html",
+    "/external-redirect-healthy-two.html",
+  ];
+
+  try {
+    const observationStart = externalFixtureObservations.length;
+    const result = await runCspQa(routes.join(","), [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    const fixtureRequests = externalFixtureObservations.slice(observationStart);
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+
+    assert.equal(result.status, 0, result.output);
+    assert.equal(report.status, "PASS", JSON.stringify(report, null, 2));
+    assert.deepEqual(report.routes, routes);
+    assert.equal(report.summary.routes, routes.length);
+    assert.equal(report.summary.dependencies, 2);
+    assert.equal(report.summary.available, 2);
+    assert.equal(report.summary.externalOutages, 0);
+    assert.equal(report.summary.failureEvents, 0);
+    assert.deepEqual(report.externalOutages, []);
+    assert.deepEqual(
+      fixtureRequests.map(({ path, method, status }) => ({ path, method, status }))
+        .sort((left, right) => left.path.localeCompare(right.path)),
+      [
+        { path: "/healthy.png", method: "GET", status: 200 },
+        { path: "/healthy.png", method: "GET", status: 200 },
+        { path: "/redirect.png", method: "GET", status: 302 },
+        { path: "/redirect.png", method: "GET", status: 302 },
+      ],
+    );
+
+    const redirect = report.dependencies.find(({ url }) => url.endsWith("/redirect.png"));
+    const finalResource = report.dependencies.find(({ url }) => url.endsWith("/healthy.png"));
+    assert.ok(redirect, JSON.stringify(report, null, 2));
+    assert.ok(finalResource, JSON.stringify(report, null, 2));
+    for (const dependency of [redirect, finalResource]) {
+      assert.equal(dependency.state, "available", dependency.url);
+      assert.deepEqual(dependency.routes, routes.slice().sort(), dependency.url);
+      assert.equal(dependency.requestCount, routes.length, dependency.url);
+      assert.deepEqual(dependency.routeOutcomes.map(({ route }) => route), routes.slice().sort());
+      assert.equal(
+        new Set(dependency.routeOutcomes.map(({ route }) => route)).size,
+        routes.length,
+        `each route should have exactly one outcome for ${dependency.url}`,
+      );
+      for (const routeOutcome of dependency.routeOutcomes) {
+        assert.equal(routeOutcome.state, "available", `${dependency.url}: ${routeOutcome.route}`);
+        assert.deepEqual(routeOutcome.responses.map(({ status }) => status), [
+          dependency === redirect ? 302 : 200,
+        ]);
+        assert.deepEqual(
+          routeOutcome.responses.map(({ route }) => route),
+          [routeOutcome.route],
+        );
+        assert.deepEqual(routeOutcome.failures, []);
+        assert.deepEqual(routeOutcome.timeouts, []);
+      }
+    }
+    assert.deepEqual(redirect.responses.map(({ status }) => status), [302, 302]);
+    assert.deepEqual(finalResource.responses.map(({ status }) => status), [200, 200]);
+    assert.deepEqual(redirect.failures, []);
+    assert.deepEqual(finalResource.failures, []);
+    assertExternalFailureReportContract(report);
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
