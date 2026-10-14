@@ -24,6 +24,7 @@ const fixtureFiles = new Map([
   ["/external-repeated-network-failure.html", "external-repeated-network-failure.html"],
   ["/external-different-network-failures.html", "external-different-network-failures.html"],
   ["/external-csp-blocked.html", "external-csp-blocked.html"],
+  ["/external-non-network-csp.html", "external-non-network-csp.html"],
   ["/external-csp-and-outage.html", "external-csp-and-outage.html"],
   ["/external-csp-shared.html", "external-csp-shared.html"],
   ["/external-outage-shared.html", "external-outage-shared.html"],
@@ -1894,6 +1895,31 @@ test("reports CSP-blocked dependencies separately from external outages", async 
       }
     }
     assert.deepEqual(blockedEndpointRequests, [], "CSP-blocked requests must not reach the server");
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("does not count non-network CSP blocks as external dependencies or outages", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-non-network-health-"));
+  const reportPath = join(reportDirectory, "report.json");
+  try {
+    const result = await runCspQa("/external-non-network-csp.html", [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+
+    assert.notEqual(result.status, 0, result.output);
+    assert.match(result.output, /CSP diagnostics were observed/);
+    assert.doesNotMatch(result.output, /EXTERNAL OUTAGE:/);
+    assert.equal(report.status, "CSP_BLOCKED");
+    assert.equal(report.summary.dependencies, 0);
+    assert.equal(report.summary.externalOutages, 0);
+    assert.equal(report.summary.cspEvidence, 0);
+    assert.deepEqual(report.dependencies, []);
+    assert.deepEqual(report.externalOutages, []);
+    assert.deepEqual(report.cspEvidence, []);
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }
