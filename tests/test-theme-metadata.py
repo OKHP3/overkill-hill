@@ -180,6 +180,27 @@ class BrandThemeMetadataTests(unittest.TestCase):
         ):
             validator.validate_brand_theme_contract({"brands": contract})
 
+    def test_contract_loader_accepts_whitespace_before_colons(self) -> None:
+        source = json.dumps(
+            {"brands": BRAND_THEME_CONTRACT, "metadata": {"entries": [{"owner": "fixture"}]}},
+            indent=2, separators=(",", " \t : "),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            self.assertEqual(validator.load_brand_theme_contract(path), BRAND_THEME_CONTRACT)
+
+    def test_duplicate_key_diagnostics_survive_whitespace_before_colons(self) -> None:
+        source = (
+            '{"brands" : ' + json.dumps(BRAND_THEME_CONTRACT)
+            + ', "metadata" : {"entries" : [{"owner" : "first", "owner" : "second"}]}}'
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brand-theme-contract.json"
+            path.write_text(source, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, r"JSON path /metadata/entries/0/owner"):
+                validator.load_brand_theme_contract(path)
+
     def test_release_validator_fails_with_aggregated_brand_errors(self) -> None:
         contract = deepcopy(BRAND_THEME_CONTRACT)
         contract["askjamie"]["storageKey"] = contract["glee"]["storageKey"]

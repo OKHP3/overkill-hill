@@ -50,6 +50,7 @@ def _find_duplicate_json_key(source: str) -> tuple[tuple[str, ...], str, int] | 
                 if key in seen:
                     return offset, (path + (key,), key, key_start)
                 seen.add(key)
+                offset = skip_whitespace(offset)
                 offset = skip_whitespace(offset + 1)  # Skip the colon.
                 offset, duplicate = scan_value(offset, path + (key,))
                 if duplicate:
