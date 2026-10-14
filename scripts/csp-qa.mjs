@@ -1085,7 +1085,9 @@ async function runExternalHealth() {
           ? "LOCAL_FAILURE"
           : timeBudget.exceeded
             ? "TIME_BUDGET_EXCEEDED"
-            : "PASS",
+              : timeouts.length
+              ? "EXTERNAL_TIMEOUT"
+              : "PASS",
   };
 
   console.log(
@@ -1157,6 +1159,7 @@ async function runExternalHealth() {
     cspDiagnostics.length ||
     cspEvidence.length ||
     localFailures.length ||
+    timeouts.length ||
     timeBudget.exceeded
   ) {
     process.exitCode = 1;

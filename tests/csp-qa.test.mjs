@@ -2728,11 +2728,11 @@ test("keeps timeout evidence when a healthy response arrives within the late-res
       "--external-health",
       `--report=${reportPath}`,
     ]);
-    assert.equal(result.status, 0, result.output);
+    assert.notEqual(result.status, 0, result.output);
 
     const report = JSON.parse(await readFile(reportPath, "utf8"));
     const observations = externalFixtureObservations.slice(observationStart);
-    assert.equal(report.status, "PASS");
+    assert.equal(report.status, "EXTERNAL_TIMEOUT");
     assert.equal(report.summary.externalOutages, 0);
     assert.equal(report.summary.timeouts, 1);
     assert.deepEqual(report.timeouts, [{
@@ -3001,8 +3001,8 @@ test("retains pending-request outage and budget exhaustion together", async () =
 
 test("keeps late healthy response successful when observation fits budget", async () => {
   const { report, exitCode } = await simulateExternalHealth({ budget: 10000 });
-  assert.equal(exitCode, 0);
-  assert.equal(report.status, "PASS");
+  assert.equal(exitCode, 1);
+  assert.equal(report.status, "EXTERNAL_TIMEOUT");
   assert.equal(report.timeBudget.exceeded, false);
   assert.equal(report.summary.available, 1);
   assert.equal(report.summary.timeouts, 1);
