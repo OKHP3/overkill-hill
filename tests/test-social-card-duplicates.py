@@ -166,6 +166,9 @@ def source_fixture_html() -> str:
 
 
 class SocialCardDuplicateTests(unittest.TestCase):
+    def test_duplicate_fixture_keys_match_validator_social_card_keys(self):
+        self.assertEqual(MODULE.SOCIAL_CARD_META_KEYS, SOCIAL_CARD_DUPLICATE_KEYS)
+
     def test_conflicting_duplicate_reports_metadata_key_and_page(self):
         findings = MODULE.validate_duplicate_social_card_metadata(
             "fr/projects/index.html",
