@@ -172,6 +172,14 @@ function classifyExternalDependency(dependency) {
   return "no-response";
 }
 
+function isBrowserDisconnectedError(error, browser) {
+  if (typeof browser?.isConnected === "function" && !browser.isConnected()) {
+    return true;
+  }
+  return /browser (?:has been )?closed|browser.*disconnected|target (?:page, context or browser )?closed|connection closed/i
+    .test(error?.message || "");
+}
+
 function reportPathFromArgument(argument, name) {
   const path = argument?.slice(`--${name}=`.length);
   if (!path) throw new Error(`--${name} must contain a file path`);
@@ -705,7 +713,8 @@ async function checkExternalRoute(browser, path, overallDeadline) {
       } else {
         try {
           await page.waitForLoadState("domcontentloaded", { timeout: loadStateTimeout });
-        } catch {
+        } catch (error) {
+          if (isBrowserDisconnectedError(error, browser)) throw error;
           if (Date.now() >= overallDeadline) {
             budgetExceeded = true;
           } else {
@@ -726,6 +735,7 @@ async function checkExternalRoute(browser, path, overallDeadline) {
       }
     }
   } catch (error) {
+    if (isBrowserDisconnectedError(error, browser)) throw error;
     if (Date.now() >= overallDeadline) {
       budgetExceeded = true;
     } else {
@@ -764,7 +774,10 @@ async function checkExternalRoute(browser, path, overallDeadline) {
     Array.isArray(window.__cspViolationEvidence)
       ? window.__cspViolationEvidence
       : []
-  )).catch(() => []);
+  )).catch((error) => {
+    if (isBrowserDisconnectedError(error, browser)) throw error;
+    return [];
+  });
   const externalCspEvidence = cspEvidence
     .map((evidence) => ({
       route: path,
@@ -959,6 +972,7 @@ async function runExternalHealth() {
       timeouts: [],
       localFailures: [],
       browserStartupFailure,
+      browserInterruption: null,
       timeBudget,
       summary: {
         routes: 0,
@@ -997,13 +1011,33 @@ async function runExternalHealth() {
   const results = [];
   const routesCutShortByBudget = [];
   const routesSkippedByBudget = [];
+  let browserDisconnected = false;
+  let browserInterruption = null;
+  browser.on("disconnected", () => {
+    browserDisconnected = true;
+  });
   try {
     for (const [index, path] of PUBLIC_PATHS.entries()) {
       if (Date.now() >= overallDeadline) {
         routesSkippedByBudget.push(...PUBLIC_PATHS.slice(index));
         break;
       }
-      const result = await checkExternalRoute(browser, path, overallDeadline);
+      let result;
+      try {
+        result = await checkExternalRoute(browser, path, overallDeadline);
+      } catch (error) {
+        if (!browserDisconnected && !isBrowserDisconnectedError(error, browser)) {
+          throw error;
+        }
+        browserInterruption = {
+          phase: "route-check",
+          status: "BROWSER_DISCONNECTED",
+          route: path,
+          routesSkipped: PUBLIC_PATHS.slice(index + 1),
+          message: (error?.message || String(error)).split("\n")[0],
+        };
+        break;
+      }
       results.push(result);
       if (result.budgetExceeded) {
         routesCutShortByBudget.push(path);
@@ -1020,7 +1054,11 @@ async function runExternalHealth() {
       }
     }
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch (error) {
+      if (!browserDisconnected && !isBrowserDisconnectedError(error, browser)) throw error;
+    }
   }
 
   const timeBudget = {
@@ -1062,6 +1100,7 @@ async function runExternalHealth() {
     cspEvidence,
     timeouts,
     localFailures,
+    browserInterruption,
     timeBudget,
     summary: {
       routes: results.length,
@@ -1077,17 +1116,19 @@ async function runExternalHealth() {
       routesCutShortByBudget: routesCutShortByBudget.length,
       routesSkippedByBudget: routesSkippedByBudget.length,
     },
-    status: externalOutages.length
-      ? "EXTERNAL_OUTAGE"
-      : cspDiagnostics.length || cspEvidence.length
-        ? "CSP_BLOCKED"
-        : localFailures.length
-          ? "LOCAL_FAILURE"
-          : timeBudget.exceeded
-            ? "TIME_BUDGET_EXCEEDED"
+    status: browserInterruption
+      ? browserInterruption.status
+      : externalOutages.length
+        ? "EXTERNAL_OUTAGE"
+        : cspDiagnostics.length || cspEvidence.length
+          ? "CSP_BLOCKED"
+          : localFailures.length
+            ? "LOCAL_FAILURE"
+            : timeBudget.exceeded
+              ? "TIME_BUDGET_EXCEEDED"
               : timeouts.length
-              ? "EXTERNAL_TIMEOUT"
-              : "PASS",
+                ? "EXTERNAL_TIMEOUT"
+                : "PASS",
   };
 
   console.log(
@@ -1145,6 +1186,15 @@ async function runExternalHealth() {
       console.log(`  ROUTE SKIPPED BY OVERALL BUDGET: ${route}`);
     });
   }
+  if (browserInterruption) {
+    console.error(
+      `BROWSER DISCONNECTED while checking ${browserInterruption.route}: ` +
+      `${browserInterruption.message}`,
+    );
+    browserInterruption.routesSkipped.forEach((route) => {
+      console.error(`  ROUTE SKIPPED AFTER BROWSER DISCONNECT: ${route}`);
+    });
+  }
   if (cspDiagnostics.length || cspEvidence.length) {
     console.log("  CSP diagnostics were observed during the availability check.");
   }
@@ -1160,6 +1210,7 @@ async function runExternalHealth() {
     cspEvidence.length ||
     localFailures.length ||
     timeouts.length ||
+    browserInterruption ||
     timeBudget.exceeded
   ) {
     process.exitCode = 1;

@@ -2834,6 +2834,7 @@ async function simulateExternalHealth({
   budget = 6500, lateHealthy = true, startup = null,
   pageCloseMs = 0, browserCloseMs = 0,
   routeStatuses = null, lateResponseStatus = 200, browserName = "chromium",
+  disconnectOnRoute = null, includeCspEvidence = false,
 } = {}) {
   const source = await readFile(cspQaScript, "utf8");
   const entry = source.indexOf("\nif (fixtureSummaryArg) {");
@@ -2842,6 +2843,9 @@ async function simulateExternalHealth({
   let now = 0;
   let report;
   let responded = false;
+  let connected = true;
+  let activePath = null;
+  let disconnectedHandler = null;
   const logs = [];
   const handlers = {};
   const request = {
@@ -2851,9 +2855,15 @@ async function simulateExternalHealth({
     addInitScript: async () => {},
     on: (name, handler) => { handlers[name] = handler; },
     goto: async (url) => {
+      activePath = new URL(url).pathname;
       handlers.request(request);
+      if (activePath === disconnectOnRoute) {
+        connected = false;
+        disconnectedHandler?.();
+        throw new Error("Target page, context or browser has been closed");
+      }
       if (routeStatuses) {
-        const status = routeStatuses[new URL(url).pathname];
+        const status = routeStatuses[activePath];
         handlers.response({
           request: () => request, status: () => status,
           statusText: () => status === 200 ? "OK" : "Service Unavailable",
@@ -2873,7 +2883,13 @@ async function simulateExternalHealth({
         });
       }
     },
-    evaluate: async () => [],
+    evaluate: async () => includeCspEvidence &&
+      activePath === Object.keys(routeStatuses || {})[0]
+      ? [{
+        blockedURI: "https://third.example/blocked.js",
+        effectiveDirective: "script-src",
+      }]
+      : [],
     close: async () => { now += pageCloseMs; },
   };
   const browserType = {
@@ -2888,6 +2904,10 @@ async function simulateExternalHealth({
       }
       return {
         newPage: async () => page,
+        on: (name, handler) => {
+          if (name === "disconnected") disconnectedHandler = handler;
+        },
+        isConnected: () => connected,
         version: () => "Synthetic browser 1.2",
         close: async () => { now += browserCloseMs; },
       };
@@ -3012,6 +3032,46 @@ test("records exhausted budget on the final route after late healthy response", 
   assert.equal(report.summary.available, 1);
   assert.equal(report.summary.timeouts, 1);
   assert.equal(report.summary.externalOutages, 0);
+});
+
+test("preserves completed route evidence when the browser disconnects mid-check", async () => {
+  const paths = {
+    "/completed/": 200,
+    "/interrupted/": 200,
+    "/unvisited/": 200,
+  };
+  const { report, exitCode, logs } = await simulateExternalHealth({
+    budget: 20000,
+    routeStatuses: paths,
+    disconnectOnRoute: "/interrupted/",
+    includeCspEvidence: true,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(report.status, "BROWSER_DISCONNECTED");
+  assert.deepEqual(report.browserInterruption, {
+    phase: "route-check",
+    status: "BROWSER_DISCONNECTED",
+    route: "/interrupted/",
+    routesSkipped: ["/unvisited/"],
+    message: "Target page, context or browser has been closed",
+  });
+  assert.equal(report.summary.routes, 1);
+  assert.equal(report.timeBudget.exceeded, false);
+  assert.deepEqual(report.dependencies.map(({ state }) => state).sort(), [
+    "available",
+    "blocked-by-csp",
+  ]);
+  assert.deepEqual(report.dependencies.flatMap(({ routes }) => routes), [
+    "/completed/",
+    "/completed/",
+  ]);
+  assert.equal(report.cspEvidence.length, 1);
+  assert.deepEqual(report.externalOutages, []);
+  assert.deepEqual(report.localFailures, []);
+  assert.equal(report.summary.externalOutages, 0);
+  assert.match(logs.join("\n"), /BROWSER DISCONNECTED while checking \/interrupted\//);
+  assert.match(logs.join("\n"), /ROUTE SKIPPED AFTER BROWSER DISCONNECT: \/unvisited\//);
 });
 
 test("retains pending-request outage and budget exhaustion together", async () => {
