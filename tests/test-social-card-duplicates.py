@@ -23,6 +23,11 @@ LOCALE_SPEC.loader.exec_module(LOCALE_MODULE)
 
 SOCIAL_IMAGE = "https://overkillhill.com/assets/img/etch-ai-sketch-using-a-council-to-design-at-velocity.png"
 CONFLICTING_SOCIAL_IMAGE = "https://example.test/conflicting-card.png"
+THREE_SOCIAL_IMAGE_VALUES = (
+    SOCIAL_IMAGE,
+    "https://example.test/second-card.png",
+    "https://example.test/third-card.png",
+)
 SOCIAL_CARD_DUPLICATE_KEYS = (
     "og:image",
     "og:image:alt",
@@ -78,6 +83,8 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
         duplicate_modes = {key: "identical" for key in SOCIAL_CARD_DUPLICATE_KEYS}
     elif duplicate == "mixed":
         duplicate_modes = mixed_duplicates
+    elif duplicate == "three-values":
+        duplicate_modes = {"og:image": "three-values"}
     elif duplicate is not None:
         duplicate_key = "og:image" if duplicate == "conflict" else duplicate
         duplicate_modes = {duplicate_key: "conflict"}
@@ -92,6 +99,11 @@ def social_card_tags(*, duplicate: str | None = None) -> str:
         if key in duplicate_modes:
             if duplicate_modes[key] == "identical":
                 tags.append(tag)
+            elif duplicate_modes[key] == "three-values":
+                tags.extend(
+                    f'<meta property="{key}" content="{value}">'
+                    for value in THREE_SOCIAL_IMAGE_VALUES[1:]
+                )
             else:
                 prefix = f'property="{key}"' if key.startswith("og:") else f'name="{key}"'
                 value = CONFLICTING_SOCIAL_VALUES[key]
@@ -328,6 +340,20 @@ class SocialCardDuplicateTests(unittest.TestCase):
                 output,
             )
 
+    def test_site_release_command_reports_every_value_for_one_field(self):
+        exit_code, stdout, stderr = self._run_site_command(
+            duplicate="three-values",
+            noindex=False,
+        )
+
+        output = stdout + stderr
+        self.assertEqual(1, exit_code)
+        self.assertIn(
+            f"conflicting duplicate social-card metadata for meta:og:image: "
+            f"{list(THREE_SOCIAL_IMAGE_VALUES)!r}",
+            output,
+        )
+
     def test_site_release_command_exempts_noindex_pilot_duplicates_for_each_field(self):
         for key in SOCIAL_CARD_DUPLICATE_KEYS:
             with self.subTest(key=key):
@@ -459,6 +485,19 @@ class SocialCardDuplicateTests(unittest.TestCase):
                 output.count(f"conflicting duplicate social-card metadata for meta:{key}:"),
                 output,
             )
+
+    def test_locale_release_command_reports_every_value_for_one_field(self):
+        exit_code, output = self._run_locale_command(
+            duplicate="three-values",
+            noindex=False,
+        )
+
+        self.assertEqual(1, exit_code)
+        self.assertIn(
+            f"conflicting duplicate social-card metadata for meta:og:image: "
+            f"{list(THREE_SOCIAL_IMAGE_VALUES)!r}",
+            output,
+        )
 
     def test_locale_release_command_exempts_noindex_pilot_duplicates_for_each_field(self):
         for key in SOCIAL_CARD_DUPLICATE_KEYS:
