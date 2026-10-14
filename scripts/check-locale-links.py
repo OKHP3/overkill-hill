@@ -143,6 +143,9 @@ def check_search_index(
         return
     try:
         payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        fail(findings, "locale search index is not valid UTF-8")
+        return
     except (OSError, json.JSONDecodeError) as exc:
         fail(findings, f"locale search index is not valid JSON: {exc}")
         return

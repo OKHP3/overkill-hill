@@ -742,6 +742,22 @@ class SEOFixtureTests(unittest.TestCase):
             )
             self.assertIn("locale search index must be an object", findings)
 
+    def test_locale_search_index_rejects_invalid_utf8_with_stable_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            index_path = Path(directory) / "search-index.fr.json"
+            index_path.write_bytes(b'{"locale":"fr","entries":[]}\xff')
+            findings = []
+
+            locale_checker.check_search_index(
+                index_path, set(), "fr", findings,
+                draft_routes=set(), require_routes=False,
+            )
+
+            self.assertEqual(
+                findings,
+                ["locale search index is not valid UTF-8"],
+            )
+
     def test_unpublished_locale_rejects_stale_search_index_routes(self) -> None:
         declared_route = "/fr/about/"
         unrelated_route = "/fr/retired/"
