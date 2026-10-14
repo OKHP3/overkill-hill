@@ -437,6 +437,57 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         self.assertIn("fr/index.html: conflicting duplicate social-card metadata", result.stderr)
         self.assertIn("meta:og:image", result.stderr)
 
+    def test_locale_checker_wrapper_reports_duplicate_route_ownership(self) -> None:
+        root = self.fixture / "duplicate-route-ownership"
+        root.mkdir()
+        manifest = root / "locale-manifest.json"
+        shutil.copy2(
+            ROOT / "tests" / "fixtures" / "seo" / "locale-duplicate-target-routes.json",
+            manifest,
+        )
+        (root / "index.html").write_text(site_page(), encoding="utf-8")
+        sitemap = root / "locale-sitemap.xml"
+        sitemap.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            "<url><loc>https://overkillhill.com/</loc></url>"
+            "</urlset>",
+            encoding="utf-8",
+        )
+        index_dir = root / "assets" / "data"
+        index_dir.mkdir(parents=True)
+        for locale in ("de", "fr"):
+            (index_dir / f"search-index.{locale}.json").write_text(
+                json.dumps({"locale": locale, "count": 0, "entries": []}),
+                encoding="utf-8",
+            )
+
+        environment = self._environment()
+        environment["OKHP3_VALIDATION_ROOT"] = str(root)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LOCALE_CHECKER),
+                "--manifest",
+                str(manifest),
+                "--sitemap",
+                str(sitemap),
+            ],
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertIn("Locale link check failed:\n", result.stderr)
+        self.assertIn(
+            "  - locale target route is claimed by multiple locales: /fr/ (de, fr)\n",
+            result.stderr,
+        )
+
     def test_legacy_locale_checker_wrapper_preserves_coverage_failures(self) -> None:
         manifest_path = self.fixture / "locale-manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
