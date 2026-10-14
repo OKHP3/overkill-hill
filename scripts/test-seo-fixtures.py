@@ -901,6 +901,52 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_unpublished_locale_reports_target_page_and_sitemap_route_together(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            self.assertFalse(
+                locale_checker.validate(
+                    manifest_path=manifest_path,
+                    sitemap_path=sitemap_path,
+                    index_path=index_path,
+                    root=root,
+                ),
+                "unpublished locale fixture should pass with an empty scaffold",
+            )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            page = manifest["locales"]["fr"]["pages"][0]
+            target_file = root / page["target_path"]
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            target_file.write_text("<!doctype html><title>Not published</title>", encoding="utf-8")
+
+            sitemap = sitemap_path.read_text(encoding="utf-8")
+            sitemap_path.write_text(
+                sitemap.replace(
+                    "</urlset>",
+                    f"<url><loc>{locale_checker.route_url(page['target_route'])}</loc></url>\n</urlset>",
+                ),
+                encoding="utf-8",
+            )
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+        self.assertEqual(
+            findings,
+            [
+                f"unpublished scaffold contains target page: {page['target_path']}",
+                f"unpublished target route is in sitemap.xml: {page['target_route']}",
+            ],
+        )
+
     def test_mixed_locale_rejects_undeclared_search_index_routes(self) -> None:
         source_routes = {"/", "/about/", "/projects/", "/contact/"}
         promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
