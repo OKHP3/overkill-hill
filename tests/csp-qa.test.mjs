@@ -841,6 +841,42 @@ test("shows explicit pass and fail results for a mixed focused fixture report", 
   }
 });
 
+test("keeps fixtures with missing or non-boolean pass values UNKNOWN", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-unknown-"));
+  const reportPath = join(reportDirectory, "fixture-report.json");
+  const summaryPath = join(reportDirectory, "summary.md");
+
+  try {
+    await writeFile(reportPath, `${JSON.stringify({
+      version: 1,
+      mode: "csp-fixtures",
+      fixtures: [
+        { path: "/missing-pass.html", errors: ["CSP: blocked"] },
+        {
+          path: "/non-boolean-pass.html",
+          pass: "false",
+          errors: ["PASS: no browser violations found"],
+        },
+      ],
+    })}\n`);
+
+    const result = await runFixtureSummary(reportPath, summaryPath);
+    assert.equal(result.status, 0, result.output);
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| \/missing-pass\.html \| UNKNOWN \| CSP \| CSP: blocked \|/,
+    );
+    assert.match(
+      summary,
+      /\| \/non-boolean-pass\.html \| UNKNOWN \| none observed \| PASS: no browser violations found \|/,
+    );
+    assert.match(summary, /Fixture totals: \*\*0 PASS\*\*, \*\*0 FAIL\*\*\./);
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("keeps every browser diagnostic category visible in the focused summary", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-"));
   const reportPath = join(reportDirectory, "fixture-report.json");
