@@ -463,8 +463,10 @@ jobs:
           python3 scripts/tests/test-search-index.py
           node --test tests/search-page.test.mjs tests/search-index.test.mjs tests/search-index-locale.test.mjs tests/embed-workflow.test.mjs tests/mermaid-links.test.mjs tests/mermaid-label-colors.test.mjs tests/foundry-diagram.test.mjs tests/mac-studio-diagrams.test.mjs
 
-      - name: Keep content visible when optional reveal scripts fail
-        run: node tests/test-reveal-browser.mjs
+      - name: Verify reveal recovery and Ask surface contrast
+        run: |
+          node tests/test-reveal-browser.mjs
+          node tests/test-ask-contrast-browser.mjs
 
       - name: Run WCAG contrast audit
         id: contrast
