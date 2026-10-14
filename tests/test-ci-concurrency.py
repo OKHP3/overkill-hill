@@ -173,9 +173,34 @@ class ConcurrencyTests(unittest.TestCase):
             'git -C "$probe_dir" fetch --no-tags --depth=1 --filter=tree:0',
             fetch_step,
         )
+        self.assertIn('config/theme-control-sites.json', fetch_step)
+        self.assertIn('jq -er', fetch_step)
+        self.assertIn('while IFS=$\'\\t\' read -r site revision_variable repository; do', fetch_step)
+        self.assertIn('revision="${!revision_variable}"', fetch_step)
+        self.assertIn('verify_revision \\\n              "$site" \\\n              "$revision_variable" \\\n              "$repository" \\\n              "$revision" || fetch_status=1', fetch_step)
         self.assertIn('git remote get-url origin', fetch_step)
-        self.assertIn('https://github.com/OKHP3/Glee-fullyTools.git', fetch_step)
-        self.assertIn('https://github.com/OKHP3/AskJamie.git', fetch_step)
+        self.assertIn('https://github.com/${repository}.git', fetch_step)
+        query_match = re.search(
+            r"site_fetch_inputs=\"\$\(jq -er '(?P<query>.*?)' "
+            r"config/theme-control-sites\.json\)\"",
+            fetch_step,
+            re.S,
+        )
+        self.assertIsNotNone(query_match, 'fetch inputs must be generated from the shared site list')
+        query = textwrap.dedent(query_match['query'])
+        generated = subprocess.run(
+            ['jq', '-er', query, str(ROOT / 'config/theme-control-sites.json')],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        self.assertEqual(
+            [line.split('\t') for line in generated],
+            [
+                [site['name'], site['revisionVariable'], site.get('repository', '')]
+                for site in FOUNDATION_SITES
+            ],
+        )
         self.assertIn(
             'foundation revision could not be fetched from',
             fetch_step,
@@ -184,19 +209,9 @@ class ConcurrencyTests(unittest.TestCase):
             'fetched unexpected revision',
             fetch_step,
         )
-        for site in FOUNDATION_SITES:
-            name = site['name']
-            revision_variable = site['revisionVariable']
-            with self.subTest(site=name):
-                self.assertRegex(
-                    fetch_step,
-                    rf'"{re.escape(name)}"\s+\\\n\s+"{re.escape(revision_variable)}"',
-                )
-                self.assertIn(
-                    revision_variable,
-                    fetch_step,
-                    f'{name} fetch gate must use {revision_variable}',
-                )
+        self.assertNotIn('verify_revision \\\n            "OKH"', fetch_step)
+        self.assertNotIn('verify_revision \\\n            "Glee"', fetch_step)
+        self.assertNotIn('verify_revision \\\n            "AskJamie"', fetch_step)
 
         fetch_position = source.index(
             '- name: Verify pinned theme-control foundation revisions are fetchable',
@@ -237,11 +252,9 @@ class ConcurrencyTests(unittest.TestCase):
             'Fetch check: %s (%s=%s): PASS; fetched %s',
             fetch_step,
         )
-        for site in FOUNDATION_SITES:
-            with self.subTest(site=site['name']):
-                self.assertIn(site['name'], fetch_step)
-                self.assertIn(site['revisionVariable'], fetch_step)
-        self.assertEqual(fetch_step.count('|| fetch_status=1'), len(FOUNDATION_SITES))
+        self.assertIn('|| fetch_status=1', fetch_step)
+        self.assertIn('fetch_status=1', fetch_step)
+        self.assertIn('done <<< "$site_fetch_inputs"', fetch_step)
         self.assertIn('exit "$fetch_status"', fetch_step)
         self.assertIn('tee -a theme-control-revisions.txt', fetch_step)
 

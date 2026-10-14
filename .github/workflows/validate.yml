@@ -101,21 +101,48 @@ jobs:
           }
 
           fetch_status=0
-          verify_revision \
-            "OKH" \
-            "THEME_CONTROL_OKH_REVISION" \
-            "$(git remote get-url origin)" \
-            "$THEME_CONTROL_OKH_REVISION" || fetch_status=1
-          verify_revision \
-            "Glee" \
-            "THEME_CONTROL_GLEE_REVISION" \
-            "https://github.com/OKHP3/Glee-fullyTools.git" \
-            "$THEME_CONTROL_GLEE_REVISION" || fetch_status=1
-          verify_revision \
-            "AskJamie" \
-            "THEME_CONTROL_ASKJAMIE_REVISION" \
-            "https://github.com/OKHP3/AskJamie.git" \
-            "$THEME_CONTROL_ASKJAMIE_REVISION" || fetch_status=1
+          site_fetch_inputs="$(jq -er '
+            .sites
+            | if type == "array" and length > 0 then
+                .[]
+                | [.name, .revisionVariable, (.repository // "")]
+                | if all(.[]; type == "string") then @tsv
+                  else error("each theme-control site must define its name, revisionVariable, and optional repository")
+                  end
+              else error("config/theme-control-sites.json must contain a non-empty sites array")
+              end
+          ' config/theme-control-sites.json)"
+          while IFS=$'\t' read -r site revision_variable repository; do
+            if [[ -z "$site" || -z "$revision_variable" ]]; then
+              printf 'ERROR: invalid theme-control site fetch entry: %s\n' \
+                "$site $revision_variable $repository" >&2
+              fetch_status=1
+              continue
+            fi
+            if [[ ! -v "$revision_variable" || -z "${!revision_variable}" ]]; then
+              printf 'ERROR: %s has no pinned revision in %s.\n' \
+                "$site" "$revision_variable" >&2
+              fetch_status=1
+              continue
+            fi
+
+            if [[ -n "$repository" ]]; then
+              repository="https://github.com/${repository}.git"
+            else
+              if ! repository="$(git remote get-url origin)"; then
+                printf 'ERROR: %s could not resolve the origin repository URL.\n' \
+                  "$site" >&2
+                fetch_status=1
+                continue
+              fi
+            fi
+            revision="${!revision_variable}"
+            verify_revision \
+              "$site" \
+              "$revision_variable" \
+              "$repository" \
+              "$revision" || fetch_status=1
+          done <<< "$site_fetch_inputs"
           exit "$fetch_status"
 
       - name: Preserve pinned foundation fetch failure
