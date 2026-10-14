@@ -757,7 +757,7 @@ const DEFAULT_SITE_ROOTS = foundationSiteContract.map((site) => ({
   root: resolve(repositoryRoot, site.localPath),
 }));
 
-function configuredSiteInputs() {
+function configuredSiteInputs(siteRoots = DEFAULT_SITE_ROOTS) {
   if (process.env.THEME_CONTROL_SITES) {
     const configured = JSON.parse(process.env.THEME_CONTROL_SITES);
     assert.ok(Array.isArray(configured), "THEME_CONTROL_SITES must be a JSON array");
@@ -801,13 +801,46 @@ function configuredSiteInputs() {
     }));
   }
 
-  const available = DEFAULT_SITE_ROOTS.filter((site) => site.root && directoryExists(site.root));
+  const available = siteRoots.filter((site) => site.root && directoryExists(site.root));
   if (available.length === 0) return [];
-  if (available.length !== DEFAULT_SITE_ROOTS.length) {
-    throw new Error(`Theme-control sync requires all three site checkouts; found ${available.map(({ name }) => name).join(", ")}`);
+  if (available.length !== siteRoots.length) {
+    const availableNames = new Set(available.map(({ name }) => name));
+    const missing = siteRoots
+      .filter(({ name }) => !availableNames.has(name))
+      .map(({ name, localPath }) => `${name} (${localPath})`);
+    throw new Error(
+      `Theme-control sync requires all three site checkouts; ` +
+      `found ${available.map(({ name }) => name).join(", ")}; missing ${missing.join(", ")}`,
+    );
   }
   return available;
 }
+
+test("partial local checkouts identify every missing site and configured path", async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "theme-control-partial-checkouts-"));
+  try {
+    const availableRoot = join(temporaryRoot, "available");
+    await mkdir(join(availableRoot, "assets", "css"), { recursive: true });
+    await mkdir(join(availableRoot, "assets", "js"), { recursive: true });
+    await writeFile(join(availableRoot, "index.html"), "");
+    await writeFile(join(availableRoot, "assets", "css", "theme.css"), "");
+    await writeFile(join(availableRoot, "assets", "js", "app.js"), "");
+
+    const simulatedRoots = DEFAULT_SITE_ROOTS.map((site, index) => ({
+      ...site,
+      root: index === 0 ? availableRoot : join(temporaryRoot, `missing-${index}`),
+    }));
+    assert.throws(
+      () => configuredSiteInputs(simulatedRoots),
+      new Error(
+        "Theme-control sync requires all three site checkouts; " +
+        "found OKH; missing Glee (../glee-fullytools), AskJamie (../askjamie)",
+      ),
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
 
 test("configured foundation paths match the shared site contract", () => {
   const previous = process.env.THEME_CONTROL_SITES;
