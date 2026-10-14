@@ -1479,6 +1479,137 @@ class SummaryTests(unittest.TestCase):
                         self.assertIn('No local QA artifact URL was returned', rendered)
                         self.assertNotIn('[Download local QA reports]', rendered)
 
+    def test_local_qa_report_summary_identifies_complete_and_partial_report_sets(self):
+        workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
+        check = re.search(
+            r'(?ms)^      - name: Check local QA report sets\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        summary = re.search(
+            r'(?ms)^      - name: Summarize local QA report artifact\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(check, 'missing pre-upload local QA report check')
+        self.assertIsNotNone(summary, 'missing local QA artifact summary')
+        self.assertIn('if: always()', check.group(1))
+        self.assertIn('if: always()', summary.group(1))
+
+        upload = re.search(
+            r'(?ms)^      - name: Upload local QA reports\n'
+            r'(.*?)(?=^      - name: |\Z)',
+            workflow,
+        )
+        self.assertIsNotNone(upload, 'missing local QA artifact upload')
+        self.assertIn('if-no-files-found: warn', upload.group(1))
+
+        def shell_command(step, label):
+            run_block = re.search(
+                r'(?ms)^        run: \|\n((?:^          .*\n?)+)',
+                step.group(1),
+            )
+            self.assertIsNotNone(run_block, f'{label} must use a literal shell block')
+            return '\n'.join(line[10:] for line in run_block.group(1).splitlines())
+
+        check_command = shell_command(check, 'local QA report check')
+        summary_command = shell_command(summary, 'local QA summary')
+        artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/456'
+        cases = (
+            (True, True, True, True),
+            (True, False, True, False),
+            (False, True, False, True),
+            (False, False, False, False),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            responsive_dir = root / 'test-results/responsive-qa'
+            static_dir = root / 'test-results/audit-site'
+            for responsive_expected, static_expected, responsive_found, static_found in cases:
+                with self.subTest(
+                    responsive=responsive_expected,
+                    static=static_expected,
+                ):
+                    for report_dir in (responsive_dir, static_dir):
+                        if report_dir.exists():
+                            shutil.rmtree(report_dir)
+                    if responsive_expected:
+                        responsive_dir.mkdir(parents=True)
+                        (responsive_dir / 'report.json').write_text('{}', encoding='utf-8')
+                    if static_expected:
+                        static_dir.mkdir(parents=True)
+                        (static_dir / 'report.json').write_text('{}', encoding='utf-8')
+
+                    output_path = root / 'github-output.txt'
+                    output_path.write_text('', encoding='utf-8')
+                    environment = os.environ.copy()
+                    environment['GITHUB_OUTPUT'] = str(output_path)
+                    check_result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c', check_command],
+                        cwd=root,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(
+                        check_result.returncode,
+                        0,
+                        check_result.stdout + check_result.stderr,
+                    )
+                    output_values = dict(
+                        line.split('=', 1)
+                        for line in output_path.read_text(encoding='utf-8').splitlines()
+                    )
+                    self.assertEqual(
+                        output_values,
+                        {
+                            'responsive_found': str(responsive_found).lower(),
+                            'static_found': str(static_found).lower(),
+                        },
+                    )
+
+                    summary_path = root / 'github-step-summary.md'
+                    summary_path.write_text('', encoding='utf-8')
+                    environment['GITHUB_STEP_SUMMARY'] = str(summary_path)
+                    environment['LOCAL_QA_ARTIFACT_URL'] = artifact_url
+                    environment['LOCAL_QA_RESPONSIVE_FOUND'] = output_values['responsive_found']
+                    environment['LOCAL_QA_STATIC_FOUND'] = output_values['static_found']
+                    summary_result = subprocess.run(
+                        ['bash', '-e', '-o', 'pipefail', '-c', summary_command],
+                        cwd=root,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(
+                        summary_result.returncode,
+                        0,
+                        summary_result.stdout + summary_result.stderr,
+                    )
+                    rendered = summary_path.read_text(encoding='utf-8')
+                    self.assertIn(
+                        '- Responsive browser reports: '
+                        + ('found' if responsive_found else 'not found'),
+                        rendered,
+                    )
+                    self.assertIn(
+                        '- Static audit reports: '
+                        + ('found' if static_found else 'not found'),
+                        rendered,
+                    )
+                    self.assertIn(f'[Download local QA reports]({artifact_url})', rendered)
+                    if responsive_found != static_found:
+                        self.assertIn(
+                            '::warning title=Partial local QA evidence::',
+                            summary_result.stdout,
+                        )
+                    else:
+                        self.assertNotIn(
+                            '::warning title=Partial local QA evidence::',
+                            summary_result.stdout,
+                        )
+
     def test_failed_csp_fixtures_upload_only_the_short_lived_focused_report(self):
         workflow = (ROOT / '.github/workflows/validate.yml').read_text(encoding='utf-8')
         match = re.search(

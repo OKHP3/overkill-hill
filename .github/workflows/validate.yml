@@ -391,6 +391,24 @@ jobs:
           npm run test:responsive
           npm run test:toc
 
+      - name: Check local QA report sets
+        id: local-qa-report-sets
+        if: always()
+        run: |
+          has_files() {
+            local directory="$1"
+            [[ -d "$directory" ]] && find "$directory" -type f -print -quit | grep -q .
+          }
+
+          responsive_found=false
+          static_found=false
+          has_files test-results/responsive-qa && responsive_found=true
+          has_files test-results/audit-site && static_found=true
+          {
+            echo "responsive_found=$responsive_found"
+            echo "static_found=$static_found"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload local QA reports
         id: upload-local-qa-reports
         if: always()
@@ -407,9 +425,22 @@ jobs:
         if: always()
         env:
           LOCAL_QA_ARTIFACT_URL: ${{ steps.upload-local-qa-reports.outputs.artifact-url }}
+          LOCAL_QA_RESPONSIVE_FOUND: ${{ steps.local-qa-report-sets.outputs.responsive_found }}
+          LOCAL_QA_STATIC_FOUND: ${{ steps.local-qa-report-sets.outputs.static_found }}
         run: |
           {
             echo "## Local QA evidence"
+            echo
+            if [ "$LOCAL_QA_RESPONSIVE_FOUND" = "true" ]; then
+              echo "- Responsive browser reports: found"
+            else
+              echo "- Responsive browser reports: not found"
+            fi
+            if [ "$LOCAL_QA_STATIC_FOUND" = "true" ]; then
+              echo "- Static audit reports: found"
+            else
+              echo "- Static audit reports: not found"
+            fi
             echo
             if [ -n "$LOCAL_QA_ARTIFACT_URL" ]; then
               printf '[Download local QA reports](%s)\n' "$LOCAL_QA_ARTIFACT_URL"
@@ -418,6 +449,9 @@ jobs:
             fi
             echo
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$LOCAL_QA_RESPONSIVE_FOUND" != "$LOCAL_QA_STATIC_FOUND" ]; then
+            echo "::warning title=Partial local QA evidence::Only one of the responsive browser and static audit report sets was found."
+          fi
 
       - name: Run accessibility QA gate
         run: |
