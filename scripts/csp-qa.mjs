@@ -120,7 +120,7 @@ const DEFAULT_EXTERNAL_HEALTH_BUDGET_MS = 120000;
 function parsePositiveIntegerArgument(argument, name, defaultValue) {
   if (!argument) return defaultValue;
   const value = Number(argument.slice(`--${name}=`.length));
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`--${name} must be a positive integer number of milliseconds`);
   }
   return value;

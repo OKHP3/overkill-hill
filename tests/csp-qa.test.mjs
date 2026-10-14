@@ -2801,7 +2801,16 @@ test("enforces one external-health budget across routes and reports affected rou
 
 test("rejects invalid external-health budgets before browser startup or report creation", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-invalid-budget-"));
-  const invalidValues = ["not-a-number", "", "0", "-25", "1.5"];
+  const invalidValues = [
+    "not-a-number",
+    "",
+    "0",
+    "-25",
+    "1.5",
+    "9007199254740992",
+    "9007199254740993",
+    "999999999999999999999999999999",
+  ];
   try {
     for (const value of invalidValues) {
       const reportPath = join(
