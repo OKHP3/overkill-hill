@@ -937,6 +937,10 @@ async function runExternalHealth() {
       version: 1,
       mode: "external-health",
       baseUrl,
+      browser: {
+        engine: browserName,
+        version: null,
+      },
       routes: PUBLIC_PATHS,
       dependencies: [],
       externalOutages: [],
@@ -976,6 +980,10 @@ async function runExternalHealth() {
     process.exitCode = 1;
     return;
   }
+  const browserVersion = typeof browser.version === "function"
+    ? browser.version()
+    : null;
+  console.log(`Browser version: ${browserVersion || "unavailable"}`);
   const results = [];
   const routesCutShortByBudget = [];
   const routesSkippedByBudget = [];
@@ -1033,6 +1041,10 @@ async function runExternalHealth() {
     version: 1,
     mode: "external-health",
     baseUrl,
+    browser: {
+      engine: browserName,
+      version: browserVersion || null,
+    },
     routes: PUBLIC_PATHS,
     dependencies,
     externalOutages,

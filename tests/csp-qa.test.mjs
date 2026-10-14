@@ -1146,6 +1146,8 @@ test("reports an explicit zero failure total for an available dependency", async
     const report = JSON.parse(await readFile(reportPath, "utf8"));
     assert.equal(report.status, "PASS", JSON.stringify(report, null, 2));
     assert.equal(report.mode, "external-health");
+    assert.equal(report.browser.engine, "chromium");
+    assert.match(report.browser.version, /\S/);
     assert.deepEqual(report.routes, [route]);
     assert.equal(report.summary.failureEvents, 0, JSON.stringify(report, null, 2));
     assertExternalFailureReportContract(report);
@@ -2191,9 +2193,12 @@ for (const {
 
         assert.notEqual(result.status, 0, result.output);
         assert.match(result.output, new RegExp(`Browser engine: ${name}`));
+        assert.match(result.output, /Browser version: \S/);
         assert.match(result.output, /EXTERNAL OUTAGE:/);
         assert.match(result.output, /CSP diagnostics were observed/);
         assert.equal(report.status, "EXTERNAL_OUTAGE");
+        assert.equal(report.browser.engine, name);
+        assert.match(report.browser.version, /\S/);
         assert.deepEqual(report.routes, routePaths);
         assert.equal(report.summary.externalOutages, 1);
         assert.equal(report.summary.localFailures, 0);
@@ -2457,7 +2462,7 @@ test("rejects invalid external-health budgets before browser startup or report c
 async function simulateExternalHealth({
   budget = 6500, lateHealthy = true, startup = null,
   pageCloseMs = 0, browserCloseMs = 0,
-  routeStatuses = null,
+  routeStatuses = null, browserName = "chromium",
 } = {}) {
   const source = await readFile(cspQaScript, "utf8");
   const entry = source.indexOf("\nif (fixtureSummaryArg) {");
@@ -2510,6 +2515,7 @@ async function simulateExternalHealth({
       }
       return {
         newPage: async () => page,
+        version: () => "Synthetic browser 1.2",
         close: async () => { now += browserCloseMs; },
       };
     },
@@ -2518,12 +2524,13 @@ async function simulateExternalHealth({
     argv: ["node", cspQaScript, "--external-health",
       "--base-url=https://first.example",
       `--paths=${routeStatuses ? Object.keys(routeStatuses).join(",") : "/only/"}`,
-      "--report=memory.json", `--external-budget-ms=${budget}`],
+      "--report=memory.json", `--external-budget-ms=${budget}`,
+      ...(browserName === "chromium" ? [] : [`--browser=${browserName}`])],
     env: {}, exitCode: 0,
   };
   await runInNewContext(`${declarations}\nrunExternalHealth();`, {
     URL, Date: { now: () => now }, process: isolatedProcess,
-    chromium: browserType, firefox: {}, webkit: {},
+    chromium: browserType, firefox: browserType, webkit: browserType,
     console: { log: (message) => logs.push(message), error() {} },
     writeFileSync: (path, content) => {
       assert.equal(path, "memory.json"); report = JSON.parse(content);
@@ -2560,12 +2567,28 @@ test("attributes mixed HTTP responses to the actual failing route", async () => 
   }
 });
 
+test("records the selected browser build without affecting outage classification", async () => {
+  const { report, exitCode } = await simulateExternalHealth({
+    budget: 20000,
+    routeStatuses: { "/healthy/": 200, "/outage/": 503 },
+    browserName: "firefox",
+  });
+  assert.equal(exitCode, 1);
+  assert.deepEqual(report.browser, {
+    engine: "firefox",
+    version: "Synthetic browser 1.2",
+  });
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+  assert.equal(report.summary.externalOutages, 1);
+});
+
 test("reports browser startup timeout without platform executables", async () => {
   const { report, exitCode } = await simulateExternalHealth({ budget: 500, startup: "timeout" });
   assert.equal(exitCode, 1);
   assert.equal(report.status, "TIME_BUDGET_EXCEEDED");
   assert.equal(report.browserStartupFailure.phase, "browser-startup");
   assert.equal(report.browserStartupFailure.kind, "timeout");
+  assert.deepEqual(report.browser, { engine: "chromium", version: null });
   assert.equal(report.browserStartupFailure.timeoutMs, 500);
   assert.equal(report.summary.routes, 0);
   assert.equal(report.summary.budgetExceeded, true);
