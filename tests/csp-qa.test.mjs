@@ -24,6 +24,7 @@ const fixtureFiles = new Map([
   ["/external-repeated-network-failure.html", "external-repeated-network-failure.html"],
   ["/external-different-network-failures.html", "external-different-network-failures.html"],
   ["/external-csp-blocked.html", "external-csp-blocked.html"],
+  ["/external-csp-same-path-different-hosts.html", "external-csp-same-path-different-hosts.html"],
   ["/external-non-network-csp.html", "external-non-network-csp.html"],
   ["/external-csp-and-outage.html", "external-csp-and-outage.html"],
   ["/external-csp-shared.html", "external-csp-shared.html"],
@@ -124,6 +125,9 @@ async function serveFixture(request, response) {
     const renderedFixture = fixture.replaceAll(
       "__EXTERNAL_BASE_URL__",
       externalBaseUrl,
+    ).replaceAll(
+      "__EXTERNAL_OTHER_HOST_URL__",
+      externalBaseUrl.replace("127.0.0.1", "localhost"),
     );
     if (path === "/external-csp-blocked.html") {
       observedCspBlockedFixtureResponse = renderedFixture;
@@ -212,6 +216,15 @@ before(async () => {
         query: requestUrl.search,
         status: 200,
       });
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      ));
+      return;
+    }
+    if (path === "/same-path.png") {
+      externalFixtureObservations.push({ path, method: request.method, status: 200 });
       response.writeHead(200, { "content-type": "image/png" });
       response.end(Buffer.from(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -1895,6 +1908,62 @@ test("reports CSP-blocked dependencies separately from external outages", async 
       }
     }
     assert.deepEqual(blockedEndpointRequests, [], "CSP-blocked requests must not reach the server");
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
+test("keeps CSP attribution separate for different hosts sharing a resource path", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-same-path-hosts-"));
+  const reportPath = join(reportDirectory, "report.json");
+  const route = "/external-csp-same-path-different-hosts.html";
+  const allowedUrl = new URL("/same-path.png", externalBaseUrl).href;
+  const blockedUrl = new URL(
+    "/same-path.png",
+    externalBaseUrl.replace("127.0.0.1", "localhost"),
+  ).href;
+
+  try {
+    const result = await runCspQa(route, [
+      "--external-health",
+      `--report=${reportPath}`,
+    ]);
+    const report = JSON.parse(await readFile(reportPath, "utf8"));
+    const allowed = report.dependencies.find(({ url }) => url === allowedUrl);
+    const blocked = report.dependencies.find(({ url }) => url === blockedUrl);
+
+    assert.equal(report.status, "CSP_BLOCKED", result.output);
+    assert.equal(report.summary.dependencies, 2);
+    assert.equal(report.summary.cspEvidence, 1);
+    assert.equal(report.summary.externalOutages, 0);
+    assert.deepEqual(report.externalOutages, []);
+    assert.ok(allowed, JSON.stringify(report, null, 2));
+    assert.ok(blocked, JSON.stringify(report, null, 2));
+    assert.equal(new URL(allowed.url).pathname, "/same-path.png");
+    assert.equal(new URL(blocked.url).pathname, "/same-path.png");
+    assert.notEqual(new URL(allowed.url).origin, new URL(blocked.url).origin);
+    assert.equal(new URL(allowed.url).search, "");
+    assert.equal(new URL(blocked.url).search, "");
+
+    assert.equal(allowed.state, "available");
+    assert.equal(allowed.cspBlocked, false);
+    assert.deepEqual(allowed.cspEvidence, []);
+    assert.deepEqual(allowed.failures, []);
+    assert.ok(allowed.responses.some(({ status }) => status === 200));
+
+    assert.equal(blocked.state, "blocked-by-csp");
+    assert.equal(blocked.cspBlocked, true);
+    assert.equal(blocked.responses.length, 0);
+    assert.equal(blocked.cspEvidence.length, 1);
+    assert.equal(blocked.cspEvidence[0].blockedURI, blocked.url);
+    assert.deepEqual(
+      report.cspEvidence.map(({ blockedURI }) => blockedURI),
+      [blocked.url],
+    );
+    assert.equal(
+      report.externalOutages.some(({ url }) => url === blocked.url),
+      false,
+    );
   } finally {
     await rm(reportDirectory, { recursive: true, force: true });
   }

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src __EXTERNAL_BASE_URL__"
+    >
+    <title>Same resource path on separate origins</title>
+  </head>
+  <body>
+    <main>
+      <h1>Same resource path on separate origins</h1>
+      <img
+        src="__EXTERNAL_BASE_URL__/same-path.png?source=allowed"
+        alt="allowed origin"
+      >
+      <img
+        src="__EXTERNAL_OTHER_HOST_URL__/same-path.png?source=blocked"
+        alt="blocked origin"
+      >
+    </main>
+  </body>
+</html>
