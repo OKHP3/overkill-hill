@@ -7,6 +7,8 @@ import importlib.util
 import unittest
 import json
 import io
+import shutil
+import subprocess
 import tempfile
 import sys
 from contextlib import redirect_stderr
@@ -133,6 +135,29 @@ class CspPageDiscoveryTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertEqual(output.getvalue().strip(), f"CSP page manifest error: {message}")
         build_policies.assert_not_called()
+
+    def test_generate_csp_outside_git_worktree_prints_inventory_error_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for filename in ("generate-csp.py", "csp.py", "public_page_boundary.py"):
+                shutil.copy2(ROOT / "scripts" / filename, scripts / filename)
+
+            result = subprocess.run(
+                [sys.executable, str(scripts / "generate-csp.py")],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("CSP page inventory error:", result.stderr)
+        self.assertIn("requires a Git worktree", result.stderr)
+        self.assertIn("Run the release validator from the repository checkout", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_check_reports_all_broken_page_declarations_at_once(self) -> None:
         generator_path = ROOT / "scripts" / "generate-csp.py"
