@@ -798,6 +798,38 @@ test("keeps the focused CSP summary useful without an uploaded artifact", async 
   }
 });
 
+test("reports unreadable focused CSP reports without treating them as missing", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-unreadable-"));
+  const summaryPath = join(reportDirectory, "summary.md");
+  const artifactUrl = "https://github.com/example/site/actions/runs/123/artifacts/456";
+
+  try {
+    // Reading a directory as a file reliably produces a non-ENOENT filesystem error,
+    // including when the test process runs with permission to read every file.
+    const result = await runFixtureSummary(reportDirectory, summaryPath, artifactUrl);
+    assert.equal(result.status, 0, result.output);
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(
+      summary,
+      /\| unavailable \| UNKNOWN \| unknown \| Could not read focused CSP fixture report:/,
+    );
+    assert.doesNotMatch(
+      summary,
+      /Focused CSP fixture report is missing|report file was missing/,
+    );
+    assert.match(
+      summary,
+      new RegExp(
+        String.raw`Focused CSP evidence artifact: \[csp-fixture-report\.json\]\(` +
+        artifactUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+        String.raw`\)`,
+      ),
+    );
+  } finally {
+    await rm(reportDirectory, { recursive: true, force: true });
+  }
+});
+
 test("distinguishes empty and malformed focused CSP reports", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "csp-summary-invalid-"));
   const reportPath = join(reportDirectory, "fixture-report.json");
