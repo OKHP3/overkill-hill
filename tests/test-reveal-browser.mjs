@@ -98,6 +98,59 @@ try {
       console.error(`FAIL ${scenario}: ${error.message}`);
     } finally { await context.close(); }
   }
+  // The stylesheet is shared, but Glee's controller opts in only initially
+  // offscreen elements. Exercise that public class contract independently of
+  // controller timing, retaining positive controls for the other two brands.
+  for (const brand of ['', 'glee-main', 'askjamie-main']) {
+    for (const [width, reducedMotion] of [[1024, 'no-preference'], [1025, 'no-preference'], [1280, 'no-preference'], [1280, 'reduce']]) {
+      const label = `${brand || 'primary'} ${width} ${reducedMotion}`;
+      const context = await browser.newContext({ viewport: { width, height: 800 }, reducedMotion });
+      const page = await context.newPage();
+      await context.route('**/*', route => {
+        if (route.request().url() === `${base}/reveal-contract`) {
+          return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head>
+            <link rel="stylesheet" href="/assets/css/theme.css"></head><body class="${brand}">
+            <main><h1>Visible content</h1>
+            <p id="initial" class="reveal-on-scroll is-visible">Initially visible content</p>
+            <p id="pending" class="reveal-on-scroll is-reveal-animate">Awaiting an intersection</p>
+            <p id="eligible" class="reveal-on-scroll is-visible is-reveal-animate">Delivered intersection</p>
+            <a href="/about/">Read about the site</a></main></body></html>` });
+        }
+        return route.request().url().startsWith(base) ? route.continue() : route.abort();
+      });
+      try {
+        await page.goto(`${base}/reveal-contract`, { waitUntil: 'load' });
+        const eligible = width >= 1025 && reducedMotion === 'no-preference';
+        const animation = id => page.locator(`#${id}`).evaluate(el => getComputedStyle(el).animationName);
+        assert.equal(await animation('initial'), eligible && brand !== 'glee-main' ? 'scroll-reveal-in' : 'none', 'Initial Glee content has no animation opt-in');
+        assert.equal(await animation('pending'), 'none', 'The opt-in marker alone cannot start animation');
+        assert.equal(await animation('eligible'), eligible ? 'scroll-reveal-in' : 'none', 'Both markers retain optional animation');
+        await page.locator('#pending').evaluate(el => el.classList.add('is-visible'));
+        assert.equal(await animation('pending'), eligible ? 'scroll-reveal-in' : 'none', 'A delivered intersection completes the class contract');
+        if (eligible) {
+          await page.emulateMedia({ reducedMotion: 'reduce' });
+          assert.equal(await animation('eligible'), 'none', 'Live reduced-motion changes disable animation');
+          await page.emulateMedia({ reducedMotion: 'no-preference' });
+          await page.setViewportSize({ width: 1024, height: 800 });
+          assert.equal(await animation('eligible'), 'none', 'Animation stops below the desktop boundary');
+          await page.setViewportSize({ width: 1025, height: 800 });
+          assert.equal(await animation('eligible'), 'scroll-reveal-in', 'The desktop boundary retains optional animation');
+          assert.equal(await animation('initial'), brand === 'glee-main' ? 'none' : 'scroll-reveal-in');
+        }
+        await page.waitForFunction(() => [...document.querySelectorAll('.reveal-on-scroll')].every(el => {
+          const style = getComputedStyle(el);
+          return Number(style.opacity) === 1 && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(style.transform);
+        }), null, { timeout: 2500 });
+        assert.ok(await page.getByRole('heading', { name: 'Visible content' }).isVisible());
+        await page.getByRole('link', { name: 'Read about the site' }).click();
+        await page.waitForURL(`${base}/about/`);
+        console.log(`PASS reveal contract ${label}: scoped animation, motion guards, readable content and navigation`);
+      } catch (error) {
+        failures++;
+        console.error(`FAIL reveal contract ${label}: ${error.message}`);
+      } finally { await context.close(); }
+    }
+  }
 } finally {
   await browser?.close();
   server.close();
