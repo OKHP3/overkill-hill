@@ -11,6 +11,7 @@ from pathlib import Path
 from csp import (
     CSP_HEADER,
     CSP_REPORT_ONLY_HEADER,
+    CspPageInventoryError,
     CspPageManifestError,
     POLICY_FILE,
     ROOT,
@@ -29,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         pages = all_pages()
         policies = build_policies()
+    except CspPageInventoryError as exc:
+        print(f"CSP page inventory error: {exc}", file=sys.stderr)
+        return 1
     except CspPageManifestError as exc:
         print(f"CSP page manifest error: {exc}", file=sys.stderr)
         return 1
