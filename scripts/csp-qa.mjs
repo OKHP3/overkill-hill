@@ -595,6 +595,50 @@ function groupFailureRecords(
   return [...grouped.values()];
 }
 
+function validateCspEvidenceRecords(
+  evidenceRecords,
+  publicRoutes,
+  { dependencyUrl = null, location = "cspEvidence", parentRoute } = {},
+) {
+  for (const [evidenceIndex, evidence] of evidenceRecords.entries()) {
+    const reportedUrl = typeof evidence?.blockedURI === "string"
+      ? evidence.blockedURI
+      : "";
+    const evidenceDependencyUrl = dependencyUrl || reportedUrl || "unknown dependency";
+    const parentRouteContext = parentRoute === undefined
+      ? ""
+      : `; route outcome route: ${String(parentRoute)}`;
+    const actualRouteContext = typeof evidence?.route === "string"
+      ? `; reported route: ${evidence.route}`
+      : "";
+    const context =
+      `dependency ${evidenceDependencyUrl} at ${location}[${evidenceIndex}]` +
+      `${parentRouteContext}${actualRouteContext}`;
+
+    if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+      throw new Error(`${context}: CSP evidence record must be an object`);
+    }
+    if (typeof evidence.route !== "string" || !publicRoutes.has(evidence.route)) {
+      throw new Error(
+        `${context}: CSP evidence route must match a checked public route`,
+      );
+    }
+    if (typeof evidence.blockedURI !== "string" || !evidence.blockedURI.trim()) {
+      throw new Error(`${context}: CSP evidence blockedURI must be non-empty`);
+    }
+    if (dependencyUrl && evidence.blockedURI !== dependencyUrl) {
+      throw new Error(
+        `${context}: CSP evidence blockedURI must match its dependency URL`,
+      );
+    }
+    if (parentRoute !== undefined && evidence.route !== parentRoute) {
+      throw new Error(
+        `${context}: CSP evidence route must match its route outcome route`,
+      );
+    }
+  }
+}
+
 async function waitForExternalRequestsToSettle(page, pendingRequests, overallDeadline) {
   const settleDeadline = Date.now() + EXTERNAL_SETTLE_TIMEOUT_MS;
   let quietSince = null;
@@ -1082,6 +1126,56 @@ async function runExternalHealth() {
     messages.map((message) => ({ path, message })),
   );
   const cspEvidence = results.flatMap(({ cspEvidence: evidence }) => evidence);
+  const checkedRoutes = new Set(PUBLIC_PATHS);
+  for (const [dependencyIndex, dependency] of dependencies.entries()) {
+    for (const [routeOutcomeIndex, routeOutcome] of
+      (dependency.routeOutcomes || []).entries()) {
+      validateCspEvidenceRecords(
+        routeOutcome.cspEvidence || [],
+        checkedRoutes,
+        {
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            ".cspEvidence",
+          parentRoute: routeOutcome.route,
+        },
+      );
+    }
+    validateCspEvidenceRecords(
+      dependency.cspEvidence || [],
+      checkedRoutes,
+      {
+        dependencyUrl: dependency.url,
+        location: `dependencies[${dependencyIndex}].cspEvidence`,
+      },
+    );
+  }
+  validateCspEvidenceRecords(cspEvidence, checkedRoutes);
+  for (const [outageIndex, outage] of externalOutages.entries()) {
+    validateCspEvidenceRecords(
+      outage.cspEvidence || [],
+      checkedRoutes,
+      {
+        dependencyUrl: outage.url,
+        location: `externalOutages[${outageIndex}].cspEvidence`,
+      },
+    );
+    for (const [routeOutcomeIndex, routeOutcome] of
+      (outage.routeOutcomes || []).entries()) {
+      validateCspEvidenceRecords(
+        routeOutcome.cspEvidence || [],
+        checkedRoutes,
+        {
+          dependencyUrl: outage.url,
+          location:
+            `externalOutages[${outageIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            ".cspEvidence",
+          parentRoute: routeOutcome.route,
+        },
+      );
+    }
+  }
   const timeouts = dependencies.flatMap(({ timeouts: evidence }) => evidence);
   const localFailures = results.flatMap(({ path, localErrors }) =>
     localErrors.map((error) => ({ path, error })),

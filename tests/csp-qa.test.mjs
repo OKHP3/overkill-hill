@@ -624,6 +624,48 @@ function assertExternalFailureReportContract(report) {
     ]),
   ];
 
+  const cspEvidenceRecords = [
+    ...(report.cspEvidence || []).map((evidence, evidenceIndex) => ({
+      evidence,
+      dependencyUrl: evidence?.blockedURI,
+      location: `cspEvidence[${evidenceIndex}]`,
+    })),
+    ...report.dependencies.flatMap((dependency, dependencyIndex) => [
+      ...(dependency.cspEvidence || []).map((evidence, evidenceIndex) => ({
+        evidence,
+        dependencyUrl: dependency.url,
+        location: `dependencies[${dependencyIndex}].cspEvidence[${evidenceIndex}]`,
+      })),
+      ...(dependency.routeOutcomes || []).flatMap((routeOutcome, routeOutcomeIndex) =>
+        (routeOutcome.cspEvidence || []).map((evidence, evidenceIndex) => ({
+          evidence,
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.cspEvidence[${evidenceIndex}]`,
+          parentRoute: routeOutcome.route,
+        })),
+      ),
+    ]),
+    ...report.externalOutages.flatMap((outage, outageIndex) => [
+      ...(outage.cspEvidence || []).map((evidence, evidenceIndex) => ({
+        evidence,
+        dependencyUrl: outage.url,
+        location: `externalOutages[${outageIndex}].cspEvidence[${evidenceIndex}]`,
+      })),
+      ...(outage.routeOutcomes || []).flatMap((routeOutcome, routeOutcomeIndex) =>
+        (routeOutcome.cspEvidence || []).map((evidence, evidenceIndex) => ({
+          evidence,
+          dependencyUrl: outage.url,
+          location:
+            `externalOutages[${outageIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.cspEvidence[${evidenceIndex}]`,
+          parentRoute: routeOutcome.route,
+        })),
+      ),
+    ]),
+  ];
+
   for (const record of failures) {
     const { failure, dependencyUrl, location, parentRoute } = record;
     const parentRouteContext = Object.hasOwn(record, "parentRoute")
@@ -693,6 +735,60 @@ function assertExternalFailureReportContract(report) {
       `${context}: timeout.url must be non-empty`,
     );
   }
+
+  for (const record of cspEvidenceRecords) {
+    const { evidence, dependencyUrl, location, parentRoute } = record;
+    const evidenceDependencyUrl = dependencyUrl ||
+      (typeof evidence?.blockedURI === "string" && evidence.blockedURI.trim()
+        ? evidence.blockedURI
+        : "unknown dependency (CSP blockedURI missing)");
+    const parentRouteContext = Object.hasOwn(record, "parentRoute")
+      ? `; route outcome route: ${String(parentRoute)}`
+      : "";
+    const actualRouteContext = typeof evidence?.route === "string"
+      ? `; reported route: ${evidence.route}`
+      : "";
+    const context =
+      `dependency ${evidenceDependencyUrl} at ${location}` +
+      `${parentRouteContext}${actualRouteContext}`;
+
+    assert.ok(
+      evidence && typeof evidence === "object" && !Array.isArray(evidence),
+      `${context}: CSP evidence record must be an object`,
+    );
+    assert.equal(
+      typeof evidence.route,
+      "string",
+      `${context}: CSP evidence route must be a string`,
+    );
+    assert.ok(
+      report.routes.includes(evidence.route),
+      `${context}: CSP evidence route is not in report.routes`,
+    );
+    assert.equal(
+      typeof evidence.blockedURI,
+      "string",
+      `${context}: CSP evidence blockedURI must be a string`,
+    );
+    assert.ok(
+      evidence.blockedURI.trim(),
+      `${context}: CSP evidence blockedURI must be non-empty`,
+    );
+    if (dependencyUrl) {
+      assert.equal(
+        evidence.blockedURI,
+        dependencyUrl,
+        `${context}: CSP evidence blockedURI must match its dependency URL`,
+      );
+    }
+    if (Object.hasOwn(record, "parentRoute")) {
+      assert.equal(
+        evidence.route,
+        parentRoute,
+        `${context}: CSP evidence route must match its route outcome route`,
+      );
+    }
+  }
 }
 
 function makeSyntheticExternalFailureReport() {
@@ -702,14 +798,17 @@ function makeSyntheticExternalFailureReport() {
     routes: ["/checked/alpha.html", "/checked/beta.html"],
     status: "EXTERNAL_OUTAGE",
     summary: { failureEvents: 1 },
+    cspEvidence: [],
     dependencies: [
       {
         url: "https://first.test/dependency.png",
+        cspEvidence: [],
         failures: [],
         routeOutcomes: [],
       },
       {
         url: "https://second.test/dependency.png",
+        cspEvidence: [],
         failures: [],
         routeOutcomes: [],
       },
@@ -717,11 +816,13 @@ function makeSyntheticExternalFailureReport() {
     externalOutages: [
       {
         url: "https://first.test/outage.png",
+        cspEvidence: [],
         failures: [],
         routeOutcomes: [],
       },
       {
         url: "https://second.test/outage.png",
+        cspEvidence: [],
         failures: [],
         routeOutcomes: [],
       },
@@ -779,6 +880,107 @@ function assertTimeoutDiagnosticContext(report, expected) {
     );
   }
 }
+
+function assertCspEvidenceDiagnosticContext(report, expected) {
+  let error;
+  assert.throws(() => {
+    try {
+      assertExternalFailureReportContract(report);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    }
+  }, assert.AssertionError);
+  assert.ok(error, "current external-health report should be rejected");
+  for (const context of [
+    expected.url,
+    expected.location,
+    expected.reason,
+    expected.parentRoute,
+    expected.actualRoute,
+  ].filter(Boolean)) {
+    assert.ok(
+      error.message.includes(context),
+      `CSP evidence diagnostic must include ${context}; received: ${error.message}`,
+    );
+  }
+}
+
+test("diagnoses invalid dependency CSP evidence with URL and exact location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].cspEvidence = [{
+    route: "/not-checked.html",
+    blockedURI: report.dependencies[1].url,
+  }];
+
+  assertCspEvidenceDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].cspEvidence[0]",
+    reason: "CSP evidence route is not in report.routes",
+    actualRoute: "/not-checked.html",
+  });
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+});
+
+test("diagnoses malformed nested CSP evidence with parent route context", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].routeOutcomes = [{
+    route: report.routes[0],
+    cspEvidence: [{
+      route: report.routes[1],
+      blockedURI: "https://wrong.test/resource.png",
+    }],
+  }];
+
+  assertCspEvidenceDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].routeOutcomes[0].cspEvidence[0]",
+    reason: "CSP evidence blockedURI must match its dependency URL",
+    parentRoute: report.routes[0],
+    actualRoute: report.routes[1],
+  });
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+});
+
+test("diagnoses missing CSP blocked URI with route and record location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.cspEvidence = [{
+    route: report.routes[1],
+  }];
+
+  assertCspEvidenceDiagnosticContext(report, {
+    url: "unknown dependency (CSP blockedURI missing)",
+    location: "cspEvidence[0]",
+    reason: "CSP evidence blockedURI must be a string",
+    actualRoute: report.routes[1],
+  });
+});
+
+test("accepts valid CSP evidence in all current report collections", () => {
+  const report = makeSyntheticExternalFailureReport();
+  const dependencyEvidence = {
+    route: report.routes[0],
+    blockedURI: report.dependencies[0].url,
+  };
+  const outageEvidence = {
+    route: report.routes[1],
+    blockedURI: report.externalOutages[0].url,
+  };
+  report.cspEvidence = [dependencyEvidence];
+  report.dependencies[0].cspEvidence = [dependencyEvidence];
+  report.dependencies[0].routeOutcomes = [{
+    route: report.routes[0],
+    cspEvidence: [dependencyEvidence],
+  }];
+  report.externalOutages[0].cspEvidence = [outageEvidence];
+  report.externalOutages[0].routeOutcomes = [{
+    route: report.routes[1],
+    cspEvidence: [outageEvidence],
+  }];
+
+  assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+});
 
 test("diagnoses missing route in dependency timeouts with URL and location", () => {
   const report = makeSyntheticExternalFailureReport();
