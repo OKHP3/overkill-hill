@@ -39,6 +39,104 @@ def load_script(name: str):
     return module
 
 
+def discovers_html_by_source_pattern(source: str) -> bool:
+    """Recognize explicit and dynamically assembled HTML discovery patterns."""
+    direct_discovery = re.compile(
+        r"iter_public_html_files|is_public_page_path|"
+        r"\.(?:rglob|glob)\s*\(\s*[\"'][^\"']*\.html|"
+        r"git\s+ls-files[^\n]*\.html|"
+        r"\b(?:find|iter)_html_files\s*\(",
+        re.IGNORECASE,
+    )
+    if direct_discovery.search(source):
+        return True
+
+    has_enumeration = re.search(
+        r"\.(?:rglob|glob)\s*\(|\bglob(?:\.sync)?\s*\(|"
+        r"os\.(?:walk|scandir)\s*\(",
+        source,
+        re.IGNORECASE,
+    )
+    has_html_suffix = re.search(r"[\"']\.html[\"']", source, re.IGNORECASE)
+    has_suffix_check = re.search(
+        r"\.suffix\b|\.endswith\s*\(", source, re.IGNORECASE
+    )
+    if has_enumeration and has_html_suffix and has_suffix_check:
+        return True
+
+    # An extension or glob may be assembled from fragments, kept in a named
+    # extension variable, or interpolated. Do not treat arbitrary HTML markup
+    # (for example, a selector named "html") as evidence of page discovery.
+    has_assembled_html_literal = re.search(
+        r"[\"'][^\"']*(?:\*\.|\.)[\"']\s*\+\s*[\"']html[\"']|"
+        r"[\"']html[\"']\s*\+\s*[\"'][^\"']*(?:\*\.|\.)[\"']",
+        source,
+        re.IGNORECASE,
+    )
+    has_html_extension_variable = re.search(
+        r"\b(?:html[_-]?(?:ext|extension|suffix)|(?:ext|extension|suffix)[_-]?html|"
+        r"ext|extension|suffix)\s*=\s*[\"']\.?html[\"']",
+        source,
+        re.IGNORECASE,
+    )
+    has_html_pattern_variable = re.search(
+        r"\b(?:html[_-]?pattern|glob[_-]?pattern|pattern)\s*=\s*[\"']"
+        r"[^\"']*\.html[\"']",
+        source,
+        re.IGNORECASE,
+    )
+    has_html_format_pattern = re.search(
+        r"[\"'][^\"']*(?:\*\.|\.)\{[^\"']*\}[^\"']*[\"']\s*\.format"
+        r"\s*\([^)]*[\"']html[\"']",
+        source,
+        re.IGNORECASE,
+    )
+    has_dynamic_assembly = re.search(
+        r"\+|f[\"']|`[^`]*\$\{|\.format\s*\(",
+        source,
+        re.IGNORECASE,
+    )
+    has_glob = re.search(
+        r"\.(?:rglob|glob)\s*\(|\bglob(?:\.sync)?\s*\(",
+        source,
+        re.IGNORECASE,
+    )
+    if (
+        has_glob
+        and (
+            (has_html_pattern_variable or has_html_format_pattern)
+            or (
+                has_dynamic_assembly
+                and (
+                    has_assembled_html_literal
+                    or has_html_extension_variable
+                )
+            )
+        )
+    ) or (
+        has_suffix_check
+        and (
+            has_html_extension_variable
+            or has_assembled_html_literal
+            or has_html_format_pattern
+        )
+        and has_dynamic_assembly
+    ):
+        return True
+
+    # Walking is a discovery mechanism only when coupled to an HTML-specific
+    # suffix check; generic walks used for JSON/assets are not page scanners.
+    return bool(
+        re.search(r"os\.(?:walk|scandir)\s*\(", source, re.IGNORECASE)
+        and has_suffix_check
+        and (
+            has_assembled_html_literal
+            or has_html_extension_variable
+            or re.search(r"[\"']\.html[\"']", source, re.IGNORECASE)
+        )
+    )
+
+
 class ExternalArchiveRetryTests(unittest.TestCase):
     def test_transient_failure_then_success(self) -> None:
         links = load_script("check-links")
@@ -75,14 +173,6 @@ class ExternalArchiveRetryTests(unittest.TestCase):
 
 class PublicPageBoundaryTests(unittest.TestCase):
     def test_active_html_scanners_are_registered_and_boundary_checked(self) -> None:
-        discovery = re.compile(
-            r"iter_public_html_files|is_public_page_path|"
-            r"\.(?:rglob|glob)\s*\(\s*[\"'][^\"']*\.html|"
-            r"os\.(?:walk|scandir)\s*\(|"
-            r"git\s+ls-files[^\n]*\.html|"
-            r"\b(?:find|iter)_html_files\s*\(",
-            re.IGNORECASE,
-        )
         registry = public_page_boundary.HTML_SCANNER_REGISTRY
         self.assertTrue(registry)
 
@@ -98,7 +188,7 @@ class PublicPageBoundaryTests(unittest.TestCase):
             ):
                 continue
             source = path.read_text(encoding="utf-8", errors="replace")
-            if discovery.search(source):
+            if discovers_html_by_source_pattern(source):
                 candidates.add(path.name)
         self.assertEqual(
             candidates,
@@ -134,6 +224,20 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 test_source = exception_test.read_text(encoding="utf-8")
                 self.assertIn("scripts/project-status.py", test_source)
                 self.assertIn("test_missing_detail", test_source)
+            elif policy == "exception: unpublished-locale-scaffold-inventory":
+                self.assertIn('if is_unpublished:', source)
+                self.assertIn("locale_dir = root / locale", source)
+                self.assertIn('locale_dir.rglob("*.html")', source)
+                exception_test = ROOT / "scripts" / "test-seo-fixtures.py"
+                test_source = exception_test.read_text(encoding="utf-8")
+                self.assertIn(
+                    "test_unpublished_locale_rejects_undeclared_generated_target_page",
+                    test_source,
+                )
+                self.assertIn(
+                    "unpublished scaffold contains undeclared target page:",
+                    test_source,
+                )
             else:
                 self.fail(f"{scanner} has an unnamed or unsupported policy: {policy}")
 
@@ -148,6 +252,33 @@ class PublicPageBoundaryTests(unittest.TestCase):
             registry,
             "README scanner inventory must match the executable registry",
         )
+
+    def test_scanner_detection_catches_assembled_html_but_not_other_inventories(self) -> None:
+        html_bypasses = (
+            'pattern = "*." + "html"\nroot.glob(pattern)\n',
+            'extension = "html"\nroot.glob("*." + extension)\n',
+            'extension = "html"\nif path.suffix == "." + extension:\n    scan(path)\n',
+            'extension = "html"\nif path.name.endswith("." + extension):\n    scan(path)\n',
+            'const extension = "html";\nglob("**/*." + extension);\n',
+            'const extension = "html";\nglob(`**/*.${extension}`);\n',
+            'pattern = "*.{}".format("html")\nroot.glob(pattern)\n',
+            'suffix = "." + "html"\nif path.suffix == suffix:\n    scan(path)\n',
+            'pattern = "*.html"\nroot.glob(pattern)\n',
+        )
+        for source in html_bypasses:
+            with self.subTest(source=source):
+                self.assertTrue(discovers_html_by_source_pattern(source))
+
+        non_html_inventories = (
+            'for path in root.rglob("*.json"):\n    load(path)\n',
+            'extension = "json"\nif path.suffix == "." + extension:\n    load(path)\n',
+            'for path in root.glob("*.png"):\n    optimize(path)\n',
+            'for path in root.rglob("*"):\n    if path.suffix in {".png", ".woff2"}:\n        process(path)\n',
+            'for directory, names, files in os.walk(root):\n    inspect_json(files)\n',
+        )
+        for source in non_html_inventories:
+            with self.subTest(source=source):
+                self.assertFalse(discovers_html_by_source_pattern(source))
 
     def test_html_inventories_share_boundary_and_keep_narrow_exceptions(self) -> None:
         csp = load_script("csp")
