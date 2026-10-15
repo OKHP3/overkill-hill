@@ -136,6 +136,49 @@ class CspPageDiscoveryTests(unittest.TestCase):
         self.assertEqual(output.getvalue().strip(), f"CSP page manifest error: {message}")
         build_policies.assert_not_called()
 
+    def test_generate_csp_missing_manifest_preserves_policy_and_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for filename in ("generate-csp.py", "csp.py", "public_page_boundary.py"):
+                shutil.copy2(ROOT / "scripts" / filename, scripts / filename)
+
+            policy_file = root / "config" / "csp-policies.json"
+            policy_file.parent.mkdir()
+            policy_bytes = b'{"sentinel":"policy must stay unchanged"}\n'
+            policy_file.write_bytes(policy_bytes)
+            headers_file = root / "_headers"
+            headers_bytes = b"/sentinel\n  X-Sentinel: header must stay unchanged\n"
+            headers_file.write_bytes(headers_bytes)
+            (root / "site-src").mkdir()
+
+            subprocess.run(
+                ["git", "init", "-q"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            result = subprocess.run(
+                [sys.executable, str(scripts / "generate-csp.py")],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(
+                "CSP page manifest error: site-src/pages.json: required CSP source page "
+                "manifest is missing or not a regular file.",
+                result.stderr,
+            )
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(policy_file.read_bytes(), policy_bytes)
+            self.assertEqual(headers_file.read_bytes(), headers_bytes)
+
     def test_generate_csp_outside_git_worktree_prints_inventory_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
