@@ -423,6 +423,9 @@ def check_generated_build_blocks_release_disagreement() -> None:
             generated_path.parent.mkdir(parents=True, exist_ok=True)
             previous_output = "<span>Article v0.5: Previously generated release</span>"
             generated_path.write_text(previous_output, encoding="utf-8")
+            feed_path = root / "feed.xml"
+            previous_feed = "<feed>Previously generated feed</feed>"
+            feed_path.write_text(previous_feed, encoding="utf-8")
             manifest = root / "site-src" / "pages.json"
             manifest.parent.mkdir(parents=True, exist_ok=True)
             manifest.write_text(
@@ -438,6 +441,7 @@ def check_generated_build_blocks_release_disagreement() -> None:
                         "ROOT": root,
                         "MANIFEST": manifest,
                         "SITEMAP": root / "sitemap.xml",
+                        "ATOM_FEED": feed_path,
                         "policies": lambda: ({}, lambda _path: "document"),
                         "render_page": lambda *_args: (
                             "<span>Article v0.7: Newly rendered release</span>"
@@ -463,6 +467,10 @@ def check_generated_build_blocks_release_disagreement() -> None:
                 raise AssertionError(
                     f"build-site {mode} overwrote generated release evidence after parity failed"
                 )
+            if feed_path.read_text(encoding="utf-8") != previous_feed:
+                raise AssertionError(
+                    f"build-site {mode} changed the Atom feed after parity failed"
+                )
 
 
 def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
@@ -472,6 +480,7 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
     source_content = "<span>Article v0.6: Source release</span>"
     previous_output = "<span>Article v0.5: Previously generated release</span>"
     sitemap_content = "<urlset><url><loc>preserved</loc></url></urlset>"
+    feed_content = "<feed>Previously generated feed</feed>"
     scenarios = (
         (
             "missing manifest route",
@@ -518,6 +527,8 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
                 generated_path.write_text(previous_output, encoding="utf-8")
                 sitemap = root / "sitemap.xml"
                 sitemap.write_text(sitemap_content, encoding="utf-8")
+                feed = root / "feed.xml"
+                feed.write_text(feed_content, encoding="utf-8")
                 manifest = root / "site-src" / "pages.json"
                 manifest.parent.mkdir(parents=True, exist_ok=True)
                 manifest.write_text(json.dumps({"pages": pages}), encoding="utf-8")
@@ -532,6 +543,7 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
                             "ROOT": root,
                             "MANIFEST": manifest,
                             "SITEMAP": sitemap,
+                            "ATOM_FEED": feed,
                             "policies": lambda: ({}, lambda _path: "document"),
                             "render_page": lambda page, *_args: rendered_by_path[
                                 page["path"]
@@ -573,6 +585,87 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
                 if sitemap.read_text(encoding="utf-8") != sitemap_content:
                     raise AssertionError(
                         f"build-site {mode} {name} changed sitemap evidence"
+                    )
+                if feed.read_text(encoding="utf-8") != feed_content:
+                    raise AssertionError(
+                        f"build-site {mode} {name} changed Atom feed evidence"
+                    )
+
+
+def check_successful_parity_run_generates_feed() -> None:
+    source_relative = check_banner.FEATURED_ARTICLE_SOURCE
+    generated_relative = check_banner.FEATURED_ARTICLE_GENERATED
+    source_content = "<span>Article v0.6: Source release</span>"
+    rendered_content = "<span>Article v0.6: Rendered release</span>"
+    generated_feed = "<feed>Generated after successful parity</feed>"
+    checker_data = {
+        "FEATURED_ARTICLE_SOURCE": source_relative,
+        "FEATURED_ARTICLE_GENERATED": generated_relative,
+        "FEATURED_ARTICLE_ROUTE": check_banner.FEATURED_ARTICLE_ROUTE,
+        "_ARTICLE_RELEASE_RE": check_banner._ARTICLE_RELEASE_RE,
+        "_featured_article_release": check_banner._featured_article_release,
+        "visible_html_markup": check_banner.visible_html_markup,
+    }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        source_path = root / source_relative
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.write_text(source_content, encoding="utf-8")
+        generated_path = root / generated_relative
+        generated_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest = root / "site-src" / "pages.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            json.dumps({"pages": [{"path": generated_relative}]}), encoding="utf-8"
+        )
+        feed = root / "feed.xml"
+        feed.write_text("<feed>Previous feed</feed>", encoding="utf-8")
+        feed_generator = root / "scripts" / "generate-atom-feed.py"
+        commands = []
+
+        def run(command, cwd):
+            commands.append(command)
+            if str(feed_generator) in command and "--check" not in command:
+                feed.write_text(generated_feed, encoding="utf-8")
+            return SimpleNamespace(returncode=0)
+
+        namespace = build_site.build.__globals__
+        with (
+            patch.dict(
+                namespace,
+                {
+                    "ROOT": root,
+                    "MANIFEST": manifest,
+                    "SITEMAP": root / "sitemap.xml",
+                    "ATOM_FEED": feed,
+                    "ATOM_FEED_GENERATOR": feed_generator,
+                    "policies": lambda: ({}, lambda _path: "document"),
+                    "render_page": lambda *_args: rendered_content,
+                },
+            ),
+            patch.object(namespace["runpy"], "run_path", return_value=checker_data),
+            patch.object(namespace["subprocess"], "run", side_effect=run),
+        ):
+            for check in (False, True):
+                commands.clear()
+                result = build_site.build(check=check)
+
+                if result != 0:
+                    mode = "--check" if check else "generation"
+                    raise AssertionError(
+                        f"build-site {mode} rejected matching featured releases: {result}"
+                    )
+                feed_commands = [
+                    command for command in commands if str(feed_generator) in command
+                ]
+                if len(feed_commands) != 1 or (("--check" in feed_commands[0]) != check):
+                    raise AssertionError(
+                        f"successful parity run used the wrong feed mode: {feed_commands}"
+                    )
+                if feed.read_text(encoding="utf-8") != generated_feed:
+                    raise AssertionError(
+                        "successful parity run did not preserve expected feed behavior"
                     )
 
 
@@ -734,6 +827,7 @@ def main() -> int:
     check_update_is_atomic()
     check_generated_build_blocks_release_disagreement()
     check_build_blocks_missing_or_ambiguous_featured_release()
+    check_successful_parity_run_generates_feed()
     print("check-banner localized regression checks passed")
     return 0
 
