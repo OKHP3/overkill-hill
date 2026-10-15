@@ -9,6 +9,7 @@ files inspectable.  Run ``--bootstrap`` once to extract the current pages into
 from __future__ import annotations
 
 import argparse
+import difflib
 import html
 import json
 import runpy
@@ -631,7 +632,42 @@ def render_sitemap(pages: list[dict], raw: str) -> str:
     )
 
 
-def featured_release_parity_errors(rendered_pages: dict[str, str]) -> list[str]:
+def featured_manifest_near_match(
+    pages: list[dict], route: str, output_path: str
+) -> tuple[str, str] | None:
+    """Find a manifest route/output pair that plausibly displaced the featured page."""
+    candidates = []
+    for page in pages:
+        candidate_route = page.get("route")
+        candidate_path = page.get("path")
+        if not isinstance(candidate_route, str) or not isinstance(candidate_path, str):
+            continue
+        if candidate_route == route:
+            # An exact route mapped to another output path is directly relevant,
+            # even if the output-path typo is too large for fuzzy matching.
+            candidates.append((2.0, candidate_route, candidate_path))
+            continue
+
+        route_similarity = difflib.SequenceMatcher(
+            None, route, candidate_route
+        ).ratio()
+        path_similarity = difflib.SequenceMatcher(
+            None, output_path, candidate_path
+        ).ratio()
+        if route_similarity >= 0.9 and path_similarity >= 0.9:
+            candidates.append(
+                (min(route_similarity, path_similarity), candidate_route, candidate_path)
+            )
+
+    if not candidates:
+        return None
+    _, candidate_route, candidate_path = max(candidates, key=lambda item: item[0])
+    return candidate_route, candidate_path
+
+
+def featured_release_parity_errors(
+    rendered_pages: dict[str, str], manifest_pages: list[dict]
+) -> list[str]:
     """Validate source and newly rendered featured-article release labels."""
     checker = runpy.run_path(str(BANNER_CHECKER))
     source_path = checker["FEATURED_ARTICLE_SOURCE"]
@@ -643,10 +679,19 @@ def featured_release_parity_errors(rendered_pages: dict[str, str]) -> list[str]:
     generated_content = rendered_pages.get(generated_path)
     if generated_content is None:
         generated_release = None
+        near_match = featured_manifest_near_match(
+            manifest_pages, checker["FEATURED_ARTICLE_ROUTE"], generated_path
+        )
+        near_match_message = (
+            f"; manifest near-match: route {near_match[0]} uses output path "
+            f"{near_match[1]}"
+            if near_match
+            else ""
+        )
         generated_error = (
             f"current featured article release is unavailable for "
             f"{checker['FEATURED_ARTICLE_ROUTE']}: {generated_path} was not "
-            "rendered from the page manifest"
+            f"rendered from the page manifest{near_match_message}"
         )
     else:
         visible_content = checker["visible_html_markup"](generated_content)
@@ -705,7 +750,7 @@ def build(check: bool) -> int:
             if not output.exists() or output.read_text(encoding="utf-8") != rendered:
                 failures.append(page["path"])
 
-    parity_errors = featured_release_parity_errors(rendered_pages)
+    parity_errors = featured_release_parity_errors(rendered_pages, data["pages"])
     if parity_errors:
         print("Featured article release parity failed:", file=sys.stderr)
         for error in parity_errors:

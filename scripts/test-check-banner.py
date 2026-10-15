@@ -484,15 +484,60 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
     scenarios = (
         (
             "missing manifest route",
-            [{"path": "about/index.html"}],
-            {"about/index.html": "<main>Other page</main>"},
+            [
+                {"route": "/about/", "path": "about/index.html"},
+                {
+                    "route": f"{route}v03/v1-heat-a/",
+                    "path": "writings/first-diagram-is-a-liar/v03/v1-heat-a/index.html",
+                },
+            ],
+            {
+                "about/index.html": "<main>Other page</main>",
+                "writings/first-diagram-is-a-liar/v03/v1-heat-a/index.html":
+                    "<main>Unrelated article</main>",
+            },
             generated_relative,
+            None,
+        ),
+        (
+            "near-match manifest route",
+            [
+                {
+                    "route": route.replace("liar/", "liars/"),
+                    "path": generated_relative.replace(
+                        "liar/index.html", "liars/index.html"
+                    ),
+                }
+            ],
+            {
+                generated_relative.replace(
+                    "liar/index.html", "liars/index.html"
+                ): "<main>Misspelled article route</main>"
+            },
+            generated_relative,
+            generated_relative.replace("liar/index.html", "liars/index.html"),
+        ),
+        (
+            "canonical route mapped to wrong output path",
+            [
+                {
+                    "route": route,
+                    "path": generated_relative.replace("index.html", "article.html"),
+                }
+            ],
+            {
+                generated_relative.replace("index.html", "article.html"):
+                    "<main>Article output path</main>"
+            },
+            generated_relative,
+            generated_relative.replace("index.html", "article.html"),
         ),
         (
             "missing rendered label",
             [{"path": generated_relative}],
             {generated_relative: "<main>No release label</main>"},
             generated_relative,
+            None,
         ),
         (
             "ambiguous rendered labels",
@@ -504,6 +549,7 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
                 )
             },
             generated_relative,
+            None,
         ),
     )
     checker_data = {
@@ -516,7 +562,7 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
     }
 
     for check in (False, True):
-        for name, pages, rendered_by_path, expected_path in scenarios:
+        for name, pages, rendered_by_path, expected_path, expected_hint in scenarios:
             with tempfile.TemporaryDirectory() as temp_dir:
                 root = Path(temp_dir)
                 source_path = root / source_relative
@@ -572,6 +618,17 @@ def check_build_blocks_missing_or_ambiguous_featured_release() -> None:
                 if route not in diagnostic or expected_path not in diagnostic:
                     raise AssertionError(
                         f"build-site {mode} {name} lacks route/path diagnostic: "
+                        f"{diagnostic}"
+                    )
+                if expected_hint is not None:
+                    if "manifest near-match:" not in diagnostic or expected_hint not in diagnostic:
+                        raise AssertionError(
+                            f"build-site {mode} {name} lacks its manifest hint: "
+                            f"{diagnostic}"
+                        )
+                elif "manifest near-match:" in diagnostic:
+                    raise AssertionError(
+                        f"build-site {mode} {name} reported an unrelated manifest hint: "
                         f"{diagnostic}"
                     )
                 if source_path.read_text(encoding="utf-8") != source_content:
