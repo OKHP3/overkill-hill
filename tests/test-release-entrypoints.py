@@ -476,6 +476,46 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
                 self.assertIn(diagnostic, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
 
+    def test_locale_checker_reports_all_incomplete_locale_declarations(self) -> None:
+        manifest = self.fixture / "locale-manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "target_locales": ["fr", "es"],
+                    "locales": {
+                        "fr": {"pages": []},
+                        "es": {"status": "published"},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(self.fixture / "scripts" / "check-locale-links.py"),
+                "--manifest",
+                str(manifest),
+                "--sitemap",
+                str(self.fixture / "locale-sitemap.xml"),
+                "--search-index",
+                str(self.fixture / "search-index.fr.json"),
+            ],
+            cwd=self.fixture,
+            env=self._environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("", result.stdout)
+        self.assertIn("Locale link check failed:\n", result.stderr)
+        self.assertIn("manifest locale 'fr' pages must be a non-empty list", result.stderr)
+        self.assertIn("manifest locale 'es' pages must be a non-empty list", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
