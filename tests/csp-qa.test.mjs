@@ -533,7 +533,12 @@ function assertExternalFailureReportContract(report) {
   assert.ok(Array.isArray(report.routes));
   assert.equal(typeof report.status, "string");
   assert.ok(report.summary && typeof report.summary === "object");
-  assert.equal(typeof report.summary.failureEvents, "number");
+  assert.ok(
+    Number.isFinite(report.summary.failureEvents) &&
+      Number.isInteger(report.summary.failureEvents) &&
+      report.summary.failureEvents >= 0,
+    "summary.failureEvents must be a finite, non-negative integer",
+  );
 
   const failures = [
     ...report.dependencies.flatMap((dependency, dependencyIndex) => {
@@ -1152,12 +1157,30 @@ test("diagnoses an unchecked route in nested outage failures with parent route",
   });
 });
 
-test("accepts a healthy external report with no failure records", () => {
-  const report = makeSyntheticExternalFailureReport();
-  report.status = "PASS";
-  report.summary.failureEvents = 0;
+test("rejects invalid failureEvents totals with a clear diagnostic", () => {
+  for (const failureEvents of [-1, 1.5, NaN, Infinity, -Infinity]) {
+    const report = makeSyntheticExternalFailureReport();
+    report.summary.failureEvents = failureEvents;
 
-  assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+    assert.throws(
+      () => assertExternalFailureReportContract(report),
+      {
+        name: "AssertionError",
+        message: "summary.failureEvents must be a finite, non-negative integer",
+      },
+      `failureEvents=${failureEvents} should be rejected`,
+    );
+  }
+});
+
+test("accepts zero and positive integer failureEvents totals", () => {
+  for (const failureEvents of [0, 1, 42]) {
+    const report = makeSyntheticExternalFailureReport();
+    report.status = failureEvents === 0 ? "PASS" : "EXTERNAL_OUTAGE";
+    report.summary.failureEvents = failureEvents;
+
+    assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+  }
 });
 
 test("accepts attributed failures in all current report collections", () => {
