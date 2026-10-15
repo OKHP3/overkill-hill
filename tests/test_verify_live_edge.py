@@ -1202,6 +1202,69 @@ import(bareSpecifier);
                 self.assertIn("GitHub Pages", asset_check["evidence"])
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_javascript_entrypoint_fingerprint_with_unrelated_query_options(self) -> None:
+        js_bytes = verify_live_edge.canonical_text_bytes(ROOT / "assets/js/app.js")
+        query_orders = (
+            (
+                "before",
+                {"asset_query_before_fingerprint": "mode=dark"},
+            ),
+            (
+                "after",
+                {"asset_query_after_fingerprint": "theme=compact"},
+            ),
+        )
+
+        for query_position, query_options in query_orders:
+            fingerprint = hashlib.sha256(js_bytes).hexdigest()[:8]
+            query_option = next(iter(query_options.values()))
+            expected_url = (
+                f"/assets/js/app.js?{query_option}&v={fingerprint}"
+                if query_position == "before"
+                else f"/assets/js/app.js?v={fingerprint}&{query_option}"
+            )
+            with self.subTest(query_position=query_position, result="matching"):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="js",
+                    **query_options,
+                )
+
+                self.assertEqual(return_code, 0)
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/js/app.js"]
+                self.assertEqual(asset_check["status"], "BLOCKED")
+                self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(self.last_fixture_requests[expected_url], 1)
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+            with self.subTest(query_position=query_position, result="local mismatch"):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="js",
+                    asset_fingerprint="00000000",
+                    **query_options,
+                )
+
+                self.assertEqual(return_code, 1)
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/js/app.js"]
+                self.assertEqual(asset_check["status"], "FAIL")
+                self.assertIn("!= local", asset_check["evidence"])
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+            with self.subTest(query_position=query_position, result="live mismatch"):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_kind="js",
+                    asset_body=js_bytes + b"\n// stale live entrypoint\n",
+                    **query_options,
+                )
+
+                self.assertEqual(return_code, 1)
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/js/app.js"]
+                self.assertEqual(asset_check["status"], "FAIL")
+                self.assertIn("!= live", asset_check["evidence"])
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_query_option_does_not_hide_local_or_live_fingerprint_mismatch(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             asset_fingerprint="00000000",
