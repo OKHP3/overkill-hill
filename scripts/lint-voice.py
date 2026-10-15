@@ -34,6 +34,7 @@ import re
 import sys
 from collections import Counter
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -246,6 +247,97 @@ def strip_tags(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
+class _VisibleProseParser(HTMLParser):
+    """Collect body text while excluding metadata and non-visible markup."""
+
+    _SKIP_TAGS = {"head", "script", "style", "pre", "code", "template"}
+    _VOID_TAGS = {
+        "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+        "meta", "param", "source", "track", "wbr",
+    }
+    _BLOCK_TAGS = {
+        "address", "article", "aside", "blockquote", "div", "dl", "fieldset",
+        "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4",
+        "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "section",
+        "table", "tbody", "td", "th", "tr", "ul",
+    }
+    _HIDDEN_STYLE = re.compile(
+        r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))\b",
+        re.IGNORECASE,
+    )
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._stack: list[tuple[str, bool]] = []
+        self.lines: dict[int, list[str]] = {}
+
+    def _is_skipping(self) -> bool:
+        return any(skipped for _, skipped in self._stack)
+
+    def _add_separator(self) -> None:
+        line, _ = self.getpos()
+        self.lines.setdefault(line, []).append(" ")
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        hidden = (
+            tag in self._SKIP_TAGS
+            or "hidden" in attributes
+            or (attributes.get("aria-hidden") or "").strip().lower() == "true"
+            or bool(self._HIDDEN_STYLE.search(attributes.get("style") or ""))
+        )
+        inherited_hidden = self._is_skipping()
+        if tag in self._BLOCK_TAGS and not inherited_hidden and not hidden:
+            self._add_separator()
+        if tag not in self._VOID_TAGS:
+            self._stack.append((tag, hidden))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in self._VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        for index in range(len(self._stack) - 1, -1, -1):
+            if self._stack[index][0] == tag:
+                del self._stack[index:]
+                return
+
+    def handle_data(self, data: str) -> None:
+        if self._is_skipping():
+            return
+        line, _ = self.getpos()
+        for offset, part in enumerate(data.split("\n")):
+            if part:
+                self.lines.setdefault(line + offset, []).append(part.rstrip("\r"))
+
+
+def _lint_locale_prose(
+    path: Path,
+    locale: str,
+) -> list[VoiceFinding]:
+    """Apply locale rules only to rendered body text, not markup or metadata."""
+    parser = _VisibleProseParser()
+    parser.feed(path.read_text(encoding="utf-8", errors="replace"))
+    parser.close()
+    rel = path.relative_to(ROOT).as_posix()
+    findings: list[VoiceFinding] = []
+    for lineno, parts in sorted(parser.lines.items()):
+        text = "".join(parts)
+        for label, pattern, suggestion in VOICE_LOCALE_PATTERNS[locale]:
+            if pattern.search(text):
+                findings.append(
+                    VoiceFinding(
+                        path=rel,
+                        lineno=lineno,
+                        label=label,
+                        suggestion=suggestion,
+                        excerpt=text.strip()[:90],
+                    )
+                )
+    return findings
+
+
 def lint_file(
     path: Path,
     *,
@@ -328,11 +420,7 @@ def lint_locale_file(path: Path, locale: str) -> list[VoiceFinding]:
     """Apply only the selected locale's pair-specific editorial checks."""
     if locale not in VOICE_LOCALE_PATTERNS:
         raise ValueError(f"unsupported voice locale: {locale}")
-    return lint_file(
-        path,
-        phrase_patterns=VOICE_LOCALE_PATTERNS[locale],
-        check_passive_voice=False,
-    )
+    return _lint_locale_prose(path, locale)
 
 
 def load_baseline(path: Path) -> Counter[str]:

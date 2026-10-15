@@ -547,6 +547,27 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 "es-mx/about/index.html": (
                     "<main><p>Vosotros usáis el ordenador.</p></main>"
                 ),
+                "en-gb/visible-prose/index.html": (
+                    "<html><head><title>favorite</title>"
+                    '<meta name="description" content="color gray neighbor traveling">'
+                    "</head><body>"
+                    '<main title="favorite color" data-copy="gray">'
+                    '<p hidden>favorite color</p>'
+                    '<p aria-hidden="true">gray neighbor</p>'
+                    '<p style="display: none">traveling</p>'
+                    "<p>Our favorite color is gray; a neighbor is traveling.</p>"
+                    "</main></body></html>"
+                ),
+                "es-mx/visible-prose/index.html": (
+                    "<html><head><title>vosotros</title>"
+                    '<meta name="description" content="ordenador">'
+                    "</head><body>"
+                    '<main title="vosotros ordenador" alt="ordenador">'
+                    '<p hidden>Vosotros usáis el ordenador.</p>'
+                    '<p aria-hidden="true">Vosotros usáis el ordenador.</p>'
+                    "<p>Vosotros usáis el ordenador.</p>"
+                    "</main></body></html>"
+                ),
                 "fr/about/index.html": "<main><p>Our favorite color is gray.</p></main>",
                 "i18n/pilot/es-mx/reviewed/index.html": (
                     "<main><p>Vosotros usáis el ordenador.</p></main>"
@@ -568,8 +589,20 @@ class PublicPageBoundaryTests(unittest.TestCase):
                     for path in voice.find_locale_html_files("es-mx", root)
                 }
                 self.assertEqual(en_us_paths, {"index.html", "fr/about/index.html"})
-                self.assertEqual(en_gb_paths, {"en-gb/about/index.html"})
-                self.assertEqual(es_mx_paths, {"es-mx/about/index.html"})
+                self.assertEqual(
+                    en_gb_paths,
+                    {
+                        "en-gb/about/index.html",
+                        "en-gb/visible-prose/index.html",
+                    },
+                )
+                self.assertEqual(
+                    es_mx_paths,
+                    {
+                        "es-mx/about/index.html",
+                        "es-mx/visible-prose/index.html",
+                    },
+                )
 
                 en_us_findings = voice.lint_file(root / "index.html")
                 en_gb_findings = voice.lint_locale_file(
@@ -586,6 +619,41 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 self.assertEqual(
                     {finding.label for finding in es_mx_findings},
                     {"Spain Spanish: vosotros", "Spain Spanish: ordenador"},
+                )
+                en_gb_visible_findings = voice.lint_locale_file(
+                    root / "en-gb/visible-prose/index.html", "en-gb"
+                )
+                self.assertEqual(
+                    {finding.label for finding in en_gb_visible_findings},
+                    {
+                        "US spelling: favorite",
+                        "US spelling: color",
+                        "US spelling: gray",
+                        "US spelling: neighbor",
+                        "US spelling: traveling",
+                    },
+                )
+                self.assertEqual(len(en_gb_visible_findings), 5)
+                self.assertTrue(
+                    all(
+                        "Our favorite color is gray; a neighbor is traveling."
+                        in finding.excerpt
+                        for finding in en_gb_visible_findings
+                    )
+                )
+                es_mx_visible_findings = voice.lint_locale_file(
+                    root / "es-mx/visible-prose/index.html", "es-mx"
+                )
+                self.assertEqual(
+                    {finding.label for finding in es_mx_visible_findings},
+                    {"Spain Spanish: vosotros", "Spain Spanish: ordenador"},
+                )
+                self.assertEqual(len(es_mx_visible_findings), 2)
+                self.assertTrue(
+                    all(
+                        finding.excerpt == "Vosotros usáis el ordenador."
+                        for finding in es_mx_visible_findings
+                    )
                 )
 
                 with tempfile.TemporaryDirectory(prefix="voice-locale-baseline-") as baseline_dir:
