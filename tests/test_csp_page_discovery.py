@@ -7,6 +7,7 @@ import importlib.util
 import unittest
 import json
 import io
+import os
 import shutil
 import subprocess
 import tempfile
@@ -87,6 +88,62 @@ class CspPageDiscoveryTests(unittest.TestCase):
                 "site-src/pages.json: required CSP source page manifest is missing or not a regular file. "
                 "Restore site-src/pages.json or regenerate the source page inventory "
                 "before running CSP generation.",
+            )
+
+    def test_non_regular_manifest_fails_instead_of_falling_back_to_tracked_pages(self) -> None:
+        for manifest_kind in ("directory", "fifo"):
+            with self.subTest(manifest_kind=manifest_kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                manifest = root / "site-src" / "pages.json"
+                manifest.parent.mkdir(parents=True)
+                (root / "index.html").write_text("<main>Tracked</main>", encoding="utf-8")
+                (root / "new-story.html").write_text(
+                    "<main>Untracked route</main>", encoding="utf-8"
+                )
+                if manifest_kind == "directory":
+                    manifest.mkdir()
+                else:
+                    os.mkfifo(manifest)
+
+                with patch.object(csp, "ROOT", root), patch.object(
+                    csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+                ):
+                    with self.assertRaises(csp.CspPageManifestError) as raised:
+                        csp.all_pages()
+
+                self.assertEqual(
+                    str(raised.exception),
+                    "site-src/pages.json: required CSP source page manifest is missing or not "
+                    "a regular file. Restore site-src/pages.json or regenerate the source page "
+                    "inventory before running CSP generation.",
+                )
+
+    def test_unreadable_manifest_fails_instead_of_falling_back_to_tracked_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            manifest = root / "site-src" / "pages.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text('{"pages":[]}', encoding="utf-8")
+            (root / "index.html").write_text("<main>Tracked</main>", encoding="utf-8")
+            (root / "new-story.html").write_text(
+                "<main>Untracked route</main>", encoding="utf-8"
+            )
+            original_read_text = Path.read_text
+
+            def fail_manifest_read(path: Path, *args: object, **kwargs: object) -> str:
+                if path == manifest:
+                    raise PermissionError("permission denied")
+                return original_read_text(path, *args, **kwargs)
+
+            with patch.object(csp, "ROOT", root), patch.object(
+                csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+            ), patch.object(Path, "read_text", new=fail_manifest_read):
+                with self.assertRaises(csp.CspPageManifestError) as raised:
+                    csp.all_pages()
+
+            self.assertEqual(
+                str(raised.exception),
+                "site-src/pages.json: cannot read CSP source page manifest: permission denied",
             )
 
     def test_invalid_manifest_route_fails_with_actionable_error(self) -> None:
