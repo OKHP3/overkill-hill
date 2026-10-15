@@ -76,12 +76,15 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         javascript_response_overrides: dict[str, bytes] | None = None,
         javascript_missing_paths: set[str] | None = None,
         inline_module_source: str | None = None,
+        fixture_routes: tuple[str, ...] = ("/",),
+        html_overrides: dict[str, bytes] | None = None,
     ) -> tuple[int, dict[str, object]]:
         """Run the full verifier against deterministic synthetic edge responses."""
         javascript_modules = javascript_modules or {}
         javascript_module_content_types = javascript_module_content_types or {}
         javascript_response_overrides = javascript_response_overrides or {}
         javascript_missing_paths = javascript_missing_paths or set()
+        html_overrides = html_overrides or {}
         sitemap = verify_live_edge.canonical_text_bytes(verify_live_edge.SITEMAP)
         search_index = verify_live_edge.canonical_text_bytes(verify_live_edge.SEARCH_INDEX)
         feed = verify_live_edge.canonical_text_bytes(verify_live_edge.ATOM_FEED)
@@ -335,6 +338,13 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "body": html.replace("{robots}", "noindex").encode("utf-8"),
             },
         }
+        for route, body in html_overrides.items():
+            responses[route] = {
+                "ok": True,
+                "status": 200,
+                "headers": html_headers,
+                "body": body,
+            }
         for asset in all_assets:
             asset_headers = {"cache-control": "max-age=31536000, immutable"}
             if asset["details"]["content_type"] is not None:
@@ -460,7 +470,11 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             output = io.StringIO()
             with (
                 patch.object(verify_live_edge, "fetch", side_effect=fixture_fetch),
-                patch.object(verify_live_edge, "load_routes", return_value=(["/"], None)),
+                patch.object(
+                    verify_live_edge,
+                    "load_routes",
+                    return_value=(list(fixture_routes), None),
+                ),
                 patch.object(verify_live_edge, "ROOT", fixture_root),
                 patch.object(sys, "argv", argv),
                 redirect_stdout(output),
@@ -958,6 +972,45 @@ import(bareSpecifier);
         checks = [item["check"] for item in report["checks"]]
         self.assertEqual(checks.count("asset /assets/js/cycle/a.mjs"), 1)
         self.assertEqual(checks.count("asset /assets/js/cycle/b.mjs"), 1)
+
+    def test_shared_module_failure_retains_each_route_and_importer_once(self) -> None:
+        modules = {
+            "/assets/js/entry-a.mjs": b'import "./shared.mjs";\n',
+            "/assets/js/entry-b.mjs": b'import "./shared.mjs";\n',
+        }
+        entry_b_hash = hashlib.sha256(
+            modules["/assets/js/entry-b.mjs"]
+        ).hexdigest()[:8]
+        about_html = (
+            '<!doctype html><meta name="robots" content="index, follow">'
+            f'<script type="module" src="/assets/js/entry-b.mjs?v={entry_b_hash}"></script>'
+        ).encode("utf-8")
+        noindex_html = b'<!doctype html><meta name="robots" content="noindex">'
+
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            javascript_missing_paths={"/assets/js/shared.mjs"},
+            fixture_routes=("/", "/about/"),
+            html_overrides={
+                "/about/": about_html,
+                "/404.html": noindex_html,
+                "/found-ry/": noindex_html,
+            },
+        )
+
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        shared_check = checks["asset /assets/js/shared.mjs"]
+        self.assertEqual(shared_check["status"], "FAIL")
+        for source in (
+            "route /",
+            "route /about/",
+            "module /assets/js/entry-a.mjs",
+            "module /assets/js/entry-b.mjs",
+        ):
+            self.assertIn(source, shared_check["evidence"])
+        self.assertEqual(self.last_fixture_requests["/assets/js/shared.mjs"], 1)
 
     def test_inline_module_import_resolves_from_the_page_route(self) -> None:
         modules = {

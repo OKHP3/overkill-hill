@@ -1500,6 +1500,8 @@ def main() -> int:
     # Check first-party assets and walk literal same-origin JavaScript imports.
     # Module sources are read as text only; this verifier never evaluates JS.
     assets: dict[str, str] = {}
+    asset_sources: dict[str, set[str]] = {}
+    asset_parents: dict[str, set[str]] = {}
     html_javascript_entrypoints: set[str] = set()
     js_asset_urls: set[str] = set()
     js_limit_reported = False
@@ -1513,7 +1515,11 @@ def main() -> int:
             js_limit_reported = True
 
     def add_asset(
-        asset_url: str, source: str, *, html_entrypoint: bool = False
+        asset_url: str,
+        source: str,
+        *,
+        html_entrypoint: bool = False,
+        parent: str | None = None,
     ) -> None:
         asset_url = asset_url.split("#", 1)[0]
         if not asset_url:
@@ -1522,6 +1528,9 @@ def main() -> int:
         if html_entrypoint and suffix in JAVASCRIPT_SUFFIXES:
             html_javascript_entrypoints.add(asset_url)
         if asset_url in assets:
+            asset_sources.setdefault(asset_url, set()).add(source)
+            if parent:
+                asset_parents.setdefault(asset_url, set()).add(parent)
             return
         if suffix in JAVASCRIPT_SUFFIXES:
             if len(js_asset_urls) >= MAX_JS_MODULES:
@@ -1532,6 +1541,9 @@ def main() -> int:
                 return
             js_asset_urls.add(asset_url)
         assets[asset_url] = asset_url
+        asset_sources.setdefault(asset_url, set()).add(source)
+        if parent:
+            asset_parents.setdefault(asset_url, set()).add(parent)
 
     inline_import_cache: dict[bytes, tuple[list[str], str | None]] = {}
     js_source_bytes = 0
@@ -1676,7 +1688,11 @@ def main() -> int:
                 if suffix == ".css":
                     css_body = response["body"].decode("utf-8", errors="replace")
                     for match in CSS_ASSET_RE.finditer(css_body):
-                        add_asset(match.group("url"), f"stylesheet {path}")
+                        add_asset(
+                            match.group("url"),
+                            f"stylesheet {path}",
+                            parent=asset_url,
+                        )
                 if is_javascript and mime_ok and not response.get("truncated"):
                     module_source = response["body"].decode(
                         "utf-8", errors="replace"
@@ -1697,7 +1713,11 @@ def main() -> int:
                             args.base, asset_url, specifier
                         )
                         if dependency:
-                            add_asset(dependency, f"module {path}")
+                            add_asset(
+                                dependency,
+                                f"module {path}",
+                                parent=asset_url,
+                            )
             if response.get("truncated"):
                 if max_source_bytes < MAX_JS_SOURCE_BYTES:
                     truncation_evidence = (
@@ -1784,6 +1804,34 @@ def main() -> int:
                 if args.hosting == "github-pages":
                     asset_status = "BLOCKED"
                 report.append(result(f"asset {path}", asset_status, GITHUB_PAGES_POLICY_NOTE if args.hosting == "github-pages" else f"HTTP 200; {cache or 'Cache-Control absent'}"))
+
+    # Resolve provenance after traversal so a later-discovered route or importer
+    # is retained even when the shared asset has already been fetched and scanned.
+    provenance_by_path: dict[str, set[str]] = {}
+    for asset_url in assets:
+        stack = [asset_url]
+        visited: set[str] = set()
+        sources: set[str] = set()
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            sources.update(asset_sources.get(current, ()))
+            stack.extend(asset_parents.get(current, ()))
+        path = urllib.parse.urlsplit(asset_url).path
+        provenance_by_path.setdefault(path, set()).update(sources)
+
+    for item in report:
+        check = item["check"]
+        if not isinstance(check, str) or item["status"] != "FAIL":
+            continue
+        for path, sources in provenance_by_path.items():
+            if check not in {f"asset {path}", f"asset {path} content type"}:
+                continue
+            if sources:
+                item["evidence"] += "; referenced by " + ", ".join(sorted(sources))
+            break
 
     failures = sum(item["status"] == "FAIL" for item in report)
     blocked = sum(item["status"] == "BLOCKED" for item in report)
