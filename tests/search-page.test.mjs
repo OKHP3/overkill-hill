@@ -222,6 +222,52 @@ for (const overlayMode of [true, false]) {
   });
 }
 
+test("320px empty search keeps its query through keyboard full-search recovery", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 } });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const absentQuery = "missing & route?";
+  try {
+    await page.route("**/assets/data/search-index.json", route => route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ entries: [
+        { url: "/projects/found-ry/", title: "FoundRy", category: "Project", description: "recovery fixture", headings: [], body: "recovery fixture" },
+        { url: "/writings/murderbird/", title: "The MurderBird", category: "Writing", description: "recovery fixture", headings: [], body: "recovery fixture" },
+      ] }),
+    }));
+    await page.goto(`${baseUrl}/writings/`);
+    await dismissAnnouncement(page);
+    await page.locator(".okh-search-trigger").press("Enter");
+    const overlay = page.getByRole("dialog", { name: "Search OverKill Hill", exact: true });
+    await overlay.waitFor({ state: "visible" });
+    const input = overlay.locator(".okh-search-input");
+    await page.waitForFunction(() => document.activeElement?.matches(".okh-search-input"));
+    await input.fill(absentQuery);
+    await page.waitForFunction(() => document.querySelector(".okh-search-status").textContent.includes("No search results"));
+    assert.equal(await overlay.locator(".okh-search-result").count(), 0);
+
+    await input.press("Tab");
+    assert.equal(await overlay.getByRole("button", { name: "Close search", exact: true }).evaluate(el => el === document.activeElement), true);
+    await page.keyboard.press("Tab");
+    const fullSearch = overlay.getByRole("link", { name: "Open full search →", exact: true });
+    assert.equal(await fullSearch.evaluate(el => el === document.activeElement), true);
+    await page.keyboard.press("Enter");
+    await page.waitForURL(url => url.pathname === "/search/" && url.searchParams.get("q") === absentQuery);
+    const pageInput = page.locator("#search-page-input");
+    assert.equal(await pageInput.inputValue(), absentQuery);
+    assert.equal(await pageInput.evaluate(el => el === document.activeElement), true);
+    await page.waitForFunction(() => document.querySelector("#search-stats").textContent.includes("0 results"));
+
+    await pageInput.fill("recovery");
+    await page.waitForFunction(() => document.querySelectorAll("#search-results .okh-search-result").length === 2);
+    assert.equal(new URL(page.url()).searchParams.get("q"), "recovery");
+    assert.equal(await pageInput.evaluate(el => el === document.activeElement), true);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test("overlay keyboard selection survives the delayed opener focus after reopening", async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
