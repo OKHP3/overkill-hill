@@ -107,6 +107,7 @@ class ConcurrencyTests(unittest.TestCase):
             'Upload local QA reports': 'local-qa-',
             'Upload failed CSP fixture report': 'csp-fixture-regressions-',
             'Upload theme-control revision evidence': 'theme-control-revisions-',
+            'Preserve BrandGuard font regression evidence': 'brandguard-font-regressions-',
             'Upload contrast audit report for fork pull requests': 'contrast-audit-',
             'Upload the validated Pages release artifact': 'validated-site-',
             'Upload third-party runtime inventory': 'third-party-runtime-',
