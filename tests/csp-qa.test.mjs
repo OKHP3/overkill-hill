@@ -3195,6 +3195,7 @@ test("identifies external requests that remain pending through the settle timeou
     assert.equal(report.status, "EXTERNAL_OUTAGE");
     assert.equal(report.summary.externalOutages, 1);
     assert.equal(report.summary.timeouts, 1);
+    assert.equal(report.summary.failureEvents, 0);
     assert.deepEqual(report.timeouts, [{
       route: "/external-timeout.html",
       url: report.timeouts[0].url,

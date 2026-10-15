@@ -25,3 +25,16 @@ was needed.
 
 **How to apply:** Try the managed Chromium executable first. Keep the separate
 `libgbm`/`cups` guidance for launch failures caused by missing shared libraries.
+
+The test runner can still fail to discover managed Chromium when Playwright's
+expected versioned Chromium and headless-shell cache entries are absent. For
+local verification, temporarily link both expected entries to
+`/repl/tools/bin/chromium`, then remove the links after the run; do not retain
+those links in project changes.
+
+**Why:** The project test harness launches Chromium through Playwright without
+an executable-path override, while this runtime's managed browser is outside
+Playwright's versioned cache.
+
+**How to apply:** Use this only as a local test-runner workaround when browser
+tests fail with a missing executable but `/repl/tools/bin/chromium` is present.
