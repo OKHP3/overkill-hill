@@ -43,7 +43,7 @@ async function geometry(page) {
     return Object.fromEntries(selectors.map(s => [s, [...document.querySelectorAll(s)].map(el => {
       const r = el.getBoundingClientRect();
       const style = getComputedStyle(el);
-      return { top: r.top + scrollY, height: r.height, width: r.width, fontSize: style.fontSize, fontFamily: style.fontFamily };
+      return { top: r.top + scrollY, height: r.height, width: r.width, fontSize: style.fontSize, fontFamily: style.fontFamily, lineHeight: style.lineHeight, children: [...el.querySelectorAll('strong, em')].map(child => ({ text: child.textContent, fontFamily: getComputedStyle(child).fontFamily, fontSize: getComputedStyle(child).fontSize, lineHeight: getComputedStyle(child).lineHeight })) };
     })]));
   });
 }
@@ -116,11 +116,27 @@ await Promise.all([['chromium', chromium], ['webkit', webkit]].map(async ([engin
             }, readyFaces);
           }
           await page.waitForTimeout(250);
+          // Root-size changes can leave WebKit's offscreen inline layout one
+          // pass behind its computed styles. Require stable geometry while the
+          // font gate remains closed; this separates resizing/style settlement
+          // from the font arrival being tested. Never release fonts to settle.
+          const settlement = [];
+          let previousGeometry, stableSamples = 0;
+          for (let attempt = 0; attempt < 20 && stableSamples < 4; attempt++) {
+            const sample = await geometry(page);
+            settlement.push(sample);
+            const signature = JSON.stringify(sample);
+            stableSamples = signature === previousGeometry ? stableSamples + 1 : 0;
+            previousGeometry = signature;
+            await page.waitForTimeout(50);
+          }
+          snapshots.settlement = settlement;
+          assert.equal(stableSamples, 4, `${label} root/style geometry must settle with fonts held`);
           snapshots.styleBefore = await page.evaluate(() => ({
             root: getComputedStyle(document.documentElement).fontSize,
             body: getComputedStyle(document.body).fontSize,
             readyClass: document.body.classList.contains('brandguard-fonts-ready'),
-            fontSetStatus: document.fonts.status,
+            fontSetStatus: document.fonts.status, faces: [...document.fonts].map(face => ({ family: face.family, status: face.status, weight: face.weight, style: face.style })),
           }));
           const before = await geometry(page);
           snapshots.before = before;

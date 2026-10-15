@@ -40,3 +40,9 @@ bounds, nonsticky compact headers, real font loading in immediate cases, page
 errors and missing local assets. Root enlargement is a rem reflow stress test,
 not browser zoom or human assistive-technology acceptance. It does not prove
 all fractional widths, font release orders, operating systems or devices.
+
+Before opening the font gate, root-size and style geometry must match in four
+consecutive 50ms samples (bounded to 20 attempts). This isolates WebKit inline
+layout settlement from font arrival. Fonts remain held throughout; movement
+after release still has the same one-pixel limit. Failure traces retain the
+settlement samples, descendant font styles and active font-set states.

@@ -71,3 +71,9 @@ The three-file foundation sync alone is insufficient for BrandGuard pages.
 The scoped import keeps these bytes outside ordinary pages' request graphs
 and preserves the existing source-budget limits. No publication, Mermaid
 update or release/foundation pin promotion is included.
+
+Before opening the font gate, root-size and style geometry must match in four
+consecutive 50ms samples (bounded to 20 attempts). This isolates WebKit inline
+layout settlement from font arrival. Fonts remain held throughout; movement
+after release still has the same one-pixel limit. Failure traces retain the
+settlement samples, descendant font styles and active font-set states.
