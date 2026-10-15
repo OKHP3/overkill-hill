@@ -10,8 +10,8 @@ To refresh, review the official Google Fonts CSS and font bytes, update the sour
 
 The seventeen `brandguard-*.woff2` subsets preserve the existing Baloo 2,
 Open Sans and Kalam bytes declared by the AskJamie BrandGuard pages. They are
-local companions to the shared stylesheet's BrandGuard-only optional font
-aliases. They do not replace OKH's three canonical font families. Ordinary
+local companions to the shared stylesheet's BrandGuard-only font aliases and
+the scoped `assets/js/brandguard-fonts.js` loader. They do not replace OKH's three canonical font families. Ordinary
 OKH, Glee and AskJamie pages do not select or request these aliases.
 
 `brandguard-provenance.json` records the October 15, 2026 retrieval, exact
@@ -20,3 +20,10 @@ the shared CSS compatible with OKH's self-only font CSP; no policy allowance
 or Mermaid release pin changes are required. No font binary was converted.
 The native-page regression harness reuses these bytes offline and verifies
 normal, enlarged, delayed, immediate, failed and predecoded-font witnesses.
+
+The loader catalog retains the family, weight and Unicode ranges in the
+recorded Google Fonts CSS. Update its references and the provenance manifests
+together when deliberately reviewing new source bytes. Ordinary pages do not
+import the loader or pay its font transfer cost; source-budget limits are
+unchanged. A loader that arrives after first contentful paint, or cannot
+observe paint timing, retains fallback rather than changing visible text.

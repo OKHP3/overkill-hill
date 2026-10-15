@@ -108,5 +108,7 @@
       "sha256": "fbbbcfef55318de350562559b671360de6d597112ecc5c73881b05092db89602",
       "asset": true
     }
-  ]
+  ],
+  "loader": "assets/js/brandguard-fonts.js",
+  "delivery": "Only the BrandGuard runtime imports the catalog. Register optional local faces before first contentful paint; late or unsupported initialization retains fallback."
 }

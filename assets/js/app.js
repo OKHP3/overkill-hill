@@ -1,3 +1,14 @@
+// BrandGuard is the only consumer of the optional local font catalog.
+(function () {
+  const start = () => {
+    const body = document.body;
+    if (!body?.matches('.askjamie-main') || !(body.matches('.askjamie-brandguard-page, .brandguard-bfs-page, .brandguard-lvmh-page') || document.querySelector('.brandguard-demo-notice'))) return;
+    import('/assets/js/brandguard-fonts.js').catch(() => { /* Keep readable fallback if the optional catalog is unavailable. */ });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+})();
+
 // French interaction drafts and source provenance: i18n/pilot/fr/interactions/.
 // The versioned announcement is dismissed for this tab's session only.
 (function () {

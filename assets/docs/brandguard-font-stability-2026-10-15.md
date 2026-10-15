@@ -7,7 +7,10 @@ viewport bands, smaller type and tighter tracking. The remaining movement
 reached downstream quotations and changed again when text was enlarged.
 
 The revision replaces those bands with scoped aliases for the same Baloo 2,
-Open Sans and Kalam font bytes, using local delivery and `font-display: optional`. Available
+Open Sans and Kalam font bytes. The shared runtime imports
+`assets/js/brandguard-fonts.js` only for BrandGuard pages. It registers local
+optional faces before first contentful paint. If it arrives late, or paint
+timing is unavailable, it keeps the already visible fallback for that visit. Available
 fonts may render the brand faces; a font that misses the first-paint deadline
 leaves readable fallback text for that page visit. It does not hide content
 while waiting or switch families after the reader starts reading. Ordinary
@@ -26,9 +29,11 @@ stylesheet activation is outside the font-arrival acceptance claim.
 from frozen AskJamie revision `7d719683bf1fe416be4c2aba9cb676146268be04`.
 Candidate foundation bytes are projected in memory; the sibling checkout is
 not rewritten. Font responses use the byte-verified local assets and their retained OFL licenses.
-The native CSP remains active. A separate four-case boundary gate verifies
+The native CSP remains active. A separate five-case boundary gate verifies
 that ordinary OKH, Glee and AskJamie pages do not request the BrandGuard faces
-and that all declarations respect a self-only font policy.
+that all declarations respect a self-only font policy, and that delayed
+loader initialization cannot move visible text. Six loader timing/scope unit
+cases cover the early, late and unsupported-platform branches.
 
 The matrix has 448 states: Chromium and WebKit; 320, 360, 390, 401 and 900px;
 16px and 32px root sizes; delayed fonts throughout, plus immediate, failed and
@@ -56,4 +61,9 @@ retained unchanged, including their original trailing spaces.
 Shared foundation validation uses both the retained approved pins and private
 immutable projections onto current sibling source. Matching projection bytes
 and browser behavior do not mean the sibling repositories have adopted them.
-No publication, Mermaid update or release/foundation pin promotion is included.
+A future foundation adoption must include `assets/js/brandguard-fonts.js`
+and the font/license companions listed in `assets/fonts/brandguard-provenance.json`.
+The three-file foundation sync alone is insufficient for BrandGuard pages.
+The scoped import keeps these bytes outside ordinary pages' request graphs
+and preserves the existing source-budget limits. No publication, Mermaid
+update or release/foundation pin promotion is included.

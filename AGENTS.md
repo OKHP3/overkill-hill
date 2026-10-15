@@ -62,6 +62,9 @@ validation workflow changes.
 - `assets/js/app.js` provides shared browser interactions, including
   navigation, theme switching, scroll behavior, and site search.
   `mermaid-init.js` is used on pages that render Mermaid diagrams.
+  BrandGuard-only font registration uses `assets/js/brandguard-fonts.js` and
+  the local font/license companions recorded in `assets/fonts/brandguard-provenance.json`.
+  Ordinary pages do not import the catalog; late initialization retains fallback.
 - `scripts/sync-universe-map.py` generates universe navigation from the search
   index using `.agents/skills/okhp3-universe-map/`. Default index writes refresh
   the universe source and published HTML; CI verifies rendering and freshness.

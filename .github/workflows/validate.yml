@@ -468,6 +468,7 @@ jobs:
           # Test input only. This does not promote the foundation/release pins.
           git -C .ci/theme-sites/askjamie fetch --no-tags --depth=1 origin 7d719683bf1fe416be4c2aba9cb676146268be04
           npx playwright install --with-deps webkit
+          node --test tests/brandguard-font-loader.test.mjs
           node tests/test-brandguard-font-boundary.mjs
           BRANDGUARD_TEST_REPORT=brandguard-font-report.json node tests/test-brandguard-font-browser.mjs
 
