@@ -717,11 +717,15 @@ const expression = /import\(["']\.\/regex\.mjs["']\)/;
             self.assertEqual(checks[f"asset {dependency}"]["status"], "PASS")
             self.assertEqual(self.last_fixture_requests[dependency], 1)
         self.assertEqual(
-            checks["asset /assets/js/fingerprinted.mjs"]["status"], "BLOCKED"
+            checks["asset /assets/js/fingerprinted.mjs"]["status"], "PASS"
         )
         self.assertIn(
-            "GitHub Pages",
+            "matches local fingerprint",
             checks["asset /assets/js/fingerprinted.mjs"]["evidence"],
+        )
+        self.assertEqual(
+            checks["asset /assets/js/fingerprinted.mjs cache policy"]["status"],
+            "BLOCKED",
         )
         self.assertEqual(report["summary"]["failures"], 0)
         self.assertEqual(
@@ -1078,7 +1082,11 @@ import(bareSpecifier);
         vendor_check = checks[f"asset {vendor_path}"]
         self.assertEqual(vendor_check["status"], "FAIL")
         self.assertIn("differs from local", vendor_check["evidence"])
-        self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "PASS")
+        self.assertEqual(
+            checks["asset /assets/js/mermaid-init.js cache policy"]["status"],
+            "BLOCKED",
+        )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
         self.assertEqual(self.last_fixture_requests[vendor_path], 1)
 
@@ -1101,6 +1109,13 @@ import(bareSpecifier);
         self.assertEqual(mime_check["status"], "FAIL")
         self.assertIn("text/html", mime_check["evidence"])
         self.assertIn("text/javascript", mime_check["evidence"])
+        self.assertEqual(
+            checks["asset /assets/js/wrong-type.mjs"]["status"], "FAIL"
+        )
+        self.assertEqual(
+            checks["asset /assets/js/wrong-type.mjs cache policy"]["status"],
+            "BLOCKED",
+        )
 
     def test_imported_module_missing_content_type_is_named_and_separately_classified(self) -> None:
         modules = {
@@ -1134,9 +1149,19 @@ import(bareSpecifier);
             "PASS",
         )
         parent_check = checks["asset /assets/js/fixture-entry.mjs"]
-        self.assertEqual(parent_check["status"], "BLOCKED")
-        self.assertIn("GitHub Pages", parent_check["evidence"])
-        self.assertEqual(checks["asset /assets/js/missing-type.mjs"]["status"], "PASS")
+        self.assertEqual(parent_check["status"], "PASS")
+        self.assertIn("matches local fingerprint", parent_check["evidence"])
+        self.assertEqual(
+            checks["asset /assets/js/fixture-entry.mjs cache policy"]["status"],
+            "BLOCKED",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/missing-type.mjs"]["status"], "FAIL"
+        )
+        self.assertEqual(
+            checks["asset /assets/js/missing-type.mjs cache policy"]["status"],
+            "BLOCKED",
+        )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_mixed_asset_stale_body_requires_explicit_target(self) -> None:
@@ -1215,7 +1240,11 @@ import(bareSpecifier);
         self.assertEqual(return_code, 1)
         self.assertEqual(report["status"], "FAILED")
         checks = {item["check"]: item for item in report["checks"]}
-        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "PASS")
+        self.assertEqual(
+            checks["asset /assets/css/theme.css cache policy"]["status"],
+            "BLOCKED",
+        )
         self.assertEqual(checks["asset /assets/js/app.js"]["status"], "FAIL")
         self.assertIn("!= local", checks["asset /assets/js/app.js"]["evidence"])
         self.assertIn(
@@ -1247,13 +1276,22 @@ import(bareSpecifier);
         self.assertIn("URL fingerprint 00000000 != local", image_check["evidence"])
         self.assertIn(f"{image_path}?v=00000000", self.last_fixture_requests)
         self.assertIn(f"{font_path}?v={font_fingerprint}", self.last_fixture_requests)
-        self.assertEqual(checks[f"asset {font_path}"]["status"], "BLOCKED")
+        self.assertEqual(checks[f"asset {font_path}"]["status"], "PASS")
+        self.assertEqual(
+            checks[f"asset {font_path} cache policy"]["status"], "BLOCKED"
+        )
         self.assertEqual(checks[f"asset {font_path} content type"]["status"], "PASS")
         self.assertEqual(
             checks[f"asset {image_path} content type"]["status"], "PASS"
         )
         self.assertEqual(
             checks["asset /assets/css/live-edge-fixture.css"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/css/live-edge-fixture.css cache policy"][
+                "status"
+            ],
             "BLOCKED",
         )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
@@ -1423,8 +1461,12 @@ import(bareSpecifier);
                 self.assertEqual(report["summary"]["failures"], 0)
                 checks = {item["check"]: item for item in report["checks"]}
                 asset_check = checks["asset /assets/css/theme.css"]
-                self.assertEqual(asset_check["status"], "BLOCKED")
-                self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(asset_check["status"], "PASS")
+                self.assertIn("matches local fingerprint", asset_check["evidence"])
+                self.assertEqual(
+                    checks["asset /assets/css/theme.css cache policy"]["status"],
+                    "BLOCKED",
+                )
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_javascript_entrypoint_fingerprint_with_unrelated_query_options(self) -> None:
@@ -1457,8 +1499,12 @@ import(bareSpecifier);
                 self.assertEqual(return_code, 1)
                 checks = {item["check"]: item for item in report["checks"]}
                 asset_check = checks["asset /assets/js/app.js"]
-                self.assertEqual(asset_check["status"], "BLOCKED")
-                self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(asset_check["status"], "PASS")
+                self.assertIn("matches local fingerprint", asset_check["evidence"])
+                self.assertEqual(
+                    checks["asset /assets/js/app.js cache policy"]["status"],
+                    "BLOCKED",
+                )
                 self.assertEqual(
                     checks["JavaScript imports /assets/js/app.js"]["status"],
                     "BLOCKED",
@@ -1604,7 +1650,14 @@ import(bareSpecifier);
         checks = {item["check"]: item for item in report["checks"]}
         self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "FAIL")
         self.assertIn("!= live", checks["asset /assets/css/theme.css"]["evidence"])
-        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+        self.assertEqual(
+            checks["asset /assets/css/theme.css cache policy"]["status"],
+            "BLOCKED",
+        )
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "PASS")
+        self.assertEqual(
+            checks["asset /assets/js/app.js cache policy"]["status"], "BLOCKED"
+        )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_mixed_assets_report_stale_javascript_as_named_failure(self) -> None:
@@ -1618,9 +1671,17 @@ import(bareSpecifier);
         self.assertEqual(return_code, 1)
         self.assertEqual(report["status"], "FAILED")
         checks = {item["check"]: item for item in report["checks"]}
-        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "PASS")
+        self.assertEqual(
+            checks["asset /assets/css/theme.css cache policy"]["status"],
+            "BLOCKED",
+        )
         self.assertEqual(checks["asset /assets/js/app.js"]["status"], "FAIL")
         self.assertIn("!= live", checks["asset /assets/js/app.js"]["evidence"])
+        self.assertEqual(
+            checks["asset /assets/js/app.js cache policy"]["status"],
+            "BLOCKED",
+        )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_mixed_css_javascript_and_module_reports_stale_module(self) -> None:
@@ -1636,8 +1697,8 @@ import(bareSpecifier);
         self.assertEqual(return_code, 1)
         self.assertEqual(report["status"], "FAILED")
         checks = {item["check"]: item for item in report["checks"]}
-        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "BLOCKED")
-        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/css/theme.css"]["status"], "PASS")
+        self.assertEqual(checks["asset /assets/js/app.js"]["status"], "PASS")
         module_check = checks["asset /assets/js/mermaid-init.js"]
         self.assertEqual(module_check["status"], "FAIL")
         self.assertIn("!= live", module_check["evidence"])
@@ -1652,6 +1713,10 @@ import(bareSpecifier);
         self.assertEqual(
             checks["asset /assets/js/mermaid-init.js content type"]["status"],
             "PASS",
+        )
+        self.assertEqual(
+            checks["asset /assets/js/mermaid-init.js cache policy"]["status"],
+            "BLOCKED",
         )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
@@ -1682,7 +1747,17 @@ import(bareSpecifier);
             )
             fingerprint = hashlib.sha256(local_bytes).hexdigest()[:8]
             self.assertIn(f"{path}?v={fingerprint}", self.last_fixture_requests)
-            self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
+            self.assertEqual(checks[f"asset {path}"]["status"], "PASS")
+            self.assertIn(
+                "MIME ", checks[f"asset {path}"]["evidence"]
+            )
+            self.assertIn(
+                "matches local fingerprint",
+                checks[f"asset {path}"]["evidence"],
+            )
+            self.assertEqual(
+                checks[f"asset {path} cache policy"]["status"], "BLOCKED"
+            )
             self.assertEqual(
                 checks[f"asset {path} content type"]["status"], "PASS"
             )
@@ -1715,8 +1790,8 @@ import(bareSpecifier);
         ]
         self.assertEqual(image_check["status"], "FAIL")
         self.assertIn("!= live", image_check["evidence"])
-        self.assertEqual(checks["asset /assets/fonts/live-edge-fixture.woff2"]["status"], "BLOCKED")
-        self.assertEqual(checks["asset /assets/css/live-edge-fixture.css"]["status"], "BLOCKED")
+        self.assertEqual(checks["asset /assets/fonts/live-edge-fixture.woff2"]["status"], "PASS")
+        self.assertEqual(checks["asset /assets/css/live-edge-fixture.css"]["status"], "PASS")
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_wrong_css_content_type_fails_with_explicit_mime_evidence(self) -> None:
@@ -1765,7 +1840,7 @@ import(bareSpecifier);
                 self.assertIn(content_type, content_type_check["evidence"])
                 self.assertIn("application/javascript", content_type_check["evidence"])
                 self.assertIn("text/javascript", content_type_check["evidence"])
-                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "FAIL")
                 self.assertNotIn("asset /assets/js/app.js", checks)
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
@@ -1801,7 +1876,7 @@ import(bareSpecifier);
                         content_type_check["accepted_content_types"],
                         sorted(accepted_types[kind]),
                     )
-                    self.assertEqual(checks[f"asset {path}"]["status"], "BLOCKED")
+                    self.assertEqual(checks[f"asset {path}"]["status"], "FAIL")
 
                     for unaffected_kind, unaffected_path in asset_paths.items():
                         if unaffected_kind == kind:
@@ -1831,7 +1906,11 @@ import(bareSpecifier);
                     "asset /assets/js/mermaid-init.js content type"
                 ]
                 self.assertEqual(content_type_check["status"], "PASS")
-                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "BLOCKED")
+                self.assertEqual(checks["asset /assets/js/mermaid-init.js"]["status"], "PASS")
+                self.assertEqual(
+                    checks["asset /assets/js/mermaid-init.js cache policy"]["status"],
+                    "BLOCKED",
+                )
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
     def test_javascript_content_type_with_parameters_is_accepted(self) -> None:
@@ -1852,7 +1931,7 @@ import(bareSpecifier);
                     "asset /assets/js/app.js content type"
                 ]
                 self.assertEqual(content_type_check["status"], "PASS")
-                self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+                self.assertEqual(checks["asset /assets/js/app.js"]["status"], "PASS")
                 self.assertEqual(
                     checks["JavaScript imports /assets/js/app.js"]["status"],
                     "BLOCKED",

@@ -340,6 +340,25 @@ def check_asset_content_type(
     return True
 
 
+def check_asset_cache_policy(
+    report: list[dict[str, Any]],
+    path: str,
+    response: dict[str, Any],
+    hosting: str,
+) -> None:
+    """Report asset cache policy separately from asset integrity."""
+    cache = response["headers"].get("cache-control", "")
+    passed = bool(IMMUTABLE_RE.search(cache)) and bool(
+        re.search(r"max-age=(?:[0-9]{8,}|31536000)\b", cache, re.I)
+    )
+    status = "PASS" if passed else "FAIL"
+    evidence = cache or "Cache-Control absent"
+    if hosting == "github-pages":
+        status = "BLOCKED"
+        evidence = GITHUB_PAGES_POLICY_NOTE
+    report.append(result(f"asset {path} cache policy", status, evidence))
+
+
 def check_first_party_content_type(
     report: list[dict[str, Any]], path: str, response: dict[str, Any]
 ) -> bool:
@@ -1684,6 +1703,7 @@ def main() -> int:
                 js_source_bytes += len(response.get("body", b""))
             mime_ok = True
             if response.get("ok") and response.get("status") == 200:
+                check_asset_cache_policy(report, path, response, args.hosting)
                 mime_ok = check_asset_content_type(report, path, response)
                 if suffix == ".css":
                     css_body = response["body"].decode("utf-8", errors="replace")
@@ -1772,11 +1792,17 @@ def main() -> int:
                                 )
                             )
                         else:
+                            mime_evidence = (
+                                f"MIME {response['headers'].get('content-type', '')!r} accepted; "
+                                if mime_ok
+                                else f"MIME {response['headers'].get('content-type', '')!r} is not accepted; "
+                            )
                             report.append(
                                 result(
                                     f"asset {path}",
-                                    "PASS",
-                                    f"HTTP 200; SHA-256 {local_sha256[:12]} matches local module",
+                                    "PASS" if mime_ok else "FAIL",
+                                    f"HTTP 200; {mime_evidence}SHA-256 "
+                                    f"{local_sha256[:12]} matches local module",
                                 )
                             )
                 continue
@@ -1798,12 +1824,26 @@ def main() -> int:
                         )
                     )
                     continue
-                cache = response["headers"].get("cache-control", "")
-                passed = bool(IMMUTABLE_RE.search(cache)) and bool(re.search(r"max-age=(?:[0-9]{8,}|31536000)\b", cache, re.I))
-                asset_status = "PASS" if passed else "FAIL"
-                if args.hosting == "github-pages":
-                    asset_status = "BLOCKED"
-                report.append(result(f"asset {path}", asset_status, GITHUB_PAGES_POLICY_NOTE if args.hosting == "github-pages" else f"HTTP 200; {cache or 'Cache-Control absent'}"))
+                mime_evidence = (
+                    f"MIME {response['headers'].get('content-type', '')!r} accepted"
+                    if mime_ok
+                    else f"MIME {response['headers'].get('content-type', '')!r} is not accepted"
+                )
+                local_evidence = (
+                    f"local fingerprint {expected_hash}"
+                    if expected_hash
+                    else "local fingerprint unavailable"
+                )
+                integrity_status = "PASS" if mime_ok else "FAIL"
+                report.append(
+                    result(
+                        f"asset {path}",
+                        integrity_status,
+                        f"HTTP 200; {mime_evidence}; URL fingerprint "
+                        f"{fingerprint.group(1).lower()} matches {local_evidence} "
+                        f"and live bytes {remote_hash}",
+                    )
+                )
 
     # Resolve provenance after traversal so a later-discovered route or importer
     # is retained even when the shared asset has already been fetched and scanned.
