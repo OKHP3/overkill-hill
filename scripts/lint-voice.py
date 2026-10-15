@@ -64,6 +64,28 @@ VOICE_LOCALE_PATTERNS: dict[str, list[tuple[str, re.Pattern[str], str]]] = {
 }
 
 
+def locale_rule_fingerprint(locale: str) -> str:
+    """Return a stable fingerprint for one locale's ordered editorial rules."""
+    if locale not in VOICE_LOCALE_PATTERNS:
+        raise ValueError(f"unsupported voice locale: {locale}")
+    rules = [
+        {
+            "label": label,
+            "pattern": pattern.pattern,
+            "flags": pattern.flags,
+            "suggestion": suggestion,
+        }
+        for label, pattern, suggestion in VOICE_LOCALE_PATTERNS[locale]
+    ]
+    profile = json.dumps(
+        {"locale": locale, "rules": rules},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(profile.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class VoiceFinding:
     """One advisory voice finding with a stable, content-based identity."""
@@ -332,11 +354,39 @@ def load_baseline(path: Path) -> Counter[str]:
 
 
 def load_locale_baselines(path: Path) -> dict[str, Counter[str]]:
-    """Load independent locale warning counts from the reviewed baseline."""
+    """Load locale counts only when their reviewed rule profiles still match."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"cannot read baseline {path}: {error}") from error
+
+    raw_fingerprints = data.get("locale_rule_fingerprints")
+    if (
+        not isinstance(raw_fingerprints, dict)
+        or set(raw_fingerprints) != set(VOICE_LOCALE_PATTERNS)
+    ):
+        raise ValueError(
+            f"baseline {path} must contain rule fingerprints for "
+            f"{', '.join(sorted(VOICE_LOCALE_PATTERNS))}; review and regenerate "
+            "the locale baseline"
+        )
+    for locale in sorted(VOICE_LOCALE_PATTERNS):
+        baseline_fingerprint = raw_fingerprints[locale]
+        if not isinstance(baseline_fingerprint, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", baseline_fingerprint
+        ):
+            raise ValueError(
+                f"baseline {path} has an invalid {locale} locale rule fingerprint"
+            )
+        current_fingerprint = locale_rule_fingerprint(locale)
+        if baseline_fingerprint != current_fingerprint:
+            raise ValueError(
+                f"locale rule profile for {locale} has changed "
+                f"(baseline fingerprint {baseline_fingerprint}, current "
+                f"{current_fingerprint}); review the locale findings and "
+                "regenerate the locale baseline"
+            )
+
     raw_locales = data.get("locale_finding_counts")
     if not isinstance(raw_locales, dict) or set(raw_locales) != set(VOICE_LOCALE_PATTERNS):
         raise ValueError(
@@ -367,6 +417,10 @@ def write_baseline(
         "schema_version": 1,
         "generated_by": "python3 scripts/lint-voice.py --write-baseline",
         "finding_counts": dict(sorted(counts.items())),
+        "locale_rule_fingerprints": {
+            locale: locale_rule_fingerprint(locale)
+            for locale in sorted(VOICE_LOCALE_PATTERNS)
+        },
         "locale_finding_counts": {
             locale: dict(sorted(Counter(
                 finding.identity for finding in (locale_findings or {}).get(locale, [])

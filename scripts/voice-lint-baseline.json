@@ -42,6 +42,10 @@
     "f5d5012f34d0068b1abc2f46dc85c6adbd1b7c7d58a212aa1ef1b450214a5558": 1,
     "fa8a3bb54cfd967be518db2d0b2e7ad20bbd71c410f1e040ca0928f1f5fd2035": 1
   },
+  "locale_rule_fingerprints": {
+    "en-gb": "593bbb754bd4e45fa365b568f5a10cd71565471f318a11405f0561ce76a4ab8f",
+    "es-mx": "7b8f4fdb48d79949142a0e1a2806c6b1a121ba98ba01cb3c6590f7673a0226a0"
+  },
   "locale_finding_counts": {
     "en-gb": {},
     "es-mx": {}

@@ -595,6 +595,16 @@ class PublicPageBoundaryTests(unittest.TestCase):
                         en_us_findings,
                         {"en-gb": en_gb_findings, "es-mx": es_mx_findings},
                     )
+                    written_baseline = json.loads(
+                        baseline_path.read_text(encoding="utf-8")
+                    )
+                    self.assertEqual(
+                        written_baseline["locale_rule_fingerprints"],
+                        {
+                            locale: voice.locale_rule_fingerprint(locale)
+                            for locale in ("en-gb", "es-mx")
+                        },
+                    )
                     self.assertEqual(
                         voice.load_baseline(baseline_path),
                         Counter(finding.identity for finding in en_us_findings),
@@ -606,6 +616,29 @@ class PublicPageBoundaryTests(unittest.TestCase):
                             "es-mx": Counter(f.identity for f in es_mx_findings),
                         },
                     )
+                    changed_en_gb_rules = [
+                        *voice.VOICE_LOCALE_PATTERNS["en-gb"],
+                        (
+                            "US spelling: analyze",
+                            re.compile(r"\banalyze\b", re.IGNORECASE),
+                            "use 'analyse'",
+                        ),
+                    ]
+                    with patch.dict(
+                        voice.VOICE_LOCALE_PATTERNS,
+                        {"en-gb": changed_en_gb_rules},
+                    ):
+                        # en-US remains readable independently of locale rule
+                        # changes; only the locale baseline is invalidated.
+                        self.assertEqual(
+                            voice.load_baseline(baseline_path),
+                            Counter(finding.identity for finding in en_us_findings),
+                        )
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            r"locale rule profile for en-gb has changed",
+                        ):
+                            voice.load_locale_baselines(baseline_path)
 
         baseline_path = SCRIPTS / "voice-lint-baseline.json"
         self.assertEqual(
