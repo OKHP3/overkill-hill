@@ -55,6 +55,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
         manifest_commit: str = "a" * 40,
         manifest_body: bytes | None = None,
         manifest_content_type: str | None = "application/json",
+        hosting: str = "github-pages",
         hosting_headers: dict[str, str] | None = None,
         asset_fingerprint: str | None = None,
         asset_fingerprints: dict[str, str] | None = None,
@@ -285,7 +286,13 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             if manifest_content_type is not None
             else {}
         )
-        sitemap_headers = {"cache-control": "max-age=600"}
+        sitemap_headers = {
+            "cache-control": (
+                "max-age=300, must-revalidate"
+                if hosting == "strict"
+                else "max-age=600"
+            )
+        }
         if sitemap_content_type is not None:
             sitemap_headers["content-type"] = sitemap_content_type
         search_index_headers = {"cache-control": "max-age=300"}
@@ -441,6 +448,19 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                         "error": "HTTP Error 404: Not Found",
                     }
                 raise AssertionError(f"fixture did not define a response for {path}") from exc
+            if hosting == "strict":
+                response["headers"] = {
+                    **verify_live_edge.SECURITY_HEADERS,
+                    "content-security-policy": "default-src 'self'",
+                    **response["headers"],
+                }
+                if (
+                    response_key.startswith("/assets/")
+                    and response_key != "/assets/data/search-index.json"
+                ):
+                    response["headers"]["cache-control"] = (
+                        "max-age=31536000, immutable"
+                    )
             if max_bytes is not None:
                 body = response["body"]
                 response["truncated"] = len(body) > max_bytes
@@ -452,7 +472,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             "--base",
             "https://fixture.example",
             "--hosting",
-            "github-pages",
+            hosting,
             "--accept-blocked",
         ]
         if expected_commit:
@@ -1770,6 +1790,34 @@ import(bareSpecifier);
             ]
         )
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
+    def test_healthy_mixed_css_javascript_and_module_passes_strict_cache_policy(self) -> None:
+        asset_paths = (
+            "/assets/css/theme.css",
+            "/assets/js/app.js",
+            "/assets/js/mermaid-init.js",
+        )
+        return_code, report = self.run_live_edge_fixture(
+            hosting="strict",
+            hosting_headers={
+                "cache-control": "max-age=300, must-revalidate",
+            },
+            asset_kinds=("css", "js", "module"),
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "PARTIAL")
+        self.assertEqual(report["summary"]["failures"], 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        for path in asset_paths:
+            self.assertEqual(checks[f"asset {path}"]["status"], "PASS")
+            self.assertEqual(
+                checks[f"asset {path} content type"]["status"], "PASS"
+            )
+            self.assertEqual(
+                checks[f"asset {path} cache policy"]["status"], "PASS"
+            )
+        self.assertEqual(checks["route / cache policy"]["status"], "PASS")
 
     def test_css_dependency_stale_body_only_changes_selected_asset(self) -> None:
         image_bytes = verify_live_edge.canonical_text_bytes(
