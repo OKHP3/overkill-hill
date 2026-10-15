@@ -62,6 +62,9 @@ validation workflow changes.
 - `assets/js/app.js` provides shared browser interactions, including
   navigation, theme switching, scroll behavior, and site search.
   `mermaid-init.js` is used on pages that render Mermaid diagrams.
+  BrandGuard-only font registration uses `assets/js/brandguard-fonts.js` and
+  the local font/license companions recorded in `assets/fonts/brandguard-provenance.json`.
+  Ordinary pages do not import the catalog; late initialization retains fallback.
 - `scripts/sync-universe-map.py` generates universe navigation from the search
   index using `.agents/skills/okhp3-universe-map/`. Default index writes refresh
   the universe source and published HTML; CI verifies rendering and freshness.
@@ -664,7 +667,7 @@ baseline -- update it here when the inventory changes materially.
 |---|---|---|
 | `assets/audit/` | `.gitkeep` plus `screenshots/canvas/` with two retained visual-QA captures | Populate by running `scripts/validate-site.py`, `check-links.py`, `viewport-qa.py`; retained screenshots are visual-QA evidence |
 | `assets/css/` | `theme.css` (136 KB) | Single canonical stylesheet |
-| `assets/fonts/` | Eleven self-hosted WOFF2 subsets, three upstream OFL license texts, provenance metadata | Alfa Slab One 400; DM Sans and JetBrains Mono variable weights. Release includes font and license files; see `assets/fonts/font-provenance.md`. |
+| `assets/fonts/` | Twenty-eight self-hosted WOFF2 subsets, six upstream OFL license texts, provenance metadata | Canonical OKH: Alfa Slab One, DM Sans and JetBrains Mono. Seventeen additional subsets serve BrandGuard-only Baloo 2, Open Sans and Kalam aliases. Release includes font and license files; see `assets/fonts/font-provenance.md`. |
 | `assets/data/` | Generated search and runtime data | Rebuild with the owning script and verify with its `--check` mode |
 | `assets/downloads/` | `okh-prompt-protocol-template.md` | User-facing prompt protocol download |
 | `assets/docs/` | `.gitkeep` only | Add audit and evaluation reports here |

@@ -375,6 +375,19 @@ class VerifyLiveEdgeTests(unittest.TestCase):
                 "body": font.read_bytes(),
             })
 
+        # The real shared runtime now imports this scoped companion. Serve its
+        # real bytes so the synthetic edge retains MIME, hash and import checks.
+        catalog_path = "/assets/js/brandguard-fonts.js"
+        if catalog_path not in javascript_missing_paths:
+            catalog_headers = {"cache-control": "max-age=600"}
+            catalog_type = javascript_module_content_types.get(catalog_path, "text/javascript")
+            if catalog_type is not None:
+                catalog_headers["content-type"] = catalog_type
+            responses.setdefault(catalog_path, {
+                "ok": True, "status": 200, "headers": catalog_headers,
+                "body": (ROOT / catalog_path.lstrip("/")).read_bytes(),
+            })
+
         if "module" in all_kinds and not javascript_modules:
             for module_file in (ROOT / "assets/vendor/mermaid").rglob("*.mjs"):
                 responses.setdefault(
@@ -934,6 +947,32 @@ import(bareSpecifier);
         stale_check = checks["asset /assets/js/stale.mjs"]
         self.assertEqual(stale_check["status"], "FAIL")
         self.assertIn("!= live", stale_check["evidence"])
+
+    def test_shared_runtime_font_catalog_is_verified_as_a_real_dependency(self) -> None:
+        return_code, report = self.run_live_edge_fixture(asset_kind="js")
+        self.assertEqual(return_code, 0)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/js/brandguard-fonts.js content type"]["status"], "PASS")
+        self.assertEqual(checks["asset /assets/js/brandguard-fonts.js"]["status"], "PASS")
+        self.assertEqual(self.last_fixture_requests["/assets/js/brandguard-fonts.js"], 1)
+
+    def test_stale_font_catalog_is_rejected(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="js",
+            javascript_response_overrides={"/assets/js/brandguard-fonts.js": b"/* stale catalog */\n"},
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/js/brandguard-fonts.js"]["status"], "FAIL")
+        self.assertIn("differs from local", checks["asset /assets/js/brandguard-fonts.js"]["evidence"])
+
+    def test_missing_font_catalog_is_rejected(self) -> None:
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="js", javascript_missing_paths={"/assets/js/brandguard-fonts.js"},
+        )
+        self.assertEqual(return_code, 1)
+        checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["asset /assets/js/brandguard-fonts.js"]["status"], "FAIL")
 
     def test_real_mermaid_vendor_dependency_bad_bytes_fail_while_pages_cache_is_blocked(self) -> None:
         vendor_path = "/assets/vendor/mermaid/mermaid.esm.min.mjs"
