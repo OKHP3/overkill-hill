@@ -8767,11 +8767,16 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
   }
 }
 
-/* Keep the Coca-Cola explanation at the canonical type size and tracking.
-   This prevents an extra enlarged-text wrap change when Kalam loads. */
-@media (min-width: 350px) and (max-width: 359px) {
+/* Keep the Coca-Cola title and explanation at their canonical type sizes.
+   Reserve the observed seven-line fallback subtitle while fonts arrive. */
+@media (min-width: 350px) and (max-width: 370px) {
+  .askjamie-main.coke-brandguard .askjamie-hero-copy h1 {
+    font-size: 2.2rem;
+    letter-spacing: normal;
+  }
   .askjamie-main.coke-brandguard .askjamie-hero-copy .hero-subtitle {
     font-size: 1.02rem;
     letter-spacing: 0.01em;
+    min-height: 7lh;
   }
 }
