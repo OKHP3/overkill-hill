@@ -63,7 +63,7 @@ GITHUB_PAGES_ACCEPTED_LIMITATIONS = {
 HTML_CACHE_RE = re.compile(r"max-age=300\b", re.I)
 REVALIDATE_RE = re.compile(r"\bmust-revalidate\b", re.I)
 IMMUTABLE_RE = re.compile(r"\bimmutable\b", re.I)
-FINGERPRINT_RE = re.compile(r"(?:^|&)v=([0-9a-f]{8})(?:&|$)", re.I)
+FINGERPRINT_VALUE_RE = re.compile(r"([0-9a-f]{8})", re.I)
 COMMIT_RE = re.compile(r"[0-9a-f]{40}", re.I)
 ASSET_CONTENT_TYPES = {
     ".css": frozenset({"text/css"}),
@@ -1588,8 +1588,28 @@ def main() -> int:
         for asset_url in pending_assets:
             checked_assets.add(asset_url)
             parsed = urllib.parse.urlparse(asset_url)
-            fingerprint = FINGERPRINT_RE.search(parsed.query)
+            fingerprint_values = [
+                value
+                for name, value in urllib.parse.parse_qsl(
+                    parsed.query, keep_blank_values=True
+                )
+                if name == "v"
+            ]
             path = parsed.path
+            if len(fingerprint_values) > 1:
+                report.append(
+                    result(
+                        f"asset {path}",
+                        "FAIL",
+                        "duplicate v= fingerprint parameters make the asset URL ambiguous",
+                    )
+                )
+                continue
+            fingerprint = (
+                FINGERPRINT_VALUE_RE.fullmatch(fingerprint_values[0])
+                if fingerprint_values
+                else None
+            )
             local_path = ROOT / path.lstrip("/")
             expected_hash = (
                 hashlib.sha256(canonical_text_bytes(local_path)).hexdigest()[:8]

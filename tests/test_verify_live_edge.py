@@ -1187,6 +1187,38 @@ import(bareSpecifier);
         self.assertIn("!= local", asset_check["evidence"])
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_duplicate_asset_fingerprint_parameters_fail_explicitly(self) -> None:
+        css_bytes = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        fingerprint = hashlib.sha256(css_bytes).hexdigest()[:8]
+        conflicting_fingerprint = (
+            "00000000" if fingerprint != "00000000" else "00000001"
+        )
+        duplicate_cases = (
+            ("identical", f"v={fingerprint}"),
+            ("conflicting", f"v={conflicting_fingerprint}"),
+        )
+
+        for duplicate_kind, duplicate_parameter in duplicate_cases:
+            with self.subTest(duplicate_kind=duplicate_kind):
+                return_code, report = self.run_live_edge_fixture(
+                    asset_query_before_fingerprint=duplicate_parameter,
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                asset_check = checks["asset /assets/css/theme.css"]
+                self.assertEqual(asset_check["status"], "FAIL")
+                self.assertIn("duplicate v= fingerprint parameters", asset_check["evidence"])
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+                self.assertFalse(
+                    any(
+                        path.startswith("/assets/css/theme.css?")
+                        for path in self.last_fixture_requests
+                    ),
+                    "ambiguous asset URLs should be rejected before fetching",
+                )
+
     def test_unrelated_query_options_before_and_after_asset_fingerprint(self) -> None:
         for query_position, fixture_options in (
             ("before", {"asset_query_before_fingerprint": "mode=dark"}),
