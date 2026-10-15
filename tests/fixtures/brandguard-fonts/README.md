@@ -1,15 +1,16 @@
 # BrandGuard font replay fixtures
 
-These test-only files are excluded from the site release. They reproduce the
+This test-only manifest and cached stylesheet are excluded from the site release.
+They replay the local font assets under `assets/fonts/` and reproduce the
 fonts declared by the native AskJamie BrandGuard pages at immutable revision
 `7d719683bf1fe416be4c2aba9cb676146268be04`. `manifest.json` records every URL
 and byte hash. The CSS was retrieved October 15, 2026 with a Chromium user
 agent; the returned WOFF2 subsets retain their upstream family names, weights
-and Unicode ranges. Each family retains its upstream OFL license here.
+and Unicode ranges. Each family retains its upstream OFL license with the local assets.
 
 The candidate CSS uses separate family aliases and `font-display: optional`
-only on BrandGuard pages, including native deferred-font activation. It uses the
-same font URLs. Other brands and ordinary AskJamie pages keep their font
+only on BrandGuard pages, including native deferred-font activation. It uses local copies of the
+same font bytes, without adding a remote font requirement to the shared CSS. Other brands and ordinary AskJamie pages keep their font
 policy. Fast fonts may render the canonical brand faces; late fonts retain
 the readable fallback for that page visit. This deliberately removes a late
 font swap instead of trying to predict line counts with narrow pixel bands.

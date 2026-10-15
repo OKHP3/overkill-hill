@@ -7,7 +7,7 @@ viewport bands, smaller type and tighter tracking. The remaining movement
 reached downstream quotations and changed again when text was enlarged.
 
 The revision replaces those bands with scoped aliases for the same Baloo 2,
-Open Sans and Kalam font sources, using `font-display: optional`. Available
+Open Sans and Kalam font bytes, using local delivery and `font-display: optional`. Available
 fonts may render the brand faces; a font that misses the first-paint deadline
 leaves readable fallback text for that page visit. It does not hide content
 while waiting or switch families after the reader starts reading. Ordinary
@@ -25,8 +25,10 @@ stylesheet activation is outside the font-arrival acceptance claim.
 `tests/test-brandguard-font-browser.mjs` reads all 14 native BrandGuard routes
 from frozen AskJamie revision `7d719683bf1fe416be4c2aba9cb676146268be04`.
 Candidate foundation bytes are projected in memory; the sibling checkout is
-not rewritten. Font responses use byte-verified, licensed test-only fixtures.
-The native CSP remains active.
+not rewritten. Font responses use the byte-verified local assets and their retained OFL licenses.
+The native CSP remains active. A separate four-case boundary gate verifies
+that ordinary OKH, Glee and AskJamie pages do not request the BrandGuard faces
+and that all declarations respect a self-only font policy.
 
 The matrix has 448 states: Chromium and WebKit; 320, 360, 390, 401 and 900px;
 16px and 32px root sizes; delayed fonts throughout, plus immediate, failed and

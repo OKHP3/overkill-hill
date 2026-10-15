@@ -20,16 +20,18 @@ function native(file) {
 }
 const fonts = new Map();
 for (const [url, entry] of Object.entries(manifest.files)) {
-  const body = await readFile(path.join(fixtures, entry.file));
+  const body = await readFile(path.join(entry.asset ? path.join(root, 'assets/fonts') : fixtures, entry.file));
   assert.equal(createHash('sha256').update(body).digest('hex'), entry.sha256, `font fixture integrity: ${entry.file}`);
   fonts.set(url, { body, contentType: entry.type });
+  if (entry.asset) fonts.set(`https://brandguard.test/assets/fonts/${entry.file}`, { body, contentType: entry.type });
 }
 const css = await readFile(process.env.BRANDGUARD_TEST_CSS || path.join(root, 'assets/css/theme.css'));
 const readyFaces = [...css.toString().matchAll(/@font-face\s*\{([^}]+)\}/g)].flatMap(([, block]) => {
-  const family = block.match(/font-family:\s*'([^']+)'/), url = block.match(/url\((https[^)]+)\)/);
+  const family = block.match(/font-family:\s*'([^']+)'/), url = block.match(/url\(([^)]+)\)/);
   if (!family?.[1].startsWith('BrandGuard ') || !url) return [];
-  assert.ok(fonts.has(url[1]), `candidate font source has no integrity-checked fixture: ${url[1]}`);
-  return [{ family: family[1], bytes: fonts.get(url[1]).body.toString('base64'),
+  const sourceUrl = new URL(url[1], 'https://brandguard.test').href;
+  assert.ok(fonts.has(sourceUrl), `candidate font source has no integrity-checked fixture: ${url[1]}`);
+  return [{ family: family[1], bytes: fonts.get(sourceUrl).body.toString('base64'),
     weight: block.match(/font-weight:\s*([^;]+)/)[1], unicodeRange: block.match(/unicode-range:\s*([^;]+)/)?.[1] }];
 });
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json' };
@@ -68,7 +70,7 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
             return route.fulfill({ contentType: entry.contentType, body: entry.body.toString().replaceAll('font-display: swap', 'font-display: fallback') });
           }
           if (fonts.has(u.href)) {
-            if (u.hostname === 'fonts.gstatic.com') {
+            if (u.hostname === 'fonts.gstatic.com' || u.pathname.startsWith('/assets/fonts/brandguard-')) {
               requests.push(u.href);
               if (mode === 'failed') return route.abort();
               if (!released) await new Promise(resolve => pending.push(resolve));

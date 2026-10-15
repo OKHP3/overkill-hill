@@ -1,0 +1,112 @@
+{
+  "source_css": "https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Open+Sans:wght@400;600&family=Kalam:wght@400&display=swap",
+  "retrieved": "2026-10-15",
+  "scope": "AskJamie BrandGuard only; existing families and font bytes, optional local delivery",
+  "files": [
+    {
+      "file": "brandguard-baloo-2-devanagari.woff2",
+      "sha256": "553cb078f5c5ea1c80a013ca273ba33ff4fd089c91fe99d3c0e84cd4e15914ee",
+      "source": "https://fonts.gstatic.com/s/baloo2/v23/wXKrE3kTposypRyd51ncAM4olXcLtA.woff2"
+    },
+    {
+      "file": "brandguard-baloo-2-vietnamese.woff2",
+      "sha256": "c802450781f0420d12d7655dcd3d4ee30130f444e4dd6ba6d039686b69d0798e",
+      "source": "https://fonts.gstatic.com/s/baloo2/v23/wXKrE3kTposypRyd51fcAM4olXcLtA.woff2"
+    },
+    {
+      "file": "brandguard-baloo-2-latin-ext.woff2",
+      "sha256": "77f82a2cdec619cea53db60cf87ff74a195304e589617fbb3bbdf5c566669ee1",
+      "source": "https://fonts.gstatic.com/s/baloo2/v23/wXKrE3kTposypRyd51bcAM4olXcLtA.woff2"
+    },
+    {
+      "file": "brandguard-baloo-2-latin.woff2",
+      "sha256": "2e9420db49d01d76a7b8a38ef22ec9c45305d9f15fafa370389b7bf467658fc3",
+      "source": "https://fonts.gstatic.com/s/baloo2/v23/wXKrE3kTposypRyd51jcAM4olXc.woff2"
+    },
+    {
+      "file": "brandguard-kalam-devanagari.woff2",
+      "sha256": "2e8e8d463f7877c5725d45735f52b720a2808bf3b9aebcd50b4b95a588bb763d",
+      "source": "https://fonts.gstatic.com/s/kalam/v18/YA9dr0Wd4kDdMthQOCfhsCkAj7g.woff2"
+    },
+    {
+      "file": "brandguard-kalam-latin-ext.woff2",
+      "sha256": "409a1c973bba365895b897c14604383b7e3df4e400f43dfb07af64a77e973232",
+      "source": "https://fonts.gstatic.com/s/kalam/v18/YA9dr0Wd4kDdMthfOCfhsCkAj7g.woff2"
+    },
+    {
+      "file": "brandguard-kalam-latin.woff2",
+      "sha256": "257f0129d54c60cda0f8856ad1de05e760a219c9365fb19cd50b0cc8fdb2c9d1",
+      "source": "https://fonts.gstatic.com/s/kalam/v18/YA9dr0Wd4kDdMthROCfhsCkA.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-cyrillic-ext.woff2",
+      "sha256": "d0edd1c6d7e0e0cd8b9146888db311e0472e09be88faf70bb01ad57e17316551",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSKmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-cyrillic.woff2",
+      "sha256": "01978402fabbdca7d046ebda60da8bae6ea9b5420e58af6350bcbeffc74af097",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSumu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-greek-ext.woff2",
+      "sha256": "d68a324be8ffcb8b21734398f8419885b526a3cc8443786dcdacff5fb0560727",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSOmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-greek.woff2",
+      "sha256": "206b8987ebc5510c1f3add37d9dd1f308559224fa9b45805d024eebf7425e90c",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSymu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-hebrew.woff2",
+      "sha256": "3e8f4b311fef0dc52856f9bee03af7ef4f8bdaa26e4bfb8a0a766b79e5351bc4",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS2mu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-math.woff2",
+      "sha256": "4f0cad5800eed7600b524be7d5b99a5510a792ba8f83427a4a2c553fc49164ec",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTVOmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-symbols.woff2",
+      "sha256": "c9d43888d70004923f98079bd0e68cabec6275d22829ef4fe9c12a71b4c336a4",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTUGmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-vietnamese.woff2",
+      "sha256": "f49cd0972b92df6ad4d34589333df653d9fcedcf3ecb71cf8191441b4e1a6081",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSCmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-latin-ext.woff2",
+      "sha256": "2d4c25a2a206d16537302b054f6a3b847ff79175207963a5fed6e12af26dd8e0",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTSGmu0SC55K5gw.woff2"
+    },
+    {
+      "file": "brandguard-open-sans-latin.woff2",
+      "sha256": "441af0def989ebfdbd6ad85ffaed85e967ab21a05f1dd342f16259464a206dd0",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memvYaGs126MiZpBA-UvWbX2vVnXBbObj2OVTS-mu0SC55I.woff2"
+    }
+  ],
+  "licenses": [
+    {
+      "file": "brandguard-baloo-2-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/baloo2/OFL.txt",
+      "sha256": "ad09b05dc8bc678c9daf7c4c5f7ef1f55e5726127f4330b2e98e40b9dffcb860",
+      "asset": true
+    },
+    {
+      "file": "brandguard-kalam-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/kalam/OFL.txt",
+      "sha256": "f62ef357d3a1c3d27edd35a6e1ba350e8a8d13499797964eeadefbf0b3b15d1f",
+      "asset": true
+    },
+    {
+      "file": "brandguard-open-sans-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/OFL.txt",
+      "sha256": "fbbbcfef55318de350562559b671360de6d597112ecc5c73881b05092db89602",
+      "asset": true
+    }
+  ]
+}
