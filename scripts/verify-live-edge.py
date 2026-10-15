@@ -1253,6 +1253,24 @@ def check_hosting_path(
         )
 
 
+class DuplicateReleaseManifestKeyError(ValueError):
+    """Raised when a release manifest contains a repeated JSON object key."""
+
+
+def reject_duplicate_release_manifest_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    """Build a JSON object only when its keys are unique."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateReleaseManifestKeyError(
+                f"duplicate JSON key {key!r}"
+            )
+        result[key] = value
+    return result
+
+
 def check_release_manifest(
     report: list[dict[str, Any]],
     base: str,
@@ -1276,7 +1294,13 @@ def check_release_manifest(
         return
 
     try:
-        manifest = json.loads(response["body"])
+        manifest = json.loads(
+            response["body"],
+            object_pairs_hook=reject_duplicate_release_manifest_keys,
+        )
+    except DuplicateReleaseManifestKeyError as exc:
+        report.append(result(label, "FAIL", f"{exc} in release manifest"))
+        return
     except (ValueError, UnicodeDecodeError) as exc:
         report.append(result(label, "FAIL", f"invalid JSON: {exc}"))
         return

@@ -1379,6 +1379,45 @@ import(bareSpecifier);
         self.assertFalse(any(name.startswith("release manifest /") for name in checks))
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_duplicate_release_manifest_keys_fail_before_artifact_comparison(self) -> None:
+        duplicate_manifests = {
+            "commit": (
+                b'{"commit":"' + b"a" * 40 + b'","commit":"' + b"a" * 40
+                + b'","artifacts":{}}'
+            ),
+            "artifacts": (
+                b'{"commit":"' + b"a" * 40
+                + b'","artifacts":{},"artifacts":{}}'
+            ),
+        }
+
+        for duplicate_key, manifest_body in duplicate_manifests.items():
+            with self.subTest(duplicate_key=duplicate_key):
+                return_code, report = self.run_live_edge_fixture(
+                    expected_commit="a" * 40,
+                    manifest_body=manifest_body,
+                    manifest_content_type="application/json",
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                self.assertEqual(
+                    checks["release manifest content type"]["status"], "PASS"
+                )
+                release_manifest = checks["release manifest"]
+                self.assertEqual(release_manifest["status"], "FAIL")
+                self.assertIn(
+                    f"duplicate JSON key '{duplicate_key}' in release manifest",
+                    release_manifest["evidence"],
+                )
+                self.assertNotIn("expected validated commit", release_manifest["evidence"])
+                self.assertNotIn("SHA-256", release_manifest["evidence"])
+                self.assertFalse(
+                    any(name.startswith("release manifest /") for name in checks)
+                )
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_non_object_release_manifest_json_fails_before_artifact_comparison(self) -> None:
         return_code, report = self.run_live_edge_fixture(
             expected_commit="b" * 40,
