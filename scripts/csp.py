@@ -139,6 +139,7 @@ def all_pages() -> list[Path]:
 
         root = ROOT.resolve()
         errors: list[str] = []
+        public_routes: dict[str, int] = {}
         for index, page in enumerate(pages, start=1):
             if not isinstance(page, dict):
                 errors.append(
@@ -205,7 +206,16 @@ def all_pages() -> list[Path]:
             # Validate declared evidence paths too, then deliberately leave
             # them out of the CSP inventory through the shared boundary.
             if is_public_page_path(candidate, root):
-                names.add(candidate.relative_to(root).as_posix())
+                public_path = candidate.relative_to(root).as_posix()
+                first_entry = public_routes.get(public_path)
+                if first_entry is not None:
+                    errors.append(
+                        f"{manifest_name}: duplicate public route {public_path!r} "
+                        f"in page entries {first_entry} and {index}"
+                    )
+                else:
+                    public_routes[public_path] = index
+                names.add(public_path)
         if errors:
             raise CspPageManifestError("\n".join(errors))
     return sorted(

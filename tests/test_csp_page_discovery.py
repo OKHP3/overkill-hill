@@ -60,6 +60,7 @@ class CspPageDiscoveryTests(unittest.TestCase):
                         "pages": [
                             {"path": "new-story.html"},
                             {"path": "tests/fixtures/declared.html"},
+                            {"path": "tests/fixtures/declared.html"},
                             {"path": "i18n/pilot/es-mx/reviewed/declared.html"},
                         ]
                     }
@@ -167,6 +168,34 @@ class CspPageDiscoveryTests(unittest.TestCase):
             r"outside\.html.*outside or could escape the repository root",
         )
 
+    def test_duplicate_public_route_reports_both_manifest_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / "site-src").mkdir()
+            (root / "new-story.html").write_text("<main>Story</main>", encoding="utf-8")
+            (root / "site-src" / "pages.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {"path": "new-story.html"},
+                            {"path": "new-story.html"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(csp, "ROOT", root), patch.object(
+                csp.subprocess, "run", return_value=SimpleNamespace(stdout="index.html\n")
+            ):
+                with self.assertRaises(csp.CspPageManifestError) as raised:
+                    csp.all_pages()
+
+        self.assertEqual(
+            str(raised.exception),
+            "site-src/pages.json: duplicate public route 'new-story.html' "
+            "in page entries 1 and 2",
+        )
+
     def test_generate_csp_prints_manifest_errors_without_a_traceback(self) -> None:
         generator_path = ROOT / "scripts" / "generate-csp.py"
         generator_spec = importlib.util.spec_from_file_location(
@@ -235,6 +264,52 @@ class CspPageDiscoveryTests(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
             self.assertEqual(policy_file.read_bytes(), policy_bytes)
             self.assertEqual(headers_file.read_bytes(), headers_bytes)
+
+    def test_generate_csp_exits_nonzero_for_duplicate_public_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for filename in ("generate-csp.py", "csp.py", "public_page_boundary.py"):
+                shutil.copy2(ROOT / "scripts" / filename, scripts / filename)
+
+            (root / "site-src").mkdir()
+            (root / "new-story.html").write_text("<main>Story</main>", encoding="utf-8")
+            (root / "site-src" / "pages.json").write_text(
+                json.dumps(
+                    {
+                        "pages": [
+                            {"path": "new-story.html"},
+                            {"path": "new-story.html"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            subprocess.run(
+                ["git", "init", "-q"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            result = subprocess.run(
+                [sys.executable, str(scripts / "generate-csp.py"), "--check"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn(
+            "CSP page manifest error: site-src/pages.json: duplicate public route "
+            "'new-story.html' in page entries 1 and 2",
+            result.stderr,
+        )
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_generate_csp_outside_git_worktree_prints_inventory_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
