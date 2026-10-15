@@ -2345,13 +2345,16 @@ import(bareSpecifier);
 
     def test_data_feed_content_types_with_parameters_are_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(
-            feed_content_type="application/atom+xml; charset=utf-8",
-            sitemap_content_type="application/xml; charset=utf-8",
-            search_index_content_type="application/json; charset=utf-8",
+            manifest_content_type="Application/JSON; Charset=UTF-8",
+            feed_content_type="Application/Atom+XML; Charset=UTF-8",
+            sitemap_content_type="Text/XML; Charset=UTF-8",
+            search_index_content_type="Application/JSON; Charset=UTF-8",
         )
 
         self.assertEqual(return_code, 0)
         checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(checks["release manifest content type"]["status"], "PASS")
+        self.assertEqual(checks["release manifest"]["status"], "PASS")
         self.assertEqual(checks["generated sitemap content type"]["status"], "PASS")
         self.assertEqual(checks["generated search index content type"]["status"], "PASS")
         self.assertEqual(checks["generated Atom feed content type"]["status"], "PASS")
