@@ -8780,3 +8780,19 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
     min-height: 7lh;
   }
 }
+
+/* Keep LEGO's measured phone hero at canonical typography without expanding
+   the correction into the narrower widths that still move downstream copy. */
+@media (min-width: 390px) and (max-width: 400px) {
+  .askjamie-main.brandguard-case-lego .askjamie-hero-copy h1 {
+    font-size: 2.2rem;
+    letter-spacing: normal;
+  }
+  .askjamie-main.brandguard-case-lego .askjamie-hero-copy .hero-subtitle {
+    font-size: 1.02rem;
+    letter-spacing: 0.01em;
+  }
+  .askjamie-main.brandguard-case-lego .askjamie-hero-copy .hero-tagline {
+    letter-spacing: normal;
+  }
+}
