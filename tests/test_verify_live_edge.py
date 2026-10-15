@@ -1437,6 +1437,44 @@ import(bareSpecifier);
         self.assertFalse(any(name.startswith("release manifest /") for name in checks))
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_invalid_release_manifest_artifacts_maps_fail_before_artifact_comparison(self) -> None:
+        valid_commit = "a" * 40
+        invalid_manifests = {
+            "missing": {"commit": valid_commit},
+            "null": {"commit": valid_commit, "artifacts": None},
+            "array": {"commit": valid_commit, "artifacts": []},
+            "string": {"commit": valid_commit, "artifacts": "invalid"},
+        }
+
+        for shape, manifest in invalid_manifests.items():
+            with self.subTest(shape=shape):
+                return_code, report = self.run_live_edge_fixture(
+                    expected_commit=valid_commit,
+                    manifest_body=json.dumps(manifest).encode("utf-8"),
+                    manifest_content_type="application/json",
+                )
+
+                self.assertEqual(return_code, 1)
+                self.assertEqual(report["status"], "FAILED")
+                checks = {item["check"]: item for item in report["checks"]}
+                self.assertEqual(
+                    checks["release manifest content type"]["status"], "PASS"
+                )
+                release_manifest = checks["release manifest"]
+                self.assertEqual(release_manifest["status"], "FAIL")
+                if shape == "missing":
+                    self.assertIn("artifacts map is missing", release_manifest["evidence"])
+                else:
+                    self.assertIn(
+                        "artifacts map must be a JSON object",
+                        release_manifest["evidence"],
+                    )
+                self.assertNotIn("SHA-256", release_manifest["evidence"])
+                self.assertFalse(
+                    any(name.startswith("release manifest /") for name in checks)
+                )
+                self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_wrong_release_manifest_content_type_fails_before_json_parsing(self) -> None:
         for content_type in ("text/html; charset=utf-8", None):
             with self.subTest(content_type=content_type):

@@ -1320,8 +1320,17 @@ def check_release_manifest(
         )
     elif not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
         report.append(result(label, "FAIL", f"malformed deployed commit {commit!r}"))
-    elif not isinstance(artifacts, dict):
+    elif "artifacts" not in manifest:
         report.append(result(label, "FAIL", "artifacts map is missing"))
+    elif not isinstance(artifacts, dict):
+        report.append(
+            result(
+                label,
+                "FAIL",
+                f"artifacts map must be a JSON object, received "
+                f"{type(artifacts).__name__}",
+            )
+        )
     else:
         evidence = (
             f"validated commit {commit}"
