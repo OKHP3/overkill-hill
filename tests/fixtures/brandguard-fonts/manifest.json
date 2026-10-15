@@ -92,5 +92,22 @@
       "sha256": "441af0def989ebfdbd6ad85ffaed85e967ab21a05f1dd342f16259464a206dd0",
       "type": "font/woff2"
     }
-  }
+  },
+  "licenses": [
+    {
+      "file": "baloo2-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/baloo2/OFL.txt",
+      "sha256": "ad09b05dc8bc678c9daf7c4c5f7ef1f55e5726127f4330b2e98e40b9dffcb860"
+    },
+    {
+      "file": "kalam-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/kalam/OFL.txt",
+      "sha256": "f62ef357d3a1c3d27edd35a6e1ba350e8a8d13499797964eeadefbf0b3b15d1f"
+    },
+    {
+      "file": "opensans-license.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/OFL.txt",
+      "sha256": "fbbbcfef55318de350562559b671360de6d597112ecc5c73881b05092db89602"
+    }
+  ]
 }

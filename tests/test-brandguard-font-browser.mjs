@@ -139,8 +139,10 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
             return { overflow: document.documentElement.scrollWidth - innerWidth, position: getComputedStyle(header).position, clipped,
               outsideText: [...new Set(outsideText)].slice(0, 10),
               fontSize: getComputedStyle(document.querySelector('.hero-subtitle')).fontSize,
+              bodyFontSize: getComputedStyle(document.body).fontSize,
               loadedFaces: [...document.fonts].filter(f => f.family.includes('BrandGuard') && f.status === 'loaded').length };
           });
+          assert.ok(parseFloat(state.bodyFontSize) >= size, `${label} body text must actually enlarge`);
           assert.ok(state.overflow <= 1, `${label} horizontal overflow: ${state.overflow}`);
           assert.deepEqual(state.clipped, [], `${label} clipped text containers`);
           assert.deepEqual(state.outsideText, [], `${label} text outside the viewport`);
