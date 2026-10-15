@@ -377,6 +377,40 @@ test("shows a retry when the search index fails, then recovers on retry", async 
   } finally { await browser.close(); }
 });
 
+test("320px keyboard retry preserves search state after an index outage", async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 } });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    const count = await openSearchPage(page, async (route, attempt) => {
+      await route.fulfill(attempt === 1
+        ? { status: 503, contentType: "application/json", body: "{}" }
+        : { contentType: "application/json", body: JSON.stringify({ entries: makeSearchEntries() }) });
+    });
+    const input = page.locator("#search-page-input");
+    const retry = page.getByRole("button", { name: "Retry search index", exact: true });
+    await retry.waitFor();
+    assert.equal(count(), 1);
+    assert.match(await page.locator("#search-stats").innerText(), /failed to load/i);
+    await input.focus();
+    await page.keyboard.press("Tab");
+    assert.equal(await retry.evaluate(el => el === document.activeElement), true);
+    await page.keyboard.press("Enter");
+    await page.locator('#search-results a[href="/project-61/"]').waitFor();
+    assert.equal(count(), 2);
+    assert.equal(await input.inputValue(), "omega");
+    assert.equal(await input.evaluate(el => el === document.activeElement), true);
+    assert.equal(new URL(page.url()).searchParams.get("q"), "omega");
+    assert.equal(new URL(page.url()).searchParams.get("cat"), "Project");
+    assert.equal(await page.locator('#search-categories [data-cat="Project"]').getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator("#search-results .okh-search-result").count(), 20);
+    assert.equal(await retry.count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test("times out a shared stalled index request and both search views recover on retry", async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
