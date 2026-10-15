@@ -136,6 +136,12 @@ def all_pages() -> list[Path]:
             raise CspPageManifestError(
                 f'{manifest_name}: expected a top-level "pages" array'
             )
+        if not pages:
+            raise CspPageManifestError(
+                f'{manifest_name}: "pages" must not be empty. Regenerate the source page '
+                "inventory so generated, untracked routes are included before running CSP "
+                "generation."
+            )
 
         root = ROOT.resolve()
         errors: list[str] = []
