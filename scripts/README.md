@@ -56,8 +56,12 @@ follows the same convention as `askjamie/scripts/README.md`.
 `public_page_boundary.HTML_SCANNER_REGISTRY` is the executable inventory of
 active scripts that discover HTML pages or source-page inputs. The contract
 test detects new top-level scanner patterns, requires each scanner to appear in
-the registry, and checks that the README mirrors the registry. Scripts under
-`scripts/archive/` are historical and intentionally excluded.
+the registry, and checks that the README mirrors the registry. It also checks
+shell `run` commands in active, top-level `.github/workflows/` files for inline
+HTML discovery. Workflows must delegate page discovery to a registered script;
+any deliberate inline exception must be documented and covered by a focused
+test. Nested/archived workflows and non-HTML inventories are excluded.
+Scripts under `scripts/archive/` are historical and intentionally excluded.
 
 | Script | Policy | Scope |
 | --- | --- | --- |

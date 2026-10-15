@@ -41,10 +41,13 @@ def load_script(name: str):
 
 def discovers_html_by_source_pattern(source: str) -> bool:
     """Recognize explicit and dynamically assembled HTML discovery patterns."""
+    source = re.sub(r"\\\s*\n", " ", source)
     direct_discovery = re.compile(
         r"iter_public_html_files|is_public_page_path|"
         r"\.(?:rglob|glob)\s*\(\s*[\"'][^\"']*\.html|"
         r"git\s+ls-files[^\n]*\.html|"
+        r"\bfind\b[^\n]*(?:-iname?\s+[\"'][^\"']*\.html[\"']|\.html\b)|"
+        r"(?:\*\*/)?\*\.html\b|"
         r"\b(?:find|iter)_html_files\s*\(",
         re.IGNORECASE,
     )
@@ -135,6 +138,44 @@ def discovers_html_by_source_pattern(source: str) -> bool:
             or re.search(r"[\"']\.html[\"']", source, re.IGNORECASE)
         )
     )
+
+
+def active_workflow_files(workflows_dir: Path) -> list[Path]:
+    """Return active workflow files, excluding nested archive directories."""
+    return sorted(
+        path
+        for path in Path(workflows_dir).iterdir()
+        if path.is_file() and path.suffix.lower() in {".yml", ".yaml"}
+    )
+
+
+def workflow_run_commands(source: str) -> list[str]:
+    """Extract inline and block-scalar run commands from workflow YAML."""
+    lines = source.splitlines()
+    commands: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^(\s*)(-\s+)?run:\s*(.*)$", lines[index])
+        if not match:
+            index += 1
+            continue
+
+        indent = len(match.group(1)) + len(match.group(2) or "")
+        value = match.group(3).strip()
+        if value in {"|", "|-", "|+", ">", ">-", ">+"}:
+            index += 1
+            block = []
+            while index < len(lines):
+                line = lines[index]
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    break
+                block.append(line)
+                index += 1
+            commands.append("\n".join(block))
+        else:
+            commands.append(value)
+            index += 1
+    return commands
 
 
 class ExternalArchiveRetryTests(unittest.TestCase):
@@ -279,6 +320,67 @@ class PublicPageBoundaryTests(unittest.TestCase):
         for source in non_html_inventories:
             with self.subTest(source=source):
                 self.assertFalse(discovers_html_by_source_pattern(source))
+
+    def test_active_workflows_do_not_inline_discover_html_files(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="workflow-html-inventory-") as directory:
+            workflows = Path(directory)
+            archived = workflows / "archive"
+            archived.mkdir()
+            (workflows / "active.yml").write_text(
+                "steps:\n"
+                "  - run: |\n"
+                "      find . -type f -name '*.html' -print\n",
+                encoding="utf-8",
+            )
+            (workflows / "assets.yaml").write_text(
+                "steps:\n"
+                "  - run: |\n"
+                "      find assets -type f -name '*.json' -print\n",
+                encoding="utf-8",
+            )
+            (workflows / "glob.yml").write_text(
+                "steps:\n"
+                "  - run: |\n"
+                "      for page in **/*.html; do echo \"$page\"; done\n",
+                encoding="utf-8",
+            )
+            (archived / "old.yml").write_text(
+                "steps:\n"
+                "  - run: |\n"
+                "      git ls-files '*.html'\n",
+                encoding="utf-8",
+            )
+
+            files = active_workflow_files(workflows)
+            self.assertEqual(
+                {path.name for path in files},
+                {"active.yml", "assets.yaml", "glob.yml"},
+            )
+            active_discoveries = [
+                (path.name, command)
+                for path in files
+                for command in workflow_run_commands(
+                    path.read_text(encoding="utf-8")
+                )
+                if discovers_html_by_source_pattern(command)
+            ]
+            self.assertEqual(
+                {path for path, _ in active_discoveries},
+                {"active.yml", "glob.yml"},
+            )
+
+        candidates = [
+            f"{path.relative_to(ROOT).as_posix()} run command"
+            for path in active_workflow_files(ROOT / ".github" / "workflows")
+            for command in workflow_run_commands(path.read_text(encoding="utf-8"))
+            if discovers_html_by_source_pattern(command)
+        ]
+        self.assertEqual(
+            candidates,
+            [],
+            "active workflows must delegate HTML discovery to a registered script "
+            "or add a documented, tested exception",
+        )
 
     def test_html_inventories_share_boundary_and_keep_narrow_exceptions(self) -> None:
         csp = load_script("csp")
