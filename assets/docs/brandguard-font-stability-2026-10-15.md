@@ -8,8 +8,10 @@ reached downstream quotations and changed again when text was enlarged.
 
 The revision replaces those bands with scoped aliases for the same Baloo 2,
 Open Sans and Kalam font bytes. The shared runtime imports
-`assets/js/brandguard-fonts.js` only for BrandGuard pages. It registers local
-optional faces before first contentful paint. If it arrives late, or paint
+`assets/js/brandguard-fonts.js` only for BrandGuard pages. It decodes only the needed Unicode subsets outside the active font set,
+then adopts the decoded faces before the next frame and first contentful paint.
+A ready class activates the brand aliases only after every required face is
+decoded. Pending or failed faces never become selectable by page text. If it arrives late, or paint
 timing is unavailable, it keeps the already visible fallback for that visit.
 A deferred full theme also retains its critical-shell fallback rather than
 starting a new font deadline after that shell paints. Available
@@ -34,7 +36,7 @@ not rewritten. Font responses use the byte-verified local assets and their retai
 The native CSP remains active. A separate five-case boundary gate verifies
 that ordinary OKH, Glee and AskJamie pages do not request the BrandGuard faces
 that all declarations respect a self-only font policy, and that delayed
-loader initialization cannot move visible text. Seven loader timing/scope unit
+loader initialization cannot move visible text. Nine loader timing/scope unit
 cases cover the early, late and unsupported-platform branches.
 
 The matrix has 448 states: Chromium and WebKit; 320, 360, 390, 401 and 900px;

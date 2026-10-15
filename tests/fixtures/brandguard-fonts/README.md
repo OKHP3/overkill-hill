@@ -8,8 +8,9 @@ and byte hash. The CSS was retrieved October 15, 2026 with a Chromium user
 agent; the returned WOFF2 subsets retain their upstream family names, weights
 and Unicode ranges. Each family retains its upstream OFL license with the local assets.
 
-The candidate loader registers separate family aliases with optional display
-only on BrandGuard pages before first contentful paint. Late or unsupported
+The candidate loader decodes needed faces outside the active font set and
+adopts them atomically only before the next frame and first contentful paint.
+A ready class then enables the BrandGuard family aliases. Late or unsupported
 initialization retains fallback for the visit. It uses local copies of the
 same font bytes, without adding a remote font requirement to the shared CSS. Other brands and ordinary AskJamie pages keep their font
 policy. Fast fonts may render the canonical brand faces; late fonts retain

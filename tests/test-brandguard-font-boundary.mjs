@@ -44,6 +44,7 @@ try {
       await page.goto('https://font-boundary.test/', { waitUntil: 'domcontentloaded' });
       let before;
       if (late) {
+        assert.equal(await page.locator('body').evaluate(el => el.classList.contains('brandguard-fonts-ready')), false, 'late initialization cannot activate brand aliases');
         await page.waitForFunction(() => performance.getEntriesByType('paint').some(entry => entry.name === 'first-contentful-paint'));
         before = await page.locator('main').boundingBox();
         release();
@@ -51,7 +52,9 @@ try {
       await page.waitForTimeout(250);
       await page.evaluate(() => document.fonts.ready);
       const family = await page.locator('body').evaluate(el => getComputedStyle(el).fontFamily);
-      assert.equal(family.includes('BrandGuard Open Sans'), active, `font policy scope: ${brand || 'OKH'}`);
+      const policy = await page.locator('body').evaluate(el => getComputedStyle(el).getPropertyValue('--brandguard-font-policy').trim());
+      assert.equal(policy === '1', active, `font policy scope: ${brand || 'OKH'}`);
+      if (!active || late) assert.equal(family.includes('BrandGuard Open Sans'), false, 'unready or unrelated pages retain fallback');
       if (!active) assert.equal(requests.some(url => url.includes('/assets/fonts/brandguard-')), false, `only BrandGuard may request its local faces: ${brand || 'OKH'}`);
       assert.equal(requests.some(url => url.endsWith('/assets/js/brandguard-fonts.js')), active, 'the shared runtime dispatches only for BrandGuard');
       if (late) {

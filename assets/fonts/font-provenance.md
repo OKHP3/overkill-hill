@@ -27,3 +27,9 @@ together when deliberately reviewing new source bytes. Ordinary pages do not
 import the loader or pay its font transfer cost; source-budget limits are
 unchanged. A loader that arrives after first contentful paint, or cannot
 observe paint timing, retains fallback rather than changing visible text.
+
+Pending faces remain outside the active font set. Only Unicode subsets needed
+by rendered page text are decoded; the ready class is applied atomically when
+all required faces finish before the frame deadline. Late or failed decoding
+retains the explicit system-font stack, including on engines whose optional
+font timing differs. No source-budget limit or movement threshold is relaxed.

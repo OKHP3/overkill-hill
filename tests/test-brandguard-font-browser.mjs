@@ -42,11 +42,12 @@ async function geometry(page) {
     const selectors = ['.site-header', '.capability-transition', '.askjamie-breadcrumb', '.askjamie-hero-copy h1', '.hero-subtitle', '.hero-tagline', '.manifesto-blockquote'];
     return Object.fromEntries(selectors.map(s => [s, [...document.querySelectorAll(s)].map(el => {
       const r = el.getBoundingClientRect();
-      return { top: r.top + scrollY, height: r.height, width: r.width };
+      const style = getComputedStyle(el);
+      return { top: r.top + scrollY, height: r.height, width: r.width, fontSize: style.fontSize, fontFamily: style.fontFamily };
     })]));
   });
 }
-for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
+await Promise.all([['chromium', chromium], ['webkit', webkit]].map(async ([engine, type]) => {
   const browser = await type.launch();
   try {
     for (const brand of brands) for (const width of widths) for (const size of [16, 32]) {
@@ -58,6 +59,7 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
         const context = await browser.newContext({ viewport: { width, height: 480 }, reducedMotion: 'reduce' });
         const page = await context.newPage();
         const errors = [], missing = [], requests = [], pending = [];
+        const snapshots = {};
         let released = mode === 'fast' || mode === 'ready';
         page.on('pageerror', e => errors.push(e.message));
         await page.route('**/*', async route => {
@@ -96,6 +98,10 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
           // Root enlargement tests rem reflow, not browser zoom. Apply before
           // measuring either phase so enlargement itself is not called a shift.
           await page.evaluate(n => { document.documentElement.style.fontSize = `${n}px`; }, size);
+          // Keep font responses held while root enlargement finishes. Resizing
+          // text is a separate phase, not evidence of a font-arrival shift.
+          await page.waitForFunction(n => parseFloat(getComputedStyle(document.documentElement).fontSize) === n && parseFloat(getComputedStyle(document.body).fontSize) === n, size);
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           if (mode === 'ready') {
             assert.ok(readyFaces.length, 'predecoded-font witness needs the candidate aliases');
             // An immediate response can still miss an optional font's first-paint
@@ -106,15 +112,24 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
                 const face = new FontFace(spec.family, bytes, { weight: spec.weight, ...(spec.unicodeRange ? { unicodeRange: spec.unicodeRange } : {}) });
                 await face.load(); document.fonts.add(face);
               }
+              document.body.classList.add('brandguard-fonts-ready');
             }, readyFaces);
           }
           await page.waitForTimeout(250);
+          snapshots.styleBefore = await page.evaluate(() => ({
+            root: getComputedStyle(document.documentElement).fontSize,
+            body: getComputedStyle(document.body).fontSize,
+            readyClass: document.body.classList.contains('brandguard-fonts-ready'),
+            fontSetStatus: document.fonts.status,
+          }));
           const before = await geometry(page);
+          snapshots.before = before;
           released = true;
           for (const resolve of pending.reverse()) resolve();
           await page.evaluate(() => document.fonts.ready);
           await page.waitForTimeout(100);
           const after = await geometry(page);
+          snapshots.after = after;
           if (mode === 'late') for (const selector of Object.keys(before)) {
             assert.equal(after[selector].length, before[selector].length, `${label} selector count`);
             before[selector].forEach((box, i) => {
@@ -168,12 +183,14 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
             await page.screenshot({ path: path.join(process.env.BRANDGUARD_SCREENSHOTS, `${engine}-${brand}-${mode}.png`) });
           }
           results.push({ label, requests: requests.length, ...state, renderedHeadingFonts });
-        } catch (e) { failures.push({ label, error: e.message }); }
+        } catch (e) { failures.push({ label, error: e.message, snapshots, requests: requests.length, missing, errors }); }
         finally { released = true; for (const resolve of pending) resolve(); await context.close(); }
       }
     }
   } finally { await browser.close(); }
-}
+}));
+results.sort((a, b) => a.label.localeCompare(b.label));
+failures.sort((a, b) => a.label.localeCompare(b.label));
 const report = { source: manifest.source_repository, revision, cssSha256: createHash('sha256').update(css).digest('hex'),
   scriptSha256: Object.fromEntries([...scripts].map(([file, bytes]) => [file, createHash('sha256').update(bytes).digest('hex')])), results, failures };
 if (process.env.BRANDGUARD_TEST_REPORT) await writeFile(process.env.BRANDGUARD_TEST_REPORT, JSON.stringify(report, null, 2) + '\n');
