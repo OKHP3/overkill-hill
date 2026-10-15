@@ -2225,6 +2225,32 @@ class SummaryTests(unittest.TestCase):
             summary,
         )
 
+    def test_archived_external_report_renders_dependency_only_outage(self):
+        code, summary = self.run_summary(
+            self.load_fixture('archived-external-runtime-dependency-only.json'),
+            'external',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | DEGRADED | 1 outages;', summary)
+        self.assertIn(
+            '| /legacy/ | https://images.example/legacy.webp '
+            '| net::ERR_CONNECTION_RESET |',
+            summary,
+        )
+
+    def test_current_external_report_uses_external_outages_for_failure_rows(self):
+        code, summary = self.run_summary(
+            self.load_fixture('external-runtime-degraded.json'), 'external'
+        )
+
+        self.assertEqual(code, 0)
+        row = (
+            '| / | https://images.example/hero.webp '
+            '| net::ERR_NAME_NOT_RESOLVED |'
+        )
+        self.assertEqual(summary.count(row), 1)
+
     def test_external_degraded_summary_links_to_uploaded_report(self):
         artifact_url = 'https://github.com/example/site/actions/runs/123/artifacts/987'
         code, summary = self.run_summary(

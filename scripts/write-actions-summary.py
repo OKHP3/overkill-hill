@@ -274,7 +274,20 @@ def external_summary(report):
         raise ValueError('third-party report has missing or invalid counts')
     if summary['routes'] == 0:
         raise ValueError('third-party report sampled no routes')
-    outages = report.get('externalOutages', [])
+    if 'externalOutages' in report:
+        outages = report['externalOutages']
+    else:
+        # Older archived reports may keep outage evidence only on dependency
+        # records. Use this compatibility path only when the canonical array is
+        # absent so current reports retain their existing rendered output.
+        dependencies = report.get('dependencies', [])
+        if not isinstance(dependencies, list):
+            raise ValueError('third-party report has invalid dependency evidence')
+        outages = [
+            dependency for dependency in dependencies
+            if isinstance(dependency, dict)
+            and dependency.get('state') in {'unavailable', 'no-response'}
+        ]
     if not isinstance(outages, list):
         raise ValueError('third-party report has invalid external outage evidence')
     failure_rows = []
