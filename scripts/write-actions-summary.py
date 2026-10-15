@@ -270,9 +270,20 @@ def edge_summary(report):
 def external_summary(report):
     summary = report.get('summary')
     keys = ('routes', 'dependencies', 'available', 'externalOutages', 'localFailures', 'cspDiagnostics')
-    if not isinstance(summary, dict) or any(type(summary.get(key)) is not int or summary[key] < 0 for key in keys):
+    archived_without_summary = 'summary' not in report
+    if archived_without_summary:
+        routes = report.get('routes')
+        dependencies = report.get('dependencies')
+        if not isinstance(routes, list) or not routes:
+            raise ValueError('archived third-party report has no route evidence')
+        if not isinstance(dependencies, list) or not dependencies:
+            raise ValueError('archived third-party report has no dependency evidence')
+    if not archived_without_summary and (
+        not isinstance(summary, dict)
+        or any(type(summary.get(key)) is not int or summary[key] < 0 for key in keys)
+    ):
         raise ValueError('third-party report has missing or invalid counts')
-    if summary['routes'] == 0:
+    if not archived_without_summary and summary['routes'] == 0:
         raise ValueError('third-party report sampled no routes')
     if 'externalOutages' in report:
         outages = report['externalOutages']
@@ -306,6 +317,56 @@ def external_summary(report):
             url = outage.get('url') or 'unknown dependency'
             error = failure.get('errorText') or 'unknown failure'
             failure_rows.append((route, url, error))
+
+    if archived_without_summary:
+        local_failures = report.get('localFailures', [])
+        if not isinstance(local_failures, list):
+            raise ValueError('third-party report has invalid local failure evidence')
+        has_local_failures = bool(local_failures)
+        has_csp_evidence = bool(report.get('cspDiagnostics') or report.get('cspEvidence'))
+        lines = [
+            row(
+                'Content delivery',
+                'FAILED' if has_local_failures else 'UNKNOWN',
+                'Archived report has no summary counters; local route totals are unavailable',
+            ),
+            row('Edge policy', 'NOT RUN', 'Use the separate live-edge report'),
+            row(
+                'External availability',
+                'DEGRADED' if outages else 'UNKNOWN',
+                (
+                    'Documented outage evidence retained; aggregate summary counts are unavailable'
+                    if outages
+                    else 'Archived report has no summary counters; dependency health is unknown'
+                ),
+            ),
+            row(
+                'Browser CSP diagnostics',
+                'WARN' if has_csp_evidence else 'UNKNOWN',
+                (
+                    'Archived report has CSP evidence; aggregate summary counts are unavailable'
+                    if has_csp_evidence
+                    else 'Archived report has no summary counters; diagnostic totals are unavailable'
+                ),
+            ),
+            '',
+            'Archived report predates summary counters; route and dependency evidence remains available below.',
+            'External outages and CSP diagnostics are non-blocking health signals. Confirmed local route failures fail this monitor.',
+            'This browser monitor does not verify the deployed release SHA.',
+        ]
+        if failure_rows:
+            lines += [
+                '',
+                'External failure evidence (archived failures without route attribution are shown as unknown route):',
+                '',
+                '| Route | Dependency | Failure |',
+                '| --- | --- | --- |',
+            ]
+            lines += [
+                f'| {cell(route)} | {cell(url)} | {cell(error)} |'
+                for route, url, error in failure_rows
+            ]
+        return lines, has_local_failures
 
     lines = [
         row('Content delivery', 'FAILED' if summary['localFailures'] else 'PASS',

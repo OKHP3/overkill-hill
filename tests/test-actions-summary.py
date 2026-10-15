@@ -2239,6 +2239,55 @@ class SummaryTests(unittest.TestCase):
             summary,
         )
 
+    def test_archived_external_report_without_summary_keeps_outage_evidence_unknown_counts(self):
+        code, summary = self.run_summary(
+            self.load_fixture('archived-external-runtime-no-summary.json'),
+            'external',
+        )
+
+        self.assertEqual(code, 0)
+        self.assertIn('| Content delivery | UNKNOWN |', summary)
+        self.assertIn('| External availability | DEGRADED |', summary)
+        self.assertIn(
+            'Documented outage evidence retained; aggregate summary counts are unavailable',
+            summary,
+        )
+        self.assertIn('| Browser CSP diagnostics | UNKNOWN |', summary)
+        self.assertIn(
+            '| /legacy/ | https://images.example/legacy.webp '
+            '| net::ERR_CONNECTION_RESET |',
+            summary,
+        )
+        self.assertNotIn('| Content delivery | PASS |', summary)
+        self.assertNotIn('| External availability | PASS |', summary)
+        self.assertNotIn('0 outages', summary)
+        self.assertNotIn('0/0 dependencies', summary)
+
+    def test_missing_external_summary_requires_archived_route_and_dependency_evidence(self):
+        report = self.load_fixture('archived-external-runtime-no-summary.json')
+        for field in ('routes', 'dependencies'):
+            with self.subTest(missing=field):
+                unsupported = copy.deepcopy(report)
+                unsupported.pop(field)
+                code, summary = self.run_summary(unsupported, 'external')
+
+                self.assertEqual(code, 1)
+                self.assertIn('| Evidence | UNKNOWN | No usable external report:', summary)
+                evidence_label = 'route' if field == 'routes' else 'dependency'
+                self.assertIn(f'has no {evidence_label} evidence', summary)
+
+    def test_archived_external_report_without_summary_and_outages_stays_unknown(self):
+        report = self.load_fixture('archived-external-runtime-no-summary.json')
+        report['dependencies'][0]['state'] = 'available'
+        report['dependencies'][0]['failures'] = []
+        code, summary = self.run_summary(report, 'external')
+
+        self.assertEqual(code, 0)
+        self.assertIn('| External availability | UNKNOWN |', summary)
+        self.assertNotIn('| External availability | PASS |', summary)
+        self.assertNotIn('0 outages', summary)
+        self.assertNotIn('0/0 dependencies', summary)
+
     def test_current_external_report_uses_external_outages_for_failure_rows(self):
         code, summary = self.run_summary(
             self.load_fixture('external-runtime-degraded.json'), 'external'

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "mode": "external-health",
+  "baseUrl": "https://fixture.example",
+  "routes": [
+    "/legacy/"
+  ],
+  "dependencies": [
+    {
+      "url": "https://images.example/legacy.webp",
+      "state": "unavailable",
+      "failures": [
+        {
+          "route": "/legacy/",
+          "errorText": "net::ERR_CONNECTION_RESET",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "status": "EXTERNAL_OUTAGE"
+}
