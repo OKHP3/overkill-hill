@@ -582,6 +582,48 @@ function assertExternalFailureReportContract(report) {
     }),
   ];
 
+  const timeouts = [
+    ...(report.timeouts || []).flatMap((timeout, timeoutIndex) => [{
+      timeout,
+      dependencyUrl: timeout.url,
+      location: `timeouts[${timeoutIndex}]`,
+    }]),
+    ...report.dependencies.flatMap((dependency, dependencyIndex) => [
+      ...(dependency.timeouts || []).flatMap((timeout, timeoutIndex) => [{
+        timeout,
+        dependencyUrl: dependency.url,
+        location: `dependencies[${dependencyIndex}].timeouts[${timeoutIndex}]`,
+      }]),
+      ...(dependency.routeOutcomes || []).flatMap((routeOutcome, routeOutcomeIndex) =>
+        (routeOutcome.timeouts || []).map((timeout, timeoutIndex) => ({
+          timeout,
+          dependencyUrl: dependency.url,
+          location:
+            `dependencies[${dependencyIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.timeouts[${timeoutIndex}]`,
+          parentRoute: routeOutcome.route,
+        })),
+      ),
+    ]),
+    ...report.externalOutages.flatMap((outage, outageIndex) => [
+      ...(outage.timeouts || []).flatMap((timeout, timeoutIndex) => [{
+        timeout,
+        dependencyUrl: outage.url,
+        location: `externalOutages[${outageIndex}].timeouts[${timeoutIndex}]`,
+      }]),
+      ...(outage.routeOutcomes || []).flatMap((routeOutcome, routeOutcomeIndex) =>
+        (routeOutcome.timeouts || []).map((timeout, timeoutIndex) => ({
+          timeout,
+          dependencyUrl: outage.url,
+          location:
+            `externalOutages[${outageIndex}].routeOutcomes[${routeOutcomeIndex}]` +
+            `.timeouts[${timeoutIndex}]`,
+          parentRoute: routeOutcome.route,
+        })),
+      ),
+    ]),
+  ];
+
   for (const record of failures) {
     const { failure, dependencyUrl, location, parentRoute } = record;
     const parentRouteContext = Object.hasOwn(record, "parentRoute")
@@ -610,6 +652,45 @@ function assertExternalFailureReportContract(report) {
     assert.ok(
       failure.errorText.trim(),
       `${context}: failure.errorText must be non-empty`,
+    );
+  }
+
+  for (const record of timeouts) {
+    const { timeout, dependencyUrl, location, parentRoute } = record;
+    const dependencyContext = dependencyUrl ||
+      (typeof timeout.url === "string" && timeout.url.trim()
+        ? timeout.url
+        : "unknown (timeout URL missing)");
+    const parentRouteContext = Object.hasOwn(record, "parentRoute")
+      ? `; route outcome route: ${String(parentRoute)}`
+      : "";
+    const actualRouteContext = typeof timeout.route === "string"
+      ? `; reported route: ${timeout.route}`
+      : "";
+    const actualUrlContext = typeof timeout.url === "string"
+      ? `; reported URL: ${timeout.url}`
+      : "";
+    const context =
+      `dependency ${dependencyContext} at ${location}` +
+      `${parentRouteContext}${actualRouteContext}${actualUrlContext}`;
+
+    assert.equal(
+      typeof timeout.route,
+      "string",
+      `${context}: timeout.route must be a string`,
+    );
+    assert.ok(
+      report.routes.includes(timeout.route),
+      `${context}: timeout.route is not in report.routes`,
+    );
+    assert.equal(
+      typeof timeout.url,
+      "string",
+      `${context}: timeout.url must be a string`,
+    );
+    assert.ok(
+      timeout.url.trim(),
+      `${context}: timeout.url must be non-empty`,
     );
   }
 }
@@ -672,6 +753,125 @@ function assertFailureDiagnosticContext(report, expected) {
     );
   }
 }
+
+function assertTimeoutDiagnosticContext(report, expected) {
+  let error;
+  assert.throws(() => {
+    try {
+      assertExternalFailureReportContract(report);
+    } catch (caught) {
+      error = caught;
+      throw caught;
+    }
+  }, assert.AssertionError);
+  assert.ok(error, "current external-health report should be rejected");
+  for (const context of [
+    expected.url,
+    expected.location,
+    expected.reason,
+    expected.parentRoute,
+    expected.actualRoute,
+    expected.actualUrl,
+  ].filter(Boolean)) {
+    assert.ok(
+      error.message.includes(context),
+      `timeout diagnostic must include ${context}; received: ${error.message}`,
+    );
+  }
+}
+
+test("diagnoses missing route in dependency timeouts with URL and location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].timeouts = [{ url: report.dependencies[1].url }];
+
+  assertTimeoutDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].timeouts[0]",
+    reason: "timeout.route",
+  });
+});
+
+test("diagnoses missing URL in dependency timeouts with dependency and location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].timeouts = [{ route: report.routes[1] }];
+
+  assertTimeoutDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].timeouts[0]",
+    reason: "timeout.url",
+    actualRoute: report.routes[1],
+  });
+});
+
+test("diagnoses malformed nested timeout evidence with route outcome context", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.dependencies[1].routeOutcomes = [{
+    route: report.routes[0],
+    timeouts: [{ route: "/not-checked.html" }],
+  }];
+
+  assertTimeoutDiagnosticContext(report, {
+    url: report.dependencies[1].url,
+    location: "dependencies[1].routeOutcomes[0].timeouts[0]",
+    reason: "timeout.route",
+    parentRoute: report.routes[0],
+    actualRoute: "/not-checked.html",
+  });
+});
+
+test("diagnoses missing URL in nested outage timeouts with route outcome context", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.externalOutages[0].routeOutcomes = [{
+    route: report.routes[0],
+    timeouts: [{ route: report.routes[0] }],
+  }];
+
+  assertTimeoutDiagnosticContext(report, {
+    url: report.externalOutages[0].url,
+    location: "externalOutages[0].routeOutcomes[0].timeouts[0]",
+    reason: "timeout.url",
+    parentRoute: report.routes[0],
+    actualRoute: report.routes[0],
+  });
+});
+
+test("validates report-wide timeout evidence at its exact location", () => {
+  const report = makeSyntheticExternalFailureReport();
+  report.timeouts = [{ route: report.routes[0] }];
+
+  assertTimeoutDiagnosticContext(report, {
+    url: "unknown (timeout URL missing)",
+    location: "timeouts[0]",
+    reason: "timeout.url",
+    actualRoute: report.routes[0],
+  });
+});
+
+test("accepts valid timeout evidence in all current report collections", () => {
+  const report = makeSyntheticExternalFailureReport();
+  const dependencyTimeout = {
+    route: report.routes[0],
+    url: report.dependencies[0].url,
+  };
+  const outageTimeout = {
+    route: report.routes[1],
+    url: report.externalOutages[0].url,
+  };
+  report.timeouts = [dependencyTimeout];
+  report.dependencies[0].timeouts = [dependencyTimeout];
+  report.dependencies[0].routeOutcomes = [{
+    route: report.routes[0],
+    timeouts: [dependencyTimeout],
+  }];
+  report.externalOutages[0].timeouts = [outageTimeout];
+  report.externalOutages[0].routeOutcomes = [{
+    route: report.routes[1],
+    timeouts: [outageTimeout],
+  }];
+
+  assert.doesNotThrow(() => assertExternalFailureReportContract(report));
+  assert.equal(report.status, "EXTERNAL_OUTAGE");
+});
 
 test("diagnoses missing attribution in dependency failures with URL and location", () => {
   const report = makeSyntheticExternalFailureReport();
