@@ -58,6 +58,12 @@ try {
           );
         }
 
+        // Native close notification is queued independently of dialog.open.
+        // Observe that event before checking the existing focus contract.
+        await dialog.evaluate(el => {
+          el.__testCloseObserved = false;
+          el.addEventListener('close', () => { el.__testCloseObserved = true; }, { once: true });
+        });
         await page.keyboard.press('Shift+Tab');
         assert.equal(
           await page.evaluate(() => document.activeElement.textContent.trim()),
@@ -79,8 +85,9 @@ try {
         }
 
         assert.equal(await dialog.evaluate(el => el.open), false, `${label}: dialog closes`);
+        await page.waitForFunction(() =>
+          document.getElementById('capability-transition-dialog').__testCloseObserved === true);
         if (blockedStorage) {
-          await page.waitForTimeout(50);
           assert.equal(
             await page.evaluate(() => {
               try {
