@@ -1672,27 +1672,24 @@ import(bareSpecifier);
         self.assertIn("received ''", font_check["evidence"])
         self.assertIn("font/woff2", font_check["evidence"])
 
-    def test_image_and_font_content_types_with_parameters_are_accepted(self) -> None:
+    def test_parameterized_image_and_font_content_types_are_case_normalized(self) -> None:
+        asset_kinds = tuple(ASSET_FORMAT_CASES)
         return_code, report = self.run_live_edge_fixture(
-            asset_kinds=("image", "font"),
+            asset_kinds=asset_kinds,
             asset_content_types={
-                "image": "image/png; charset=binary",
-                "font": "font/woff2; charset=utf-8",
+                kind: f"{accepted_types[0].upper()}; charset=UTF-8"
+                for kind, (_, accepted_types) in ASSET_FORMAT_CASES.items()
             },
         )
 
         self.assertEqual(return_code, 0)
         checks = {item["check"]: item for item in report["checks"]}
-        self.assertEqual(
-            checks[
-                "asset /assets/img/favicons/murderbird-v2-icon-browser-32.png content type"
-            ]["status"],
-            "PASS",
-        )
-        self.assertEqual(
-            checks["asset /assets/fonts/live-edge-fixture.woff2 content type"]["status"],
-            "PASS",
-        )
+        for kind, (path, _) in ASSET_FORMAT_CASES.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    checks[f"asset {path} content type"]["status"],
+                    "PASS",
+                )
 
     def test_supported_icon_and_font_extensions_accept_expected_content_types(self) -> None:
         return_code, report = self.run_live_edge_fixture(
