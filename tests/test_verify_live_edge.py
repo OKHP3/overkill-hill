@@ -470,7 +470,7 @@ class VerifyLiveEdgeTests(unittest.TestCase):
             self.last_fixture_guarded_redirect_paths = guarded_redirect_paths
             return return_code, json.loads(report_path.read_text(encoding="utf-8"))
 
-    def test_literal_javascript_import_parser_ignores_non_code_and_computed_imports(self) -> None:
+    def test_literal_javascript_import_parser_reports_computed_imports_in_code_only(self) -> None:
         source = r'''
 // import "./comment.mjs";
 const text = 'import("./string.mjs")';
@@ -482,9 +482,11 @@ import(variable || import("./nested-dynamic.mjs"));
 import.meta.resolve("./meta.mjs");
 const expression = /import\(["']\.\/regex\.mjs["']\)/;
 '''
-        imports, exceeded = verify_live_edge.extract_javascript_imports(source)
+        imports, issue = verify_live_edge.extract_javascript_imports(source)
 
-        self.assertFalse(exceeded)
+        self.assertIn("computed dynamic import", issue or "")
+        self.assertIn("line 7, column 1", issue or "")
+        self.assertIn("dependency discovery incomplete", issue or "")
         self.assertEqual(
             imports,
             [
@@ -655,6 +657,68 @@ const expression = /import\(["']\.\/regex\.mjs["']\)/;
                 "/assets/js/missing-template.mjs",
                 "/assets/js/missing-options.mjs",
             }.issubset(guarded_paths)
+        )
+
+    def test_computed_import_blocks_discovery_without_skipping_literal_dependencies(self) -> None:
+        fingerprinted_module = b"export const fingerprinted = true;\n"
+        fingerprint = hashlib.sha256(fingerprinted_module).hexdigest()[:8]
+        modules = {
+            "/assets/js/fixture-entry.mjs": (
+                b'import(variable || import("./nested-literal.mjs"));\n'
+                b'import(runtimeSpecifier);\n'
+                b'import("./after-literal.mjs");\n'
+                + f'import("./fingerprinted.mjs?v={fingerprint}");\n'.encode()
+            ),
+            "/assets/js/nested-literal.mjs": b"export const nested = true;\n",
+            "/assets/js/after-literal.mjs": b"export const after = true;\n",
+            "/assets/js/inline-literal.mjs": b"export const inline = true;\n",
+            "/assets/js/fingerprinted.mjs": fingerprinted_module,
+        }
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="module-graph",
+            javascript_modules=modules,
+            inline_module_source=(
+                'import(runtimeSpecifier);\n'
+                'import("/assets/js/inline-literal.mjs");\n'
+            ),
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "PARTIAL")
+        checks = {item["check"]: item for item in report["checks"]}
+        for source_check, source_path in (
+            ("JavaScript imports /assets/js/fixture-entry.mjs", "fixture-entry.mjs"),
+            ("JavaScript imports inline /", "inline /"),
+        ):
+            check = checks[source_check]
+            self.assertEqual(check["status"], "BLOCKED")
+            self.assertIn("computed dynamic import", check["evidence"])
+            self.assertIn("line 1, column 1", check["evidence"])
+            self.assertIn(source_path, check["check"])
+        for dependency in (
+            "/assets/js/nested-literal.mjs",
+            "/assets/js/after-literal.mjs",
+            "/assets/js/inline-literal.mjs",
+        ):
+            self.assertEqual(checks[f"asset {dependency}"]["status"], "PASS")
+            self.assertEqual(self.last_fixture_requests[dependency], 1)
+        self.assertEqual(
+            checks["asset /assets/js/fingerprinted.mjs"]["status"], "BLOCKED"
+        )
+        self.assertIn(
+            "GitHub Pages",
+            checks["asset /assets/js/fingerprinted.mjs"]["evidence"],
+        )
+        self.assertEqual(report["summary"]["failures"], 0)
+        self.assertEqual(
+            checks["asset /assets/js/fingerprinted.mjs content type"]["status"],
+            "PASS",
+        )
+        self.assertEqual(
+            self.last_fixture_requests[
+                f"/assets/js/fingerprinted.mjs?v={fingerprint}"
+            ],
+            1,
         )
 
     def test_query_free_imported_js_is_mime_and_sha_checked_without_entrypoint_rule(self) -> None:
@@ -851,9 +915,17 @@ import(bareSpecifier);
             javascript_modules=modules,
         )
 
-        self.assertEqual(return_code, 0)
+        self.assertEqual(return_code, 1)
         self.assertEqual(report["summary"]["failures"], 0)
         checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(
+            checks["JavaScript imports /assets/js/fixture-entry.mjs"]["status"],
+            "BLOCKED",
+        )
+        self.assertIn(
+            "computed dynamic import",
+            checks["JavaScript imports /assets/js/fixture-entry.mjs"]["evidence"],
+        )
         for path in (
             "/assets/js/nested/static.mjs",
             "/assets/js/shared/common.mjs",
@@ -1261,11 +1333,15 @@ import(bareSpecifier);
                     **query_options,
                 )
 
-                self.assertEqual(return_code, 0)
+                self.assertEqual(return_code, 1)
                 checks = {item["check"]: item for item in report["checks"]}
                 asset_check = checks["asset /assets/js/app.js"]
                 self.assertEqual(asset_check["status"], "BLOCKED")
                 self.assertIn("GitHub Pages", asset_check["evidence"])
+                self.assertEqual(
+                    checks["JavaScript imports /assets/js/app.js"]["status"],
+                    "BLOCKED",
+                )
                 self.assertEqual(self.last_fixture_requests[expected_url], 1)
                 self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
@@ -1468,10 +1544,17 @@ import(bareSpecifier);
             asset_kinds=("css", "js", "module"),
         )
 
-        self.assertEqual(return_code, 0)
+        self.assertEqual(return_code, 1)
         self.assertEqual(report["status"], "PARTIAL")
         self.assertEqual(report["summary"]["failures"], 0)
         checks = {item["check"]: item for item in report["checks"]}
+        self.assertEqual(
+            checks["JavaScript imports /assets/js/app.js"]["status"], "BLOCKED"
+        )
+        self.assertIn(
+            "computed dynamic import",
+            checks["JavaScript imports /assets/js/app.js"]["evidence"],
+        )
         for path in asset_paths:
             local_bytes = verify_live_edge.canonical_text_bytes(
                 ROOT / path.lstrip("/")
@@ -1642,12 +1725,17 @@ import(bareSpecifier);
                     asset_content_type=content_type,
                 )
 
-                self.assertEqual(return_code, 0)
+                self.assertEqual(return_code, 1)
                 checks = {item["check"]: item for item in report["checks"]}
                 content_type_check = checks[
                     "asset /assets/js/app.js content type"
                 ]
                 self.assertEqual(content_type_check["status"], "PASS")
+                self.assertEqual(checks["asset /assets/js/app.js"]["status"], "BLOCKED")
+                self.assertEqual(
+                    checks["JavaScript imports /assets/js/app.js"]["status"],
+                    "BLOCKED",
+                )
 
     def test_css_content_type_with_parameters_is_accepted(self) -> None:
         return_code, report = self.run_live_edge_fixture(

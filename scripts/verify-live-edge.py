@@ -32,7 +32,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -607,6 +607,12 @@ def _regex_can_start_after(
     }
 
 
+class _JavaScriptToken(NamedTuple):
+    kind: str
+    value: str | None
+    start: int
+
+
 def _javascript_tokens(source: str):
     """Yield code tokens, including template expressions but not template text."""
     operators = (
@@ -673,6 +679,7 @@ def _javascript_tokens(source: str):
                 index = len(source) if end < 0 else end + 2
                 continue
 
+            token_start = index
             this_after_control_paren = False
             this_after_block_close = False
             this_after_ambiguous_brace_close = False
@@ -769,7 +776,7 @@ def _javascript_tokens(source: str):
                         this_after_block_close = closed_brace is True
                         this_after_ambiguous_brace_close = closed_brace is None
 
-            yield token
+            yield _JavaScriptToken(token[0], token[1], token_start)
             previous = token
             after_control_paren = this_after_control_paren
             after_block_close = this_after_block_close
@@ -814,9 +821,9 @@ def _javascript_tokens(source: str):
 class _JavaScriptTokenStream:
     def __init__(self, source: str):
         self._tokens = iter(_javascript_tokens(source))
-        self._buffer: deque[tuple[str, str | None]] = deque()
+        self._buffer: deque[_JavaScriptToken] = deque()
 
-    def peek(self, offset: int = 0) -> tuple[str, str | None] | None:
+    def peek(self, offset: int = 0) -> _JavaScriptToken | None:
         while len(self._buffer) <= offset:
             try:
                 self._buffer.append(next(self._tokens))
@@ -824,11 +831,11 @@ class _JavaScriptTokenStream:
                 return None
         return self._buffer[offset]
 
-    def pop(self) -> tuple[str, str | None] | None:
+    def pop(self) -> _JavaScriptToken | None:
         token = self.peek()
         return self._buffer.popleft() if token is not None else None
 
-    def push(self, token: tuple[str, str | None]) -> None:
+    def push(self, token: _JavaScriptToken) -> None:
         self._buffer.appendleft(token)
 
 
@@ -841,21 +848,23 @@ def extract_javascript_imports(
     imports: list[str] = []
     seen: set[str] = set()
     scan_issue: str | None = None
+    stop_scanning = False
 
     def record(specifier: str | None) -> None:
-        nonlocal scan_issue
+        nonlocal scan_issue, stop_scanning
         if not specifier or specifier in seen:
             return
         if len(imports) >= max_imports:
             scan_issue = f"import count exceeds the {max_imports}-import limit"
+            stop_scanning = True
             return
         seen.add(specifier)
         imports.append(specifier)
 
-    previous: tuple[str, str | None] | None = None
+    previous: _JavaScriptToken | tuple[str, str | None] | None = None
     try:
         while (token := tokens.pop()) is not None:
-            kind, value = token
+            kind, value = token[:2]
             if kind != "identifier" or value not in {"import", "export"}:
                 previous = token
                 continue
@@ -871,11 +880,12 @@ def extract_javascript_imports(
                 if following is not None and following[0] == "string":
                     record(tokens.pop()[1])
                     previous = ("string", None)
-                    if scan_issue:
+                    if stop_scanning:
                         break
                     continue
                 if (
-                    following == ("punctuation", "(")
+                    following is not None
+                    and following[:2] == ("punctuation", "(")
                     and tokens.peek(1) is not None
                     and tokens.peek(1)[0] == "string"
                     and tokens.peek(2) is not None
@@ -886,11 +896,23 @@ def extract_javascript_imports(
                     # Do not consume the rest of import(...): an options object
                     # can itself contain executable literal import() expressions.
                     previous = ("string", None)
-                    if scan_issue:
+                    if stop_scanning:
                         break
                     continue
-                if following == ("punctuation", "("):
-                    # A computed import() is deliberately outside this literal-only scan.
+                if following is not None and following[:2] == (
+                    "punctuation",
+                    "(",
+                ):
+                    line_breaks = list(
+                        re.finditer(r"\r\n|[\r\n\u2028\u2029]", source[: token.start])
+                    )
+                    line = len(line_breaks) + 1
+                    line_start = line_breaks[-1].end() if line_breaks else 0
+                    column = token.start - line_start + 1
+                    scan_issue = scan_issue or (
+                        "computed dynamic import makes dependency discovery "
+                        f"incomplete at line {line}, column {column}"
+                    )
                     previous = token
                     continue
             elif tokens.peek() is None or tokens.peek()[1] not in {"*", "{"}:
@@ -905,7 +927,7 @@ def extract_javascript_imports(
                 if clause_token is None:
                     break
                 last_token = clause_token
-                clause_kind, clause_value = clause_token
+                clause_kind, clause_value = clause_token[:2]
                 if clause_kind == "punctuation":
                     if clause_value in {"{", "[", "("}:
                         depth += 1
@@ -938,8 +960,9 @@ def extract_javascript_imports(
                     "static import/export clause exceeds the "
                     f"{MAX_JS_IMPORT_CLAUSE_TOKENS}-token limit"
                 )
+                stop_scanning = True
             previous = last_token
-            if scan_issue:
+            if stop_scanning:
                 break
             if found:
                 continue
