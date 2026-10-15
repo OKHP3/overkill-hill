@@ -1190,6 +1190,39 @@ import(bareSpecifier);
         self.assertIn("/assets/js/app.js?v=00000000", self.last_fixture_requests)
         self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
 
+    def test_css_discovered_asset_fingerprint_override_targets_only_selected_kind(
+        self,
+    ) -> None:
+        image_path = ASSET_FORMAT_CASES["image"][0]
+        font_path = ASSET_FORMAT_CASES["font"][0]
+        font_bytes = b"live-edge fixture font"
+        font_fingerprint = hashlib.sha256(font_bytes).hexdigest()[:8]
+
+        return_code, report = self.run_live_edge_fixture(
+            asset_kind="css-fixture",
+            css_asset_kinds=("image", "font"),
+            asset_fingerprints={"image": "00000000"},
+        )
+
+        self.assertEqual(return_code, 1)
+        self.assertEqual(report["status"], "FAILED")
+        checks = {item["check"]: item for item in report["checks"]}
+        image_check = checks[f"asset {image_path}"]
+        self.assertEqual(image_check["status"], "FAIL")
+        self.assertIn("URL fingerprint 00000000 != local", image_check["evidence"])
+        self.assertIn(f"{image_path}?v=00000000", self.last_fixture_requests)
+        self.assertIn(f"{font_path}?v={font_fingerprint}", self.last_fixture_requests)
+        self.assertEqual(checks[f"asset {font_path}"]["status"], "BLOCKED")
+        self.assertEqual(checks[f"asset {font_path} content type"]["status"], "PASS")
+        self.assertEqual(
+            checks[f"asset {image_path} content type"]["status"], "PASS"
+        )
+        self.assertEqual(
+            checks["asset /assets/css/live-edge-fixture.css"]["status"],
+            "BLOCKED",
+        )
+        self.assertEqual(checks["route / cache policy"]["status"], "BLOCKED")
+
     def test_stale_asset_selection_must_match_a_rendered_asset(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
