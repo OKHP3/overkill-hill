@@ -4,6 +4,9 @@
   const body = document.body;
   if (!body?.matches('.askjamie-main') || !(body.matches('.askjamie-brandguard-page, .brandguard-bfs-page, .brandguard-lvmh-page') || document.querySelector('.brandguard-demo-notice'))) return;
   if (typeof FontFace !== 'function' || !document.fonts) return;
+  // A deferred full theme must not activate a fresh family after its critical
+  // shell has painted fallback text. Retain that fallback for this visit.
+  if (!getComputedStyle(body).getPropertyValue('--font-body').includes('BrandGuard Open Sans')) return;
   // Without paint timing, retain readable fallback rather than guess that a
   // late family switch is safe. No font requests are made in that case.
   if (typeof PerformanceObserver === 'undefined' || !PerformanceObserver.supportedEntryTypes?.includes('paint')) return;

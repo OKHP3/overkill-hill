@@ -4,12 +4,13 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../assets/js/brandguard-fonts.js', import.meta.url), 'utf8');
-function run({ ask = true, notice = true, painted = false, timing = true, api = true } = {}) {
+function run({ ask = true, notice = true, painted = false, timing = true, api = true, theme = true } = {}) {
   const registered = [];
   vm.runInNewContext(source, {
     document: { body: { matches: selector => selector === '.askjamie-main' ? ask : false },
       querySelector: () => notice, fonts: { add: face => registered.push(face) } },
     FontFace: api ? class { constructor(family, url, descriptors) { Object.assign(this, { family, url, descriptors }); } } : undefined,
+    getComputedStyle: () => ({ getPropertyValue: () => theme ? '"BrandGuard Open Sans", system-ui' : '' }),
     PerformanceObserver: { supportedEntryTypes: timing ? ['paint'] : [] },
     performance: { getEntriesByType: () => painted ? [{ name: 'first-contentful-paint' }] : [] },
   });
@@ -29,3 +30,4 @@ test('unavailable paint timing keeps fallback rather than guessing', () => asser
 test('ordinary AskJamie pages do not register the catalog', () => assert.equal(run({ notice: false }).length, 0));
 test('a notice in another brand cannot register the catalog', () => assert.equal(run({ ask: false }).length, 0));
 test('missing font APIs retain readable fallback', () => assert.equal(run({ api: false }).length, 0));
+test('a deferred full theme cannot activate fonts over its painted critical shell', () => assert.equal(run({ theme: false }).length, 0));
