@@ -1169,6 +1169,41 @@ import(bareSpecifier);
                 asset_fingerprint="00000000",
             )
 
+    def test_per_kind_fingerprint_override_must_target_a_rendered_asset(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "fingerprint override is for an unselected asset kind",
+        ):
+            self.run_live_edge_fixture(
+                asset_kind="css",
+                asset_fingerprints={"image": "00000000"},
+            )
+
+    def test_shared_and_per_kind_fingerprint_overrides_cannot_be_combined(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "use either the shared asset_fingerprint or per-kind "
+            "asset_fingerprints, not both",
+        ):
+            self.run_live_edge_fixture(
+                asset_kind="css",
+                asset_fingerprint="00000000",
+                asset_fingerprints={"css": "00000000"},
+            )
+
+    def test_single_asset_shared_fingerprint_override_remains_supported(self) -> None:
+        css_bytes = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
+        fingerprint = hashlib.sha256(css_bytes).hexdigest()[:8]
+
+        return_code, report = self.run_live_edge_fixture(asset_fingerprint=fingerprint)
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(report["summary"]["failures"], 0)
+        self.assertIn(
+            f"/assets/css/theme.css?v={fingerprint}",
+            self.last_fixture_requests,
+        )
+
     def test_mixed_asset_fingerprint_override_targets_only_selected_kind(self) -> None:
         local_css = verify_live_edge.canonical_text_bytes(ROOT / "assets/css/theme.css")
         local_css_fingerprint = hashlib.sha256(local_css).hexdigest()[:8]
