@@ -463,6 +463,22 @@ jobs:
           python3 scripts/tests/test-search-index.py
           node --test tests/search-page.test.mjs tests/search-index.test.mjs tests/search-index-locale.test.mjs tests/embed-workflow.test.mjs tests/mermaid-links.test.mjs tests/mermaid-label-colors.test.mjs tests/foundry-diagram.test.mjs tests/mac-studio-diagrams.test.mjs
 
+      - name: Verify BrandGuard font arrival and enlarged text
+        run: |
+          # Test input only. This does not promote the foundation/release pins.
+          git -C .ci/theme-sites/askjamie fetch --no-tags --depth=1 origin 7d719683bf1fe416be4c2aba9cb676146268be04
+          npx playwright install --with-deps webkit
+          BRANDGUARD_TEST_REPORT=brandguard-font-report.json node tests/test-brandguard-font-browser.mjs
+
+      - name: Preserve BrandGuard font regression evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: brandguard-font-regressions-${{ github.run_id }}
+          path: brandguard-font-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Verify reveal recovery and Ask compatibility styles
         run: |
           node tests/test-reveal-browser.mjs

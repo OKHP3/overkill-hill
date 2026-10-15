@@ -25,12 +25,12 @@ try{
     }else{
       assert.ok(x.label.painted&&x.linkArea>0,'Complete label and home link remain painted');
       assert.equal(x.label.text,'GPT-BFS01: BFS Framing Intelligent Futures');
-      if(kind==='hub'&&width<=899){assert.equal(x.logo,'120px');assert.equal(x.margin,'0px');assert.equal(x.label.minWidth,width<=340?'0px':'244px');}
+      if(kind==='hub'&&width<=899){assert.equal(x.logo,'120px');assert.equal(x.margin,'0px');assert.equal(x.label.minWidth,'0px');}
       else {assert.equal(x.logo,'192px');assert.equal(x.margin,'16px');}
       if(kind!=='ordinary'&&width<=340){
         assert.equal(x.separator,'none');assert.equal(x.label.whiteSpace,'normal');assert.equal(x.label.flex,'1 1 100%');assert.equal(x.label.overflowWrap,'anywhere');
         assert.ok(x.labelRanges.every(r=>r.left>=x.labelBox.left-1&&r.right<=x.labelBox.right+1),'Wrapped glyph ranges stay inside the label');
-      }else {assert.notEqual(x.separator,'none');assert.equal(x.label.whiteSpace,'nowrap');}
+      }else {assert.notEqual(x.separator,'none');assert.equal(x.label.whiteSpace,kind!=='ordinary'?'normal':'nowrap');}
       await page.keyboard.press('Tab');const focus=await page.evaluate(()=>{const a=document.querySelector('.askjamie-logo--crumb'),s=getComputedStyle(a);return document.activeElement===a&&s.outlineStyle!=='none'&&parseFloat(s.outlineWidth)>0;});assert.ok(focus,'Exact breadcrumb home link receives visible keyboard focus');
       await page.keyboard.press('Enter');await page.waitForURL('**/#top');
     }
