@@ -8769,7 +8769,7 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
 
 /* Keep the Coca-Cola explanation at the canonical type size and tracking.
    This prevents an extra enlarged-text wrap change when Kalam loads. */
-@media (min-width: 350px) and (max-width: 370px) {
+@media (min-width: 350px) and (max-width: 359px) {
   .askjamie-main.coke-brandguard .askjamie-hero-copy .hero-subtitle {
     font-size: 1.02rem;
     letter-spacing: 0.01em;
