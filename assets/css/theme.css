@@ -8511,10 +8511,6 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
     letter-spacing: -0.05em;
   }
 
-  .askjamie-main:has(.brandguard-demo-notice) .capability-transition h2 {
-    letter-spacing: -0.05em;
-  }
-
   .askjamie-main.askjamie-brandguard-page .askjamie-hero-copy h1 {
     letter-spacing: -0.08em;
   }
@@ -8696,11 +8692,6 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
 
 /* Reserve only the line counts measured at the 350px edge. */
 @media (min-width: 350px) and (max-width: 355px) {
-  .askjamie-main.brandguard-bfs-page .capability-transition > p:nth-of-type(2),
-  .askjamie-main.brandguard-lvmh-page .capability-transition > p:nth-of-type(2) {
-    min-height: 7lh;
-  }
-
   .askjamie-main.askjamie-brandguard-page .askjamie-hero-copy h1,
   .askjamie-main.brandguard-bfs-page .askjamie-hero-copy h1 {
     min-height: 4lh;
@@ -8715,16 +8706,10 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
   }
 }
 
-/* The 370px width lets deferred fonts shorten the long-case transition copy;
-   keep that upstream text and the BFS headline from moving the measured hero. */
+/* Preserve the BFS headline near its measured compact wrap threshold. */
 @media (min-width: 365px) and (max-width: 370px) {
   .askjamie-main.brandguard-bfs-page .askjamie-hero-copy h1 {
     min-height: 3lh;
-  }
-
-  .askjamie-main.brandguard-bfs-page .capability-transition > p:nth-of-type(2),
-  .askjamie-main.brandguard-lvmh-page .capability-transition > p:nth-of-type(2) {
-    min-height: 7lh;
   }
 }
 
@@ -8748,5 +8733,36 @@ html[data-theme="light"] .askjamie-main .site-footer h4 { color: var(--color-fg)
 
   .askjamie-main:has(.brandguard-demo-notice) .askjamie-hero-copy .hero-tagline {
     letter-spacing: -0.04em;
+  }
+}
+
+/* Reserve the measured paragraph wrap differences without adding an extra line
+   after the loaded and fallback text already fit the same number of lines. */
+@media (min-width: 350px) and (max-width: 358px) {
+  .askjamie-main:has(.brandguard-demo-notice) .capability-transition > p:nth-of-type(2) {
+    min-height: 7lh;
+  }
+}
+@media (min-width: 395px) and (max-width: 400px) {
+  .askjamie-main:has(.brandguard-demo-notice) .capability-transition > p:nth-of-type(2) {
+    min-height: 6lh;
+  }
+}
+
+/* Reserve case-specific wrap differences only inside their measured thresholds. */
+@media (min-width: 381px) and (max-width: 388px) {
+  .askjamie-main.brandguard-case-dollar-general .askjamie-hero-copy .hero-tagline,
+  .askjamie-main.brandguard-case-costco .askjamie-hero-copy .hero-tagline {
+    min-height: 6lh;
+  }
+}
+@media (min-width: 391px) and (max-width: 400px) {
+  .askjamie-main.brandguard-starbucks .askjamie-hero-copy .hero-tagline {
+    min-height: 6lh;
+  }
+}
+@media (min-width: 395px) and (max-width: 400px) {
+  .askjamie-main.brandguard-case-dollar-general .askjamie-hero-copy .hero-subtitle {
+    min-height: 2lh;
   }
 }
