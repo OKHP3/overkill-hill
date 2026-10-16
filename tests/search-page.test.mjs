@@ -794,6 +794,35 @@ test('search history does not reinterpret non-alias hidden content as a sibling 
   } finally { await browser.close(); }
 });
 
+for (const fragment of ['missing-history-check-target', '%E0%A4%A']) {
+  test(`search history restores its visible trigger for unavailable #${fragment}`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+    try {
+      await page.route('**/*', route => new URL(route.request().url()).origin === baseUrl ? route.continue() : route.abort('blockedbyclient'));
+      await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/#${fragment}`, { waitUntil: 'load' });
+      await dismissAnnouncement(page);
+      // The first fragment has no element; the second cannot be URI-decoded.
+      // Neither may leave keyboard focus in the dismissed search overlay.
+      await page.locator('a.okh-skip-link[href="#toc-widget"]').focus();
+      await page.keyboard.press('Enter');
+      await settleReadingGeometry(page, '#toc-widget');
+      await openHistorySearch(page);
+      await page.goBack();
+      await settleReadingGeometry(page, 'header');
+      assert.equal(new URL(page.url()).hash, `#${fragment}`);
+      assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+      assert.equal(await page.locator('.okh-search-trigger:focus').count(), 1);
+      assert.equal(await page.locator('.okh-search-input').inputValue(), 'first diagram');
+      const trigger = await page.locator('.okh-search-trigger').boundingBox();
+      assert.ok(trigger && trigger.y >= 0 && trigger.y + trigger.height <= 844);
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator('.theme-toggle:focus').count(), 1);
+      assert.equal(await page.locator('.okh-search-overlay :focus').count(), 0);
+    } finally { await browser.close(); }
+  });
+}
+
 test('query-only history dismisses overlay search and restores its visible trigger', async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 320, height: 844 } });
