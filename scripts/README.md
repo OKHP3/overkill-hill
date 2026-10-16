@@ -68,6 +68,7 @@ the registry, and checks that the README mirrors the registry. Scripts under
 | `cache-bust.py` | shared + maintained-source-inputs | Public pages plus declared maintained source fragments; exact exception is tested |
 | `check-banner.py` | shared + source-banner-partial | Public pages plus its single authoring partial; exact exception is tested |
 | `check-links.py` | shared | Published HTML pages |
+| `check-locale-links.py` | exception: unpublished-locale-scaffold-inventory | Unpublished locale scaffold pages; exact exception is tested |
 | `csp.py` | shared | Tracked pages filtered by the shared boundary |
 | `lint-voice.py` | shared | Published HTML pages |
 | `project-status.py` | exception: source-project-detail-inventory | Authored project-detail source pages; covered by `tests/test-project-status.py` |

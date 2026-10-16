@@ -272,6 +272,7 @@ def validate_locale(
     source_routes: set[str] = set()
     target_routes: set[str] = set()
     promoted_routes: set[str] = set()
+    declared_target_paths: set[str] = set()
     site_validator = None
     for page in pages:
         if not isinstance(page, dict):
@@ -286,6 +287,7 @@ def validate_locale(
             continue
         source_routes.add(source_route)
         target_routes.add(target_route)
+        declared_target_paths.add(target_path)
         page_indexable = page.get("indexable", indexable)
         page_metadata_source = page.get("metadata_source", metadata_source)
         if not isinstance(page_indexable, bool):
@@ -374,6 +376,17 @@ def validate_locale(
         else:
             if expected_target in urls:
                 fail(findings, f"draft locale route is in sitemap.xml: {target_route}")
+
+    if is_unpublished:
+        locale_dir = root / locale
+        if locale_dir.is_dir():
+            for target_file in sorted(locale_dir.rglob("*.html")):
+                target_path = target_file.relative_to(root).as_posix()
+                if target_path not in declared_target_paths:
+                    fail(
+                        findings,
+                        f"unpublished scaffold contains undeclared target page: {target_path}",
+                    )
 
     locale_prefix = f"{SITE_ORIGIN}/{locale}/"
     locale_sitemap_routes = [

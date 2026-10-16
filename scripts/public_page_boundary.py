@@ -50,6 +50,7 @@ HTML_SCANNER_REGISTRY = {
     "cache-bust.py": "shared + maintained-source-inputs",
     "check-banner.py": "shared + source-banner-partial",
     "check-links.py": "shared",
+    "check-locale-links.py": "exception: unpublished-locale-scaffold-inventory",
     "csp.py": "shared",
     "lint-voice.py": "shared",
     "project-status.py": "exception: source-project-detail-inventory",

@@ -134,6 +134,20 @@ class PublicPageBoundaryTests(unittest.TestCase):
                 test_source = exception_test.read_text(encoding="utf-8")
                 self.assertIn("scripts/project-status.py", test_source)
                 self.assertIn("test_missing_detail", test_source)
+            elif policy == "exception: unpublished-locale-scaffold-inventory":
+                self.assertIn('if is_unpublished:', source)
+                self.assertIn("locale_dir = root / locale", source)
+                self.assertIn('locale_dir.rglob("*.html")', source)
+                exception_test = ROOT / "scripts" / "test-seo-fixtures.py"
+                test_source = exception_test.read_text(encoding="utf-8")
+                self.assertIn(
+                    "test_unpublished_locale_rejects_undeclared_generated_target_page",
+                    test_source,
+                )
+                self.assertIn(
+                    "unpublished scaffold contains undeclared target page:",
+                    test_source,
+                )
             else:
                 self.fail(f"{scanner} has an unnamed or unsupported policy: {policy}")
 
