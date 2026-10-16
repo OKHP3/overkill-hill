@@ -458,6 +458,8 @@ jobs:
           retention-days: 30
 
       - name: Run search and embedded-app regressions
+        env:
+          SEARCH_REQUIRE_CLASSIC_SCROLLBARS: '1'
         run: |
           python3 tests/test-search-sections.py
           python3 scripts/tests/test-search-index.py
