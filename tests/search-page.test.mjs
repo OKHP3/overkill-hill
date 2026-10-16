@@ -918,3 +918,33 @@ test('search dismissal keeps a newer gutter declaration from another controller'
     assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
   } finally { await browser.close(); }
 });
+
+test('search can open when the scrollbar-gutter convenience getter is unavailable', async () => {
+  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+  try {
+    // Emulate an older engine's missing CSS convenience property while retaining
+    // the standard CSSStyleDeclaration methods and every other computed value.
+    await page.addInitScript(() => {
+      const computed = window.getComputedStyle;
+      window.getComputedStyle = (element, ...args) => {
+        const style = computed.call(window, element, ...args);
+        if (element !== document.documentElement) return style;
+        return new Proxy(style, { get(target, name) {
+          if (name === 'scrollbarGutter') return undefined;
+          const value = Reflect.get(target, name, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        } });
+      };
+    });
+    await openArticleSection(page);
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter), undefined);
+    assert.ok(await page.evaluate(() => innerWidth > document.documentElement.clientWidth), 'Reach the classic-scrollbar feature branch');
+    await page.keyboard.press('Control+k');
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'true');
+    await page.locator('.okh-search-input').press('Escape');
+    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+  } finally { await browser.close(); }
+});

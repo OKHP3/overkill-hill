@@ -1080,7 +1080,7 @@ document.addEventListener("DOMContentLoaded", () => {
       previousScrollbarGutter = null;
       // Keep a classic scrollbar's layout space while search locks scrolling.
       // Existing stable gutters and overlay-scrollbar layouts need no override.
-      if (innerWidth > document.documentElement.clientWidth && !getComputedStyle(document.documentElement).scrollbarGutter.includes("stable")) {
+      if (innerWidth > document.documentElement.clientWidth && !getComputedStyle(document.documentElement).getPropertyValue("scrollbar-gutter").includes("stable")) {
         previousScrollbarGutter = {
           value: document.documentElement.style.getPropertyValue("scrollbar-gutter"),
           priority: document.documentElement.style.getPropertyPriority("scrollbar-gutter"),
