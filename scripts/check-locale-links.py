@@ -286,6 +286,8 @@ def validate_locale(
             fail(findings, f"manifest page has incomplete route/path fields: {page!r}")
             continue
         source_routes.add(source_route)
+        if target_route in target_routes:
+            fail(findings, f"locale {locale!r} declares duplicate target route: {target_route}")
         target_routes.add(target_route)
         declared_target_paths.add(target_path)
         page_indexable = page.get("indexable", indexable)
