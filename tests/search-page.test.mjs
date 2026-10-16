@@ -654,7 +654,7 @@ async function openArticleSection(page, articleHtml) {
 }
 
 async function openHistorySearch(page, query = 'first diagram') {
-  await page.keyboard.press('Control+k');
+  await page.keyboard.press('ControlOrMeta+k');
   await page.waitForFunction(() => document.querySelector('.okh-search-overlay').dataset.open === 'true' && document.activeElement.matches('.okh-search-input'));
   await page.locator('.okh-search-input').fill(query);
   await page.locator('.okh-search-result').first().waitFor();
@@ -846,28 +846,45 @@ test('pending history focus cannot replace a newly reopened search interaction',
   } finally { await browser.close(); }
 });
 
-test('search preserves the native reading position through visible-scrollbar history', async () => {
-  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
-  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
-  try {
-    await openArticleSection(page);
-    const initial = await page.evaluate(() => ({ scroll: scrollY, gutter: innerWidth - document.documentElement.clientWidth }));
-    assert.ok(initial.gutter > 0, 'This regression requires actual classic scrollbar geometry');
-    await openHistorySearch(page);
-    await page.goBack();
-    await settleReadingGeometry(page, '#toc-widget');
-    await assertVisibleReadingFocus(page, 'toc-widget');
-    await page.keyboard.press('Tab');
-    assert.equal(await page.locator(':focus').getAttribute('href'), '#read-the-story-work-through-the-idea');
-    await openHistorySearch(page);
-    await page.goForward();
-    await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
-    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
-    assert.ok(Math.abs(await page.evaluate(() => scrollY) - initial.scroll) < 2, 'Search must not rewrite the section entry through scrollbar reflow');
-    await page.keyboard.press('Tab');
-    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
-  } finally { await browser.close(); }
-});
+// Default headless Chromium hides scrollbars without reserving a gutter.
+// Native mode removes that default so Linux CI must exercise real classic
+// geometry, while Macs retain their actual native overlay-scrollbar behavior.
+const requireClassicScrollbars = process.env.SEARCH_REQUIRE_CLASSIC_SCROLLBARS === '1';
+function scrollbarLaunchOptions(mode) {
+  return { headless: true, ...(mode === 'native' ? { ignoreDefaultArgs: ['--hide-scrollbars'] } : {}) };
+}
+async function assertScrollbarGeometry(page, mode, context) {
+  const gutter = await page.evaluate(() => innerWidth - document.documentElement.clientWidth);
+  assert.ok(gutter >= 0, 'Viewport gutter cannot be negative');
+  if (mode === 'overlay') assert.equal(gutter, 0, 'Overlay case must have no reserved scrollbar gutter');
+  else if (requireClassicScrollbars) assert.ok(gutter > 0, 'CI requires actual classic scrollbar geometry');
+  context.diagnostic(`${mode} scrollbar case: ${gutter}px gutter (${gutter > 0 ? 'classic' : 'overlay'})`);
+}
+
+for (const scrollbarMode of ['native', 'overlay']) {
+  test(`search preserves the native reading position through ${scrollbarMode} scrollbar history`, async (context) => {
+    const browser = await chromium.launch(scrollbarLaunchOptions(scrollbarMode));
+    const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+    try {
+      await openArticleSection(page);
+      const initial = await page.evaluate(() => ({ scroll: scrollY, gutter: innerWidth - document.documentElement.clientWidth }));
+      await assertScrollbarGeometry(page, scrollbarMode, context);
+      await openHistorySearch(page);
+      await page.goBack();
+      await settleReadingGeometry(page, '#toc-widget');
+      await assertVisibleReadingFocus(page, 'toc-widget');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), '#read-the-story-work-through-the-idea');
+      await openHistorySearch(page);
+      await page.goForward();
+      await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
+      await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+      assert.ok(Math.abs(await page.evaluate(() => scrollY) - initial.scroll) < 2, 'Search must not rewrite the section entry through scrollbar reflow');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+    } finally { await browser.close(); }
+  });
+}
 
 test('search preserves a preexisting important stable gutter through ordinary and history dismissal', async () => {
   const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
@@ -919,32 +936,34 @@ test('search dismissal keeps a newer gutter declaration from another controller'
   } finally { await browser.close(); }
 });
 
-test('search can open when the scrollbar-gutter convenience getter is unavailable', async () => {
-  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
-  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
-  try {
-    // Emulate an older engine's missing CSS convenience property while retaining
-    // the standard CSSStyleDeclaration methods and every other computed value.
-    await page.addInitScript(() => {
-      const computed = window.getComputedStyle;
-      window.getComputedStyle = (element, ...args) => {
-        const style = computed.call(window, element, ...args);
-        if (element !== document.documentElement) return style;
-        return new Proxy(style, { get(target, name) {
-          if (name === 'scrollbarGutter') return undefined;
-          const value = Reflect.get(target, name, target);
-          return typeof value === 'function' ? value.bind(target) : value;
-        } });
-      };
-    });
-    await openArticleSection(page);
-    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter), undefined);
-    assert.ok(await page.evaluate(() => innerWidth > document.documentElement.clientWidth), 'Reach the classic-scrollbar feature branch');
-    await page.keyboard.press('Control+k');
-    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'true');
-    await page.locator('.okh-search-input').press('Escape');
-    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
-    await page.keyboard.press('Tab');
-    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
-  } finally { await browser.close(); }
-});
+for (const scrollbarMode of ['native', 'overlay']) {
+  test(`search can open with a missing scrollbar-gutter getter and ${scrollbarMode} scrollbars`, async (context) => {
+    const browser = await chromium.launch(scrollbarLaunchOptions(scrollbarMode));
+    const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+    try {
+      // Emulate an older engine's missing CSS convenience property while retaining
+      // the standard CSSStyleDeclaration methods and every other computed value.
+      await page.addInitScript(() => {
+        const computed = window.getComputedStyle;
+        window.getComputedStyle = (element, ...args) => {
+          const style = computed.call(window, element, ...args);
+          if (element !== document.documentElement) return style;
+          return new Proxy(style, { get(target, name) {
+            if (name === 'scrollbarGutter') return undefined;
+            const value = Reflect.get(target, name, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+          } });
+        };
+      });
+      await openArticleSection(page);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter), undefined);
+      await assertScrollbarGeometry(page, scrollbarMode, context);
+      await page.keyboard.press('ControlOrMeta+k');
+      assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'true');
+      await page.locator('.okh-search-input').press('Escape');
+      await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+    } finally { await browser.close(); }
+  });
+}
