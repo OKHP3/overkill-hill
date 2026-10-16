@@ -645,6 +645,34 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_empty_legacy_locale_manifest_cannot_pass_coverage_vacuously(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+
+        for with_locale_routes in (False, True):
+            with self.subTest(with_locale_routes=with_locale_routes):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    manifest_path, sitemap_path, index_path = self._write_legacy_locale_fixture(
+                        root,
+                        source_routes | promoted_routes if with_locale_routes else source_routes,
+                        promoted_routes if with_locale_routes else set(),
+                    )
+                    shutil.copy2(
+                        FIXTURE_ROOT / "locale-empty-legacy-manifest.json",
+                        manifest_path,
+                    )
+                    findings = locale_checker.validate(
+                        manifest_path=manifest_path,
+                        sitemap_path=sitemap_path,
+                        index_path=index_path,
+                        root=root,
+                    )
+                    self.assertEqual(
+                        findings,
+                        ["manifest locale 'fr' pages must be a non-empty list"],
+                    )
+
     def test_locale_checker_reports_explicit_robots_boundary_values(self) -> None:
         source_routes = {"/", "/about/", "/projects/", "/contact/"}
         promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
