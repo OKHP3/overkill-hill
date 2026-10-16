@@ -437,6 +437,90 @@ class ReleaseEntrypointSmokeTests(unittest.TestCase):
         self.assertIn("fr/index.html: conflicting duplicate social-card metadata", result.stderr)
         self.assertIn("meta:og:image", result.stderr)
 
+    def test_legacy_locale_checker_wrapper_preserves_coverage_failures(self) -> None:
+        manifest_path = self.fixture / "locale-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        locale = manifest["locales"]["fr"]
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "target_locale": "fr",
+                    "status": locale["status"],
+                    "indexable": locale["indexable"],
+                    "metadata_source": locale["metadata_source"],
+                    "pages": locale["pages"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.fixture / "fr" / "index.html").write_text(
+            locale_page(),
+            encoding="utf-8",
+        )
+        source_path = self.fixture / "index.html"
+        source_html = source_path.read_text(encoding="utf-8")
+        source_path.write_text(
+            source_html.replace(
+                "</head>",
+                '  <link rel="alternate" hreflang="en" href="https://overkillhill.com/">\n'
+                '  <link rel="alternate" hreflang="fr" href="https://overkillhill.com/fr/">\n'
+                '  <link rel="alternate" hreflang="x-default" href="https://overkillhill.com/">\n'
+                "</head>",
+            ),
+            encoding="utf-8",
+        )
+
+        sitemap_path = self.fixture / "locale-sitemap.xml"
+        search_index_path = self.fixture / "search-index.fr.json"
+        complete_sitemap = sitemap_path.read_text(encoding="utf-8")
+        complete_index = search_index_path.read_text(encoding="utf-8")
+        cases = (
+            (
+                "missing sitemap route",
+                complete_sitemap.replace(
+                    "  <url><loc>https://overkillhill.com/fr/</loc></url>\n",
+                    "",
+                ),
+                complete_index,
+                "indexable locale route is missing from sitemap.xml: /fr/",
+            ),
+            (
+                "missing search-index route",
+                complete_sitemap,
+                json.dumps({"locale": "fr", "count": 0, "entries": []}),
+                "locale search index is missing routes: /fr/",
+            ),
+        )
+
+        for label, sitemap, search_index, diagnostic in cases:
+            with self.subTest(label=label):
+                sitemap_path.write_text(sitemap, encoding="utf-8")
+                search_index_path.write_text(search_index, encoding="utf-8")
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(self.fixture / "scripts" / "check-locale-links.py"),
+                        "--manifest",
+                        str(manifest_path),
+                        "--sitemap",
+                        str(sitemap_path),
+                        "--search-index",
+                        str(search_index_path),
+                    ],
+                    cwd=self.fixture,
+                    env=self._environment(),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertEqual(
+                    f"Locale link check failed:\n  - {diagnostic}\n",
+                    result.stderr,
+                )
+
     def test_locale_checker_reports_malformed_or_incomplete_manifest(self) -> None:
         manifest = self.fixture / "locale-manifest.json"
         cases = (
