@@ -620,3 +620,154 @@ test("Glee hero heading contrasts with its actual paper panel in light, dark and
     }
   } finally { await browser.close(); }
 });
+
+
+async function settleReadingGeometry(page, selector) {
+  let previous;
+  let equal = 0;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const sample = await page.locator(selector).evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return { values: [scrollY, rect.top, rect.height, document.documentElement.scrollHeight], fonts: document.fonts.status };
+    });
+    equal = sample.fonts !== 'loading' && previous && sample.values.every((value, index) => Math.abs(value - previous[index]) < 0.25) ? equal + 1 : 0;
+    if (equal >= 4) return;
+    previous = sample.values;
+  }
+  assert.fail('Reading geometry did not settle');
+}
+
+async function openArticleSection(page) {
+  await page.route('**/*', route => new URL(route.request().url()).origin === baseUrl ? route.continue() : route.abort('blockedbyclient'));
+  await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/`, { waitUntil: 'load' });
+  await dismissAnnouncement(page);
+  await page.locator('a.okh-skip-link[href="#toc-widget"]').focus();
+  await page.keyboard.press('Enter');
+  await settleReadingGeometry(page, '#toc-widget');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.locator(':focus').getAttribute('href'), '#the-cost-of-a-tidy-lie');
+  await page.keyboard.press('Enter');
+  await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
+}
+
+async function openHistorySearch(page, query = 'first diagram') {
+  await page.keyboard.press('Control+k');
+  await page.waitForFunction(() => document.querySelector('.okh-search-overlay').dataset.open === 'true' && document.activeElement.matches('.okh-search-input'));
+  await page.locator('.okh-search-input').fill(query);
+  await page.locator('.okh-search-result').first().waitFor();
+}
+
+async function assertVisibleReadingFocus(page, id) {
+  const state = await page.evaluate(() => {
+    const active = document.activeElement;
+    const rect = active.getBoundingClientRect();
+    return { id: active.id, top: rect.top, height: innerHeight, header: document.querySelector('header').getBoundingClientRect().bottom, overflow: document.documentElement.scrollWidth - innerWidth };
+  });
+  assert.equal(state.id, id);
+  assert.ok(state.top >= Math.max(0, state.header) && state.top < state.height, JSON.stringify(state));
+  assert.equal(state.overflow, 0);
+}
+
+const researchHref = 'https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1551-6708.1987.tb00863.x';
+for (const dismissal of ['Escape', 'Close button']) {
+  test(`search restores a transient article opener after ${dismissal}`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+    try {
+      await openArticleSection(page);
+      const before = await page.evaluate(() => scrollY);
+      await openHistorySearch(page);
+      if (dismissal === 'Close button') {
+        await page.keyboard.press('Tab');
+        assert.equal(await page.locator('.okh-search-close:focus').count(), 1);
+        await page.keyboard.press('Enter');
+      } else await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.querySelector('.okh-search-overlay').dataset.open === 'false');
+      await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
+      await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+      assert.ok(Math.abs(await page.evaluate(() => scrollY) - before) < 1);
+      assert.equal(await page.locator('.okh-search-input').inputValue(), 'first diagram');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+      assert.equal(await page.locator('#the-cost-of-a-tidy-lie').getAttribute('tabindex'), null);
+    } finally { await browser.close(); }
+  });
+}
+
+test('search dismissal preserves native Back and Forward reading focus', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+  try {
+    await openArticleSection(page);
+    await openHistorySearch(page);
+    await page.goBack();
+    await settleReadingGeometry(page, '#toc-widget');
+    assert.equal(new URL(page.url()).hash, '#toc-widget');
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+    await assertVisibleReadingFocus(page, 'toc-widget');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), '#read-the-story-work-through-the-idea');
+    await openHistorySearch(page);
+    await page.goForward();
+    await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
+    assert.equal(new URL(page.url()).hash, '#the-cost-of-a-tidy-lie');
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+  } finally { await browser.close(); }
+});
+
+test('query-only history dismisses overlay search and restores its visible trigger', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 } });
+  try {
+    await openSearchPage(page, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: makeSearchEntries() }) }), '/search/?q=omega');
+    await page.locator('[data-cat="Project"]').click();
+    await page.locator('[data-cat="Brand"]').click();
+    await page.locator('.okh-search-trigger').focus();
+    await openHistorySearch(page, 'omega');
+    await page.goBack();
+    await settleReadingGeometry(page, 'header');
+    assert.equal(new URL(page.url()).searchParams.get('cat'), 'Project');
+    assert.equal(await page.locator('[data-cat="Project"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.locator('#search-page-input').inputValue(), 'omega');
+    assert.equal(await page.locator('#search-results .okh-search-result').count(), 20);
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+    assert.equal(await page.locator('.okh-search-trigger:focus').count(), 1);
+    assert.equal(await page.locator('.okh-search-input').inputValue(), 'omega');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('.okh-search-overlay :focus').count(), 0);
+  } finally { await browser.close(); }
+});
+
+test('pending history focus cannot replace a newly reopened search interaction', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+  try {
+    await openArticleSection(page);
+    await openHistorySearch(page);
+    // Deliberately delay animation callbacks to exercise an adversarial ordering.
+    await page.evaluate(() => {
+      window.__historyFrames = [];
+      window.__nativeHistoryFrame = window.requestAnimationFrame;
+      window.requestAnimationFrame = callback => window.__historyFrames.push(callback);
+    });
+    await page.goBack();
+    await page.waitForFunction(() => document.querySelector('.okh-search-overlay').dataset.open === 'false');
+    assert.ok(await page.evaluate(() => window.__historyFrames.length > 0));
+    await openHistorySearch(page, 'mermaid');
+    await page.evaluate(() => {
+      const queued = window.__historyFrames;
+      window.requestAnimationFrame = window.__nativeHistoryFrame;
+      queued.forEach(callback => window.requestAnimationFrame(callback));
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'true');
+    assert.equal(await page.locator('.okh-search-input:focus').count(), 1);
+    assert.equal(await page.locator('.okh-search-input').inputValue(), 'mermaid');
+    assert.equal(new URL(page.url()).hash, '#toc-widget');
+  } finally { await browser.close(); }
+});

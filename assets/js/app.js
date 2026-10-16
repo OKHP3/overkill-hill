@@ -1033,6 +1033,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastTokens     = [];
     let lastFocus      = null;
     let focusTimer     = null;
+    let openingHash = "";
+    let previousOverflow = "";
+    let focusRevision = 0;
     let indexState     = "loading";
 
     function showLoading() {
@@ -1070,6 +1073,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (overlay.dataset.open === "true") return;
       // Pointer activation does not focus buttons in every browser.
       lastFocus = opener || document.activeElement;
+      openingHash = location.hash;
+      focusRevision += 1;
+      previousOverflow = document.documentElement.style.overflow;
       overlay.dataset.open = "true";
       document.documentElement.style.overflow = "hidden";
       showLoading();
@@ -1082,13 +1088,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (overlay.dataset.open === "true" && !overlay.contains(document.activeElement)) input.focus();
       }, 30);
     }
-    function close() {
+    function canRestoreSearchFocus(target) {
+      if (!target || target === document.body || target === document.documentElement
+          || !target.isConnected || typeof target.focus !== "function"
+          || target.matches(":disabled, [hidden], [inert], [aria-hidden='true']")
+          || target.closest("[hidden], [inert], [aria-hidden='true']")) return false;
+      const style = getComputedStyle(target);
+      return style.display !== "none" && style.visibility !== "hidden" && target.getClientRects().length > 0;
+    }
+    function restoreSearchFocus(target) {
+      if (!canRestoreSearchFocus(target)) target = document.querySelector(".okh-search-trigger");
+      if (!canRestoreSearchFocus(target)) return;
+      const temporary = !target.hasAttribute("tabindex") && target.tabIndex < 0;
+      if (temporary) target.setAttribute("tabindex", "-1");
+      try { target.focus({ preventScroll: true }); } catch (_) { /* Focus is best effort. */ }
+      if (temporary) {
+        const cleanup = () => { if (target.getAttribute("tabindex") === "-1") target.removeAttribute("tabindex"); };
+        if (document.activeElement === target) target.addEventListener("blur", cleanup, { once: true });
+        else cleanup();
+      }
+    }
+    function close(restoreFocus = true, target = lastFocus) {
+      focusRevision += 1;
       clearTimeout(focusTimer);
       overlay.dataset.open = "false";
-      document.documentElement.style.overflow = "";
-      if (lastFocus && typeof lastFocus.focus === "function") {
-        try { lastFocus.focus(); } catch (e) { /* ignore */ }
-      }
+      document.documentElement.style.overflow = previousOverflow;
+      if (restoreFocus) restoreSearchFocus(target);
       lastFocus = null;
     }
     function renderEmpty() {
@@ -1133,6 +1158,29 @@ document.addEventListener("DOMContentLoaded", () => {
           ? okhLocaleText(" result found for ", " résultat trouvé pour ")
           : okhLocaleText(" results found for ", " résultats trouvés pour ")) + q + ".";
     }
+    window.addEventListener("popstate", () => {
+      focusRevision += 1;
+      if (overlay.dataset.open !== "true") return;
+      if (location.hash === openingHash) { close(); return; }
+      let target = null;
+      try { if (location.hash) target = document.getElementById(decodeURIComponent(location.hash.slice(1))); }
+      catch (_) { /* Invalid fragments use the visible search trigger. */ }
+      close(false);
+      const revision = focusRevision;
+      // Native history restores scroll after popstate. Only this dismissed search
+      // may restore focus, and a newer open/close/history action cancels it.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (revision !== focusRevision || overlay.dataset.open === "true") return;
+        const active = document.activeElement;
+        if (active && active !== document.body && active !== document.documentElement
+            && !overlay.contains(active) && active !== target) return;
+        const rect = canRestoreSearchFocus(target) ? target.getBoundingClientRect() : null;
+        const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom || 0;
+        const visible = rect && rect.top >= Math.max(0, headerBottom) && rect.top < innerHeight;
+        restoreSearchFocus(visible ? target : document.querySelector(".okh-search-trigger"));
+      }));
+    });
+
     input.addEventListener("input", render);
     initResultNavigation(input, list);
     closeBtn.addEventListener("click", close);
