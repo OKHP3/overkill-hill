@@ -720,6 +720,79 @@ test('search dismissal preserves native Back and Forward reading focus', async (
   } finally { await browser.close(); }
 });
 
+for (const [alias, heading, nextHref] of [
+  ['roy', 'roy-what-did-the-words-buy', 'https://mermaid.js.org/intro/'],
+  ['scoring-model', 'how-the-council-experiment-was-run', 'https://github.com/OKHP3/first-diagram-is-a-liar/tree/main/archive/diagramming-shootout'],
+  ['council-scoring', 'what-the-two-rounds-actually-reveal', 'https://raw.githubusercontent.com/OKHP3/first-diagram-is-a-liar/main/archive/diagramming-shootout/images/v1/etch-ai-sketch-using-a-council-to-design-at-velocity-copilot-v1.png'],
+]) {
+  test(`search history continues reading at the visible heading for legacy #${alias}`, async () => {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+    try {
+      await page.route('**/*', route => new URL(route.request().url()).origin === baseUrl ? route.continue() : route.abort('blockedbyclient'));
+      await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/#${alias}`, { waitUntil: 'load' });
+      await dismissAnnouncement(page);
+      await settleReadingGeometry(page, `#${heading}`);
+      const nativeScroll = await page.evaluate(() => scrollY);
+      await page.locator('a.okh-skip-link[href="#toc-widget"]').focus();
+      await page.keyboard.press('Enter');
+      await settleReadingGeometry(page, '#toc-widget');
+      await openHistorySearch(page);
+      await page.goBack();
+      await settleReadingGeometry(page, `#${heading}`);
+      assert.equal(new URL(page.url()).hash, `#${alias}`);
+      assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+      await assertVisibleReadingFocus(page, heading);
+      assert.ok(Math.abs(await page.evaluate(() => scrollY) - nativeScroll) < 2, 'Back retains native alias reading position');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), nextHref);
+      // Visit the compatibility URL through native same-document navigation,
+      // then exercise Forward independently of the Back restoration above.
+      await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/#toc-widget`);
+      await settleReadingGeometry(page, '#toc-widget');
+      await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/#${alias}`);
+      await settleReadingGeometry(page, `#${heading}`);
+      await page.goBack();
+      await settleReadingGeometry(page, '#toc-widget');
+      await openHistorySearch(page);
+      await page.goForward();
+      await settleReadingGeometry(page, `#${heading}`);
+      assert.equal(new URL(page.url()).hash, `#${alias}`);
+      assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+      await assertVisibleReadingFocus(page, heading);
+      assert.ok(Math.abs(await page.evaluate(() => scrollY) - nativeScroll) < 2, 'Forward retains native alias reading position');
+      await page.keyboard.press('Tab');
+      assert.equal(await page.locator(':focus').getAttribute('href'), nextHref);
+    } finally { await browser.close(); }
+  });
+}
+
+test('search history does not reinterpret non-alias hidden content as a sibling focus target', async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'reduce' });
+  try {
+    const article = await readFile(resolve(repositoryRoot, 'writings/first-diagram-is-a-liar/index.html'), 'utf8');
+    const marker = '<span aria-hidden="true" id="roy"></span>';
+    assert.ok(article.includes(marker));
+    const fixture = article.replace(marker, '<span aria-hidden="true" id="roy">Hidden content</span><button id="not-a-fragment-alias">Unrelated control</button>');
+    await page.route('**/*', route => new URL(route.request().url()).origin === baseUrl ? route.continue() : route.abort('blockedbyclient'));
+    await page.route('**/writings/first-diagram-is-a-liar/', route => route.fulfill({ contentType: 'text/html', body: fixture }));
+    await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/#roy`, { waitUntil: 'load' });
+    await dismissAnnouncement(page);
+    await settleReadingGeometry(page, '#roy-what-did-the-words-buy');
+    await page.locator('a.okh-skip-link[href="#toc-widget"]').focus();
+    await page.keyboard.press('Enter');
+    await settleReadingGeometry(page, '#toc-widget');
+    await openHistorySearch(page);
+    await page.goBack();
+    await settleReadingGeometry(page, '#roy-what-did-the-words-buy');
+    assert.equal(new URL(page.url()).hash, '#roy');
+    assert.equal(await page.locator('.okh-search-overlay').getAttribute('data-open'), 'false');
+    assert.equal(await page.locator('.okh-search-trigger:focus').count(), 1);
+    assert.equal(await page.locator('#not-a-fragment-alias:focus').count(), 0);
+  } finally { await browser.close(); }
+});
+
 test('query-only history dismisses overlay search and restores its visible trigger', async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 320, height: 844 } });

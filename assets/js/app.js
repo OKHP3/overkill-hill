@@ -1165,6 +1165,13 @@ document.addEventListener("DOMContentLoaded", () => {
       let target = null;
       try { if (location.hash) target = document.getElementById(decodeURIComponent(location.hash.slice(1))); }
       catch (_) { /* Invalid fragments use the visible search trigger. */ }
+      // Legacy article fragments are empty hidden spans immediately before a
+      // heading. Skip only that marker chain; never focus arbitrary hidden UI.
+      if (target?.matches('span[aria-hidden="true"]:empty')) {
+        let heading = target.nextElementSibling;
+        while (heading?.matches('span[aria-hidden="true"]:empty')) heading = heading.nextElementSibling;
+        if (heading?.matches('h1, h2, h3, h4, h5, h6')) target = heading;
+      }
       close(false);
       const revision = focusRevision;
       // Native history restores scroll after popstate. Only this dismissed search
