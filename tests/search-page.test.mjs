@@ -638,8 +638,9 @@ async function settleReadingGeometry(page, selector) {
   assert.fail('Reading geometry did not settle');
 }
 
-async function openArticleSection(page) {
+async function openArticleSection(page, articleHtml) {
   await page.route('**/*', route => new URL(route.request().url()).origin === baseUrl ? route.continue() : route.abort('blockedbyclient'));
+  if (articleHtml) await page.route('**/writings/first-diagram-is-a-liar/', route => route.fulfill({ contentType: 'text/html', body: articleHtml }));
   await page.goto(`${baseUrl}/writings/first-diagram-is-a-liar/`, { waitUntil: 'load' });
   await dismissAnnouncement(page);
   await page.locator('a.okh-skip-link[href="#toc-widget"]').focus();
@@ -663,7 +664,7 @@ async function assertVisibleReadingFocus(page, id) {
   const state = await page.evaluate(() => {
     const active = document.activeElement;
     const rect = active.getBoundingClientRect();
-    return { id: active.id, top: rect.top, height: innerHeight, header: document.querySelector('header').getBoundingClientRect().bottom, overflow: document.documentElement.scrollWidth - innerWidth };
+    return { id: active.id, top: rect.top, height: innerHeight, header: document.querySelector('header').getBoundingClientRect().bottom, overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth) };
   });
   assert.equal(state.id, id);
   assert.ok(state.top >= Math.max(0, state.header) && state.top < state.height, JSON.stringify(state));
@@ -842,5 +843,78 @@ test('pending history focus cannot replace a newly reopened search interaction',
     assert.equal(await page.locator('.okh-search-input:focus').count(), 1);
     assert.equal(await page.locator('.okh-search-input').inputValue(), 'mermaid');
     assert.equal(new URL(page.url()).hash, '#toc-widget');
+  } finally { await browser.close(); }
+});
+
+test('search preserves the native reading position through visible-scrollbar history', async () => {
+  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+  try {
+    await openArticleSection(page);
+    const initial = await page.evaluate(() => ({ scroll: scrollY, gutter: innerWidth - document.documentElement.clientWidth }));
+    assert.ok(initial.gutter > 0, 'This regression requires actual classic scrollbar geometry');
+    await openHistorySearch(page);
+    await page.goBack();
+    await settleReadingGeometry(page, '#toc-widget');
+    await assertVisibleReadingFocus(page, 'toc-widget');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), '#read-the-story-work-through-the-idea');
+    await openHistorySearch(page);
+    await page.goForward();
+    await settleReadingGeometry(page, '#the-cost-of-a-tidy-lie');
+    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+    assert.ok(Math.abs(await page.evaluate(() => scrollY) - initial.scroll) < 2, 'Search must not rewrite the section entry through scrollbar reflow');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+  } finally { await browser.close(); }
+});
+
+test('search preserves a preexisting important stable gutter through ordinary and history dismissal', async () => {
+  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+  const styles = () => page.evaluate(() => ({
+    gutter: document.documentElement.style.getPropertyValue('scrollbar-gutter'),
+    priority: document.documentElement.style.getPropertyPriority('scrollbar-gutter'),
+    overflow: document.documentElement.style.overflow,
+  }));
+  try {
+    const article = await readFile(resolve(repositoryRoot, 'writings/first-diagram-is-a-liar/index.html'), 'utf8');
+    const fixture = article.replace('<html ', '<html style="scrollbar-gutter: stable both-edges !important; overflow: auto" ');
+    assert.notEqual(fixture, article);
+    await openArticleSection(page, fixture);
+    const initial = await styles();
+    assert.deepEqual(initial, { gutter: 'stable both-edges', priority: 'important', overflow: 'auto' });
+    await openHistorySearch(page);
+    assert.equal((await styles()).gutter, initial.gutter);
+    assert.equal((await styles()).priority, initial.priority);
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await styles(), initial);
+    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
+    const link = await page.locator(':focus').boundingBox();
+    assert.ok(link && link.y >= 0 && link.y < 844);
+    await openHistorySearch(page);
+    await page.goBack();
+    await settleReadingGeometry(page, '#toc-widget');
+    assert.deepEqual(await styles(), initial);
+    await assertVisibleReadingFocus(page, 'toc-widget');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), '#read-the-story-work-through-the-idea');
+  } finally { await browser.close(); }
+});
+
+test('search dismissal keeps a newer gutter declaration from another controller', async () => {
+  const browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] });
+  const page = await browser.newPage({ viewport: { width: 320, height: 844 }, reducedMotion: 'no-preference' });
+  try {
+    await openArticleSection(page);
+    await openHistorySearch(page);
+    await page.evaluate(() => document.documentElement.style.setProperty('scrollbar-gutter', 'stable both-edges', 'important'));
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await page.evaluate(() => ({ value: document.documentElement.style.getPropertyValue('scrollbar-gutter'), priority: document.documentElement.style.getPropertyPriority('scrollbar-gutter') })), { value: 'stable both-edges', priority: 'important' });
+    await assertVisibleReadingFocus(page, 'the-cost-of-a-tidy-lie');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator(':focus').getAttribute('href'), researchHref);
   } finally { await browser.close(); }
 });

@@ -1035,6 +1035,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let focusTimer     = null;
     let openingHash = "";
     let previousOverflow = "";
+    let previousScrollbarGutter = null;
     let focusRevision = 0;
     let indexState     = "loading";
 
@@ -1076,6 +1077,16 @@ document.addEventListener("DOMContentLoaded", () => {
       openingHash = location.hash;
       focusRevision += 1;
       previousOverflow = document.documentElement.style.overflow;
+      previousScrollbarGutter = null;
+      // Keep a classic scrollbar's layout space while search locks scrolling.
+      // Existing stable gutters and overlay-scrollbar layouts need no override.
+      if (innerWidth > document.documentElement.clientWidth && !getComputedStyle(document.documentElement).scrollbarGutter.includes("stable")) {
+        previousScrollbarGutter = {
+          value: document.documentElement.style.getPropertyValue("scrollbar-gutter"),
+          priority: document.documentElement.style.getPropertyPriority("scrollbar-gutter"),
+        };
+        document.documentElement.style.setProperty("scrollbar-gutter", "stable");
+      }
       overlay.dataset.open = "true";
       document.documentElement.style.overflow = "hidden";
       showLoading();
@@ -1113,6 +1124,12 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(focusTimer);
       overlay.dataset.open = "false";
       document.documentElement.style.overflow = previousOverflow;
+      if (previousScrollbarGutter
+          && document.documentElement.style.getPropertyValue("scrollbar-gutter") === "stable"
+          && document.documentElement.style.getPropertyPriority("scrollbar-gutter") === "") {
+        document.documentElement.style.setProperty("scrollbar-gutter", previousScrollbarGutter.value, previousScrollbarGutter.priority);
+      }
+      previousScrollbarGutter = null;
       if (restoreFocus) restoreSearchFocus(target);
       lastFocus = null;
     }
