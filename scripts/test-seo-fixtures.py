@@ -804,6 +804,28 @@ class SEOFixtureTests(unittest.TestCase):
                 findings,
             )
 
+    def test_unpublished_locale_rejects_undeclared_generated_target_page(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest_path, sitemap_path, index_path = (
+                self._write_unpublished_locale_fixture(root, set())
+            )
+            orphan_path = root / "fr" / "retired" / "index.html"
+            orphan_path.parent.mkdir(parents=True)
+            orphan_path.write_text("<!doctype html><title>Unpublished</title>", encoding="utf-8")
+
+            findings = locale_checker.validate(
+                manifest_path=manifest_path,
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+            self.assertIn(
+                "unpublished scaffold contains undeclared target page: fr/retired/index.html",
+                findings,
+            )
+
     def test_unpublished_locale_rejects_sitemap_target_route(self) -> None:
         target_route = "/fr/about/"
 
