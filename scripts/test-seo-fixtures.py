@@ -198,6 +198,36 @@ def mutate_navigation(raw: str, key: str, value: str) -> str:
 
 
 class SEOFixtureTests(unittest.TestCase):
+    def test_locale_search_index_rejects_duplicate_url_members(self) -> None:
+        source_routes = {"/", "/about/", "/projects/", "/contact/"}
+        promoted_routes = {"/fr/", "/fr/about/", "/fr/projects/"}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _, sitemap_path, index_path = self._write_mixed_locale_fixture(
+                root,
+                source_routes | promoted_routes,
+                promoted_routes,
+            )
+            index_path.write_text(
+                '{"site":"https://overkillhill.com","locale":"fr",'
+                '"generated":"fixture","count":2,"entries":['
+                '{"url":"/fr/","url":"/fr/about/"},'
+                '{"url":"/fr/projects/"}]}',
+                encoding="utf-8",
+            )
+
+            findings = locale_checker.validate(
+                manifest_path=root / "manifest.json",
+                sitemap_path=sitemap_path,
+                index_path=index_path,
+                root=root,
+            )
+
+        self.assertIn(
+            "locale search index is not valid JSON: duplicate JSON member name 'url'",
+            findings,
+        )
+
     def test_article_date_parity_rejects_python_only_syntax_before_equality(self) -> None:
         calendar = "2026-06-12T00:00:00Z"
         for value in (
@@ -816,6 +846,22 @@ class SEOFixtureTests(unittest.TestCase):
                 draft_routes=set(), require_routes=False,
             )
             self.assertIn("locale search index must be an object", findings)
+
+    def test_locale_search_index_rejects_invalid_utf8_with_stable_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            index_path = Path(directory) / "search-index.fr.json"
+            index_path.write_bytes(b'{"locale":"fr","entries":[]}\xff')
+            findings = []
+
+            locale_checker.check_search_index(
+                index_path, set(), "fr", findings,
+                draft_routes=set(), require_routes=False,
+            )
+
+            self.assertEqual(
+                findings,
+                ["locale search index is not valid UTF-8"],
+            )
 
     def test_unpublished_locale_rejects_stale_search_index_routes(self) -> None:
         declared_route = "/fr/about/"
