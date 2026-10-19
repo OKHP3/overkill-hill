@@ -200,6 +200,10 @@ to preserve the dependency lockfile.
 
 Managed Replit runtimes can lag behind the latest LTS patch. The manifest and
 lockfile therefore support **Node >=24.13.0 <25** with **npm >=11.6.2 <12**.
+`packageManager` selects **npm 11.19.0** for package-manager-aware tools such as
+Dependabot. Without an explicit selection, the hosted updater can choose npm 12
+from the lockfile format and fail the supported engine bounds. This selection
+does not install or upgrade the managed Replit runtime.
 `.npmrc` keeps engine enforcement enabled; unsupported Node/npm majors and
 older patches are rejected. The September 20 Replit inspection found Node
 24.13.0 and npm 11.6.2. This is supported compatibility, not a claim that the

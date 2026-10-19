@@ -14,6 +14,7 @@ SPEC.loader.exec_module(STACK)
 class RuntimeAlignmentTests(unittest.TestCase):
     def fixture(self, root, nvm=None, locked=None, module="24"):
         (root / ".nvmrc").write_text(nvm or STACK.NODE_VERSION)
+        (root / "package.json").write_text(json.dumps({"packageManager": "npm@11.19.0"}))
         (root / "package-lock.json").write_text(json.dumps({"packages": {
             "": {"engines": {"node": locked or STACK.NODE_ENGINE, "npm": STACK.NPM_ENGINE}}}}))
         (root / ".replit").write_text(f'modules = ["nodejs-{module}"]')
@@ -47,6 +48,26 @@ class RuntimeAlignmentTests(unittest.TestCase):
             root = Path(folder)
             self.fixture(root, module="22")
             self.assertIn("REPLIT_NODE", self.failures(root))
+
+    def test_missing_npm_selection_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.fixture(root)
+            (root / "package.json").write_text("{}")
+            self.assertIn("NPM_SELECTION", self.failures(root))
+
+    def test_incompatible_npm_selection_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.fixture(root)
+            (root / "package.json").write_text(json.dumps({"packageManager": "npm@12.2.0"}))
+            self.assertIn("NPM_SELECTION", self.failures(root))
+
+    def test_supported_npm_selection_passes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.fixture(root)
+            self.assertEqual(self.failures(root), [])
 
 
 if __name__ == "__main__":

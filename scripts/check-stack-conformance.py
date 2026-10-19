@@ -47,6 +47,7 @@ from pathlib import Path
 NODE_VERSION = "24.21.0"
 NODE_ENGINE = ">=24.13.0 <25"
 NPM_ENGINE = ">=11.6.2 <12"
+NPM_PACKAGE_MANAGER = "npm@11.19.0"
 
 # Exact pins, matching docs/dependency-policy.md in the reference repo.
 NPM_REQUIRED = {
@@ -204,6 +205,12 @@ def check_node(root: Path, rep: Report):
 
 def check_runtime_alignment(root: Path, rep: Report):
     """Catch the pin drift that makes clean installs fail on another host."""
+    manifest = read_json(root / "package.json") or {}
+    manager = manifest.get("packageManager")
+    if manager != NPM_PACKAGE_MANAGER:
+        rep.fail("NPM_SELECTION", f"package.json packageManager is {manager!r}, expected {NPM_PACKAGE_MANAGER!r}")
+    else:
+        rep.ok("NPM_SELECTION", f"Dependabot selects {manager} instead of its image default")
     nvm = read_text(root / ".nvmrc")
     lock = read_json(root / "package-lock.json") or {}
     locked = lock.get("packages", {}).get("", {}).get("engines", {})
