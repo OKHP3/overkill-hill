@@ -14,7 +14,7 @@ SPEC.loader.exec_module(STACK)
 class RuntimeAlignmentTests(unittest.TestCase):
     def fixture(self, root, nvm=None, locked=None, module="24"):
         (root / ".nvmrc").write_text(nvm or STACK.NODE_VERSION)
-        (root / "package.json").write_text(json.dumps({"packageManager": "npm@11.19.0"}))
+        (root / "package.json").write_text(json.dumps({"packageManager": STACK.NPM_PACKAGE_MANAGER}))
         (root / "package-lock.json").write_text(json.dumps({"packages": {
             "": {"engines": {"node": locked or STACK.NODE_ENGINE, "npm": STACK.NPM_ENGINE}}}}))
         (root / ".replit").write_text(f'modules = ["nodejs-{module}"]')
