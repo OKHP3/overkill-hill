@@ -22,7 +22,7 @@
     "serve": "python3 scripts/serve-site.py"
   },
   "dependencies": {
-    "playwright": "1.64.0",
+    "playwright": "1.64.1",
     "lighthouse": "13.5.0"
   }
 }
