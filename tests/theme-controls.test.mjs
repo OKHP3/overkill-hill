@@ -853,6 +853,48 @@ test("duplicate configured sites retain the expected checkout-path diagnostic", 
   }
 });
 
+test("missing configured sites are rejected before theme review", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract
+    .filter((site) => site.name !== "Glee")
+    .map((site) => ({
+      name: site.name,
+      root: site.checkoutPath,
+      revision: "a".repeat(40),
+    }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify(configured);
+    assert.throws(
+      () => configuredSiteInputs(),
+      /THEME_CONTROL_SITES must contain exactly the three reviewed sites/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
+
+test("unknown configured sites are rejected against the shared site contract", () => {
+  const previous = process.env.THEME_CONTROL_SITES;
+  const configured = foundationSiteContract.map((site) => ({
+    name: site.name,
+    root: site.checkoutPath,
+    revision: "a".repeat(40),
+  }));
+  try {
+    process.env.THEME_CONTROL_SITES = JSON.stringify(
+      configured.map((site) => site.name === "Glee" ? { ...site, name: "Unknown" } : site),
+    );
+    assert.throws(
+      () => configuredSiteInputs(),
+      /THEME_CONTROL_SITES must contain exactly OKH, Glee, AskJamie/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.THEME_CONTROL_SITES;
+    else process.env.THEME_CONTROL_SITES = previous;
+  }
+});
+
 function directoryExists(path) {
   return existsSync(join(path, "index.html")) &&
     existsSync(join(path, "assets", "css", "theme.css")) &&
