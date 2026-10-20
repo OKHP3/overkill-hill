@@ -1,4 +1,4 @@
-"""Protect exact Node pins and the compatible Replit major from drifting."""
+"""Protect QA dependency pins and the compatible Replit major from drifting."""
 import importlib.util
 import json
 from pathlib import Path
@@ -36,6 +36,11 @@ class RuntimeAlignmentTests(unittest.TestCase):
             root = Path(folder)
             self.fixture(root, nvm="22.19.0")
             self.assertIn("NODE_ALIGNMENT", self.failures(root))
+
+    def test_repository_python_qa_pins_agree(self):
+        report = STACK.Report({})
+        STACK.check_pip_deps(ROOT, report)
+        self.assertEqual([r for r in report.findings if r["level"] == STACK.FAIL], [])
 
     def test_stale_lock_engine_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
