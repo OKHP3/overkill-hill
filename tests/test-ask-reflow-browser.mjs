@@ -7,7 +7,7 @@ const browser = await chromium.launch({ headless: true });
 let cases = 0;
 try {
   for (const brand of ['askjamie-main', '', 'glee-main']) {
-    for (const width of [320, 900]) for (const size of [16, 32]) {
+    for (const width of [320, 375, 400, 900]) for (const size of [16, 32]) {
       for (const mode of [
         { preference: 'light', os: 'dark', dark: false },
         { preference: 'dark', os: 'light', dark: true },
