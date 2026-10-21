@@ -7,7 +7,7 @@ const browser = await chromium.launch({ headless: true });
 let cases = 0;
 try {
   for (const brand of ['askjamie-main', '', 'glee-main']) {
-    for (const width of [320, 900]) for (const size of [16, 32]) {
+    for (const width of [320, 375, 400, 900]) for (const size of [16, 32]) {
       for (const mode of [
         { preference: 'light', os: 'dark', dark: false },
         { preference: 'dark', os: 'light', dark: true },
@@ -48,6 +48,30 @@ try {
           assert.equal(state.href, '/case/');
           assert.equal(state.nestedControls, 0);
           if (brand === 'askjamie-main') {
+            const measureOverflow = () => page.evaluate(() => {
+              const root = document.documentElement;
+              return {
+                document: root.scrollWidth - root.clientWidth,
+                elements: [...document.querySelectorAll('main, .hero-actions .btn, .brandguard-case-card, .site-footer')]
+                  .filter(element => {
+                    const bounds = element.getBoundingClientRect();
+                    return bounds.left < -1 || bounds.right > root.clientWidth + 1;
+                  }).map(element => element.className || element.tagName),
+              };
+            });
+            const assertNoOverflow = geometry => {
+              assert.ok(geometry.document <= 1, `Document overflow at ${width}px / ${size}px: ${geometry.document}px`);
+              assert.deepEqual(geometry.elements, [], `Elements outside viewport at ${width}px / ${size}px`);
+            };
+            assertNoOverflow(await measureOverflow());
+            if (width === 375 && size === 32 && mode.preference === 'light') {
+              // Prove the geometry gate catches overflow even when wrapping properties stay unchanged.
+              await card.evaluate(element => { element.style.minWidth = '150vw'; });
+              const overflowControl = await measureOverflow();
+              assert.throws(() => assertNoOverflow(overflowControl), { name: 'AssertionError' });
+              await card.evaluate(element => { element.style.removeProperty('min-width'); });
+              assertNoOverflow(await measureOverflow());
+            }
             assert.equal(state.mainWrap, 'anywhere');
             assert.equal(state.navWrap, 'wrap');
             for (const key of ['childMinWidth', 'footerMinWidth', 'heroMinWidth']) assert.equal(state[key], '0px');
