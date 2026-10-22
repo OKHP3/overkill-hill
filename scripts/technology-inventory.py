@@ -350,8 +350,14 @@ def enrich(rows, deadline=None):
         except Exception as exc:
             # Do not include HTTP response bodies, which could contain credentials.
             return {**item, "latest": None, "status": "UNKNOWN", "error": str(exc)}
+    # Runtime diagnostics must not queue behind the transitive registry inventory.
+    # Preserve report order and the shared deadline; skipped lookups stay UNKNOWN.
+    order = sorted(range(len(rows)), key=lambda i:
+                   rows[i]["provider"] not in {"python", "node", "npm-bundled"})
     with ThreadPoolExecutor(max_workers=6) as pool:
-        return list(pool.map(one, rows))
+        resolved = list(pool.map(one, (rows[i] for i in order)))
+    by_index = dict(zip(order, resolved))
+    return [by_index[i] for i in range(len(rows))]
 
 
 def upstream_inventory(rows, deadline=None):
