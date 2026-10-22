@@ -122,6 +122,15 @@ and the current report before choosing an update.
 
 ## Validation and rollback
 
+### October 21 runtime patch maintenance
+
+Preferred Node and bundled npm pins are 24.22.1 and 11.19.1. Python primary
+selectors use 3.15.1 and the older compatibility trial uses 3.14.9. The runtime
+compatibility and Site Validation workflows validate these patch changes before
+merge; supported Node/npm engine bounds and QA dependency pins are unchanged.
+The Replit Python 3.11 module finding remains open pending actual host evidence.
+The observations below retain their original dates and do not certify current hosts.
+
 ### Current Python runtime policy (October 11)
 
 Primary GitHub jobs select Python **3.15.0** after the hosted 3.15.0

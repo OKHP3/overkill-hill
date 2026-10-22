@@ -44,10 +44,10 @@ from pathlib import Path
 
 # --- Canonical values (ADR 0007) --------------------------------------------
 
-NODE_VERSION = "24.21.0"
+NODE_VERSION = "24.22.1"
 NODE_ENGINE = ">=24.13.0 <25"
 NPM_ENGINE = ">=11.6.2 <12"
-NPM_PACKAGE_MANAGER = "npm@11.19.0"
+NPM_PACKAGE_MANAGER = "npm@11.19.1"
 
 # Exact pins, matching docs/dependency-policy.md in the reference repo.
 NPM_REQUIRED = {

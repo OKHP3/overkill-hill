@@ -144,7 +144,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.15.0'
+          python-version: '3.15.1'
 
       - name: Install Python validation dependencies
         run: python3 -m pip install --disable-pip-version-check --no-input -r requirements-qa.txt
@@ -604,7 +604,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.15.0'
+          python-version: '3.15.1'
 
       - name: Verify production live edge
         id: verify
