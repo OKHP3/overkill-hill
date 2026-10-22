@@ -149,6 +149,27 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual([r["status"] for r in results], ["UNKNOWN", "CURRENT"])
         self.assertIn("error", results[0])
 
+    def test_runtime_lookups_precede_registry_work_without_hiding_failures(self):
+        items = [AUDIT.row("package", "npm transitive", "1.0.0", [], "npm"),
+                 AUDIT.row("Python", "runtime", "3.15.1", [], "python"),
+                 AUDIT.row("Node.js", "runtime", "24.22.1", [], "node"),
+                 AUDIT.row("npm", "runtime", "bundled", [], "npm-bundled")]
+        calls = []
+        executor = AUDIT.ThreadPoolExecutor
+        def resolve(item, deadline=None):
+            self.assertEqual(deadline, 123)
+            calls.append(item["name"])
+            if item["provider"] == "npm":
+                raise TimeoutError("Version lookup time budget exhausted")
+            return {"latest": item["current"], "status": "CURRENT"}
+        with patch.object(AUDIT, "ThreadPoolExecutor", side_effect=lambda **_: executor(max_workers=1)), \
+                patch.object(AUDIT, "resolve", side_effect=resolve):
+            results = AUDIT.enrich(items, deadline=123)
+        self.assertEqual(calls, ["Python", "Node.js", "npm", "package"])
+        self.assertEqual([r["name"] for r in results], [r["name"] for r in items])
+        self.assertEqual([r["status"] for r in results], ["UNKNOWN", "CURRENT", "CURRENT", "CURRENT"])
+        self.assertIn("budget exhausted", results[0]["error"])
+
     def test_gzip_responses_are_decoded(self):
         response = io.BytesIO(gzip.compress(b'{"version":"1.2.3"}'))
         response.headers = {"Content-Encoding": "gzip"}
