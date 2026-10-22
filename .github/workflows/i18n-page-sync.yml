@@ -36,7 +36,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: '3.15.0'
+          python-version: '3.15.1'
 
       - name: Run published-locale release gate
         run: python3 scripts/check-i18n-release.py --mode check --format json

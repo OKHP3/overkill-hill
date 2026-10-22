@@ -41,13 +41,13 @@ class RuntimeCoverageTests(unittest.TestCase):
                   if python_selectors(text)}
         self.assertEqual(counts, {"validate.yml": 2, "technology-watch.yml": 2,
                                   "i18n-page-sync.yml": 1, "translation-skill-tests.yml": 1})
-        self.assertEqual(primary_selector_mismatches(workflows, "3.15.0"), {})
+        self.assertEqual(primary_selector_mismatches(workflows, "3.15.1"), {})
 
     def test_one_stale_primary_selector_is_rejected(self):
         workflows = self.primary_workflows()
         workflows["validate.yml"] = workflows["validate.yml"].replace(
-            "python-version: '3.15.0'", "python-version: '3.11'", 1)
-        self.assertEqual(primary_selector_mismatches(workflows, "3.15.0"),
+            "python-version: '3.15.1'", "python-version: '3.11'", 1)
+        self.assertEqual(primary_selector_mismatches(workflows, "3.15.1"),
                          {"validate.yml": ["3.11"]})
 
     def test_all_active_validation_suites_run_in_the_matrix(self):

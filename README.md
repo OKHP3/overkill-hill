@@ -195,12 +195,12 @@ Checks every HTML page for: title, meta description, canonical, single H1, JSON-
 For the browser-level phone layout check used in CI:
 
 Use the preferred Node.js version in `.nvmrc` and `.node-version` for local
-browser QA and CI: **24.21.0**, with bundled npm **11.19.0**. Run `npm ci`
+browser QA and CI: **24.22.1**, with bundled npm **11.19.1**. Run `npm ci`
 to preserve the dependency lockfile.
 
 Managed Replit runtimes can lag behind the latest LTS patch. The manifest and
 lockfile therefore support **Node >=24.13.0 <25** with **npm >=11.6.2 <12**.
-`packageManager` selects **npm 11.19.0** for package-manager-aware tools such as
+`packageManager` selects **npm 11.19.1** for package-manager-aware tools such as
 Dependabot. Without an explicit selection, the hosted updater can choose npm 12
 from the lockfile format and fail the supported engine bounds. This selection
 does not install or upgrade the managed Replit runtime.
