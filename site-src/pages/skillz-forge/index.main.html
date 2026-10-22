@@ -234,37 +234,19 @@
 <!-- CURRENT INVENTORY ───────────────────────────────── -->
 <div class="content-block card" data-search-index="" id="inventory">
 <div class="section-label">Current Inventory</div>
-<h2><span data-fallback="148" id="skillz-live-skill-count">148</span> public distribution skills across <span data-fallback="16" id="skillz-live-family-count">16</span> active families</h2>
-<p style="font-size:0.875rem;color:var(--color-muted);margin-bottom:1.25rem;line-height:1.7;">Source-derived count from the live generated catalog (<code>project-summary.json</code>) as of <span data-fallback="2026-08-20" id="skillz-live-as-of">2026-08-20</span>. This page fetches that file at load time and updates the numbers above automatically; if the fetch fails (e.g. offline), the last-synced values shown here remain. A prior July 29, 2026 audit reported 75 skills across 12 families; the count grew as new packages were added and audited.</p>
-<div aria-label="Active skill families" role="list" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
-<span class="tag" role="listitem">Abrahamic</span>
-<span class="tag" role="listitem">Agent Foundry</span>
-<span class="tag" role="listitem">AskJamie</span>
-<span class="tag" role="listitem">Community</span>
-<span class="tag" role="listitem">Context Extraction</span>
-<span class="tag" role="listitem">Glee-fully</span>
-<span class="tag" role="listitem">Knowledge Operations</span>
-<span class="tag" role="listitem">LifeTrkr</span>
-<span class="tag tag--accent" role="listitem">Mermaid</span>
-<span class="tag" role="listitem">Notion</span>
-<span class="tag" role="listitem">Outcome Modeling</span>
-<span class="tag" role="listitem">Process Capture</span>
-<span class="tag" role="listitem">ReFolDec</span>
-<span class="tag" role="listitem">Replit</span>
-<span class="tag" role="listitem">Social Posting</span>
-<span class="tag" role="listitem">Universal</span>
-</div>
+<h2 id="skillz-inventory-heading">Current public distribution catalog</h2>
+<p style="font-size:0.875rem;color:var(--color-muted);margin-bottom:1.25rem;line-height:1.7;">The inventory below loads from the live generated catalog (<code>project-summary.json</code>). <span id="skillz-live-as-of">Checking the current source snapshot.</span> If it is unavailable, use the <a href="https://okhp3.github.io/skillz/">live Forge catalog</a> for current counts and families.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.75rem;margin-bottom:1.25rem;">
 <div style="padding:0.875rem;border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);background:rgba(0,0,0,0.1);">
-<div data-fallback="148" id="skillz-live-skill-card" style="font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--okh-orange);line-height:1;">148</div>
+<div id="skillz-live-skill-card" style="font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--okh-orange);line-height:1;">Pending</div>
 <div style="font-size:0.78rem;color:var(--color-muted);margin-top:0.25rem;">public distribution skills</div>
 </div>
 <div style="padding:0.875rem;border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);background:rgba(0,0,0,0.1);">
-<div data-fallback="16" id="skillz-live-family-card" style="font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--color-fg);line-height:1;">16</div>
+<div id="skillz-live-family-card" style="font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:700;color:var(--color-fg);line-height:1;">Pending</div>
 <div style="font-size:0.78rem;color:var(--color-muted);margin-top:0.25rem;">active families</div>
 </div>
 </div>
-<p style="font-size:0.825rem;color:var(--color-muted);margin-bottom:0.75rem;line-height:1.6;">Forge currently lists <strong data-fallback="119" id="skillz-live-draftable-count" style="color:var(--color-fg);">119</strong> draftable, <strong data-fallback="24" id="skillz-live-skeleton-count" style="color:var(--color-fg);">24</strong> skeleton, and <strong data-fallback="5" id="skillz-live-usable-count" style="color:var(--color-fg);">5</strong> usable contracts; no contract carries validated or published maturity. Maturity describes the contract's completeness; it is tracked separately from <strong style="color:var(--color-fg);">evidence status</strong>, which describes what proof exists for the current version (live, analytical, local-checks, historical, not-run, or none). See <a href="#maturity" style="color:var(--okh-orange);">how maturity and evidence work</a> below.</p>
+<p style="font-size:0.825rem;color:var(--color-muted);margin-bottom:0.75rem;line-height:1.6;"><span id="skillz-live-maturity-summary">Maturity counts are loading from the current catalog.</span> Maturity describes the contract's completeness; it is tracked separately from <strong style="color:var(--color-fg);">evidence status</strong>, which describes what proof exists for the current version. See <a href="#maturity" style="color:var(--okh-orange);">how maturity and evidence work</a> below.</p>
 <p style="font-size:0.825rem;color:var(--color-muted);line-height:1.6;">This page does not maintain a live family directory. The SPA is the authoritative exploration surface: family breakdowns, maturity filters, and per-skill detail are all available there. <a data-gtag-category="inventory" data-gtag-event="skillz_live_app_open" data-gtag-label="explore" href="https://okhp3.github.io/skillz/" rel="noopener noreferrer" style="color:var(--okh-orange);" target="_blank">Explore the full catalog in Skillz Forge ↗</a> · <a data-gtag-category="inventory" data-gtag-event="github_handoff" data-gtag-label="audit_docs" href="https://github.com/OKHP3/skillz/tree/main/docs" rel="noopener noreferrer" style="color:var(--okh-orange);" target="_blank">Read the July 29, 2026 maturity audit ↗</a></p>
 </div>
 <!-- WHAT VISITORS CAN DO ─────────────────────────────── -->

@@ -4,34 +4,39 @@
         fetch(SOURCE_URL, { cache: 'no-store' })
           .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
           .then(function (summary) {
-            var skillCountEl = document.getElementById('skillz-live-skill-count');
-            var familyCountEl = document.getElementById('skillz-live-family-count');
+            var headingEl = document.getElementById('skillz-inventory-heading');
             var asOfEl = document.getElementById('skillz-live-as-of');
-            var bannerEl = document.getElementById('skillz-live-banner-count');
             var skillCardEl = document.getElementById('skillz-live-skill-card');
             var familyCardEl = document.getElementById('skillz-live-family-card');
-            var draftableEl = document.getElementById('skillz-live-draftable-count');
-            var skeletonEl = document.getElementById('skillz-live-skeleton-count');
-            var usableEl = document.getElementById('skillz-live-usable-count');
-            if (typeof summary.skillCount === 'number' && typeof summary.familyCount === 'number') {
-              if (skillCountEl) skillCountEl.textContent = summary.skillCount;
-              if (familyCountEl) familyCountEl.textContent = summary.familyCount;
-              if (bannerEl) bannerEl.textContent = summary.skillCount + ' skills, ' + summary.familyCount + ' families';
-              if (skillCardEl) skillCardEl.textContent = summary.skillCount;
-              if (familyCardEl) familyCardEl.textContent = summary.familyCount;
+            var maturityEl = document.getElementById('skillz-live-maturity-summary');
+            if (!Number.isSafeInteger(summary.skillCount) || summary.skillCount <= 0 ||
+                !Number.isSafeInteger(summary.familyCount) || summary.familyCount <= 0) {
+              throw new Error('Invalid catalog inventory');
             }
-            if (asOfEl && summary.generatedAt) {
-              asOfEl.textContent = summary.generatedAt.slice(0, 10);
-            }
-            if (summary.maturityCounts && typeof summary.maturityCounts === 'object') {
-              if (draftableEl && typeof summary.maturityCounts.draftable === 'number') draftableEl.textContent = summary.maturityCounts.draftable;
-              if (skeletonEl && typeof summary.maturityCounts.skeleton === 'number') skeletonEl.textContent = summary.maturityCounts.skeleton;
-              if (usableEl && typeof summary.maturityCounts.usable === 'number') usableEl.textContent = summary.maturityCounts.usable;
+            if (headingEl) headingEl.textContent = summary.skillCount + ' public distribution skills across ' + summary.familyCount + ' active families';
+            if (skillCardEl) skillCardEl.textContent = summary.skillCount;
+            if (familyCardEl) familyCardEl.textContent = summary.familyCount;
+            if (asOfEl) asOfEl.textContent = typeof summary.generatedAt === 'string'
+              ? 'Source snapshot: ' + summary.generatedAt.slice(0, 10) + '.'
+              : 'Source snapshot time unavailable.';
+            if (maturityEl && summary.maturityCounts && typeof summary.maturityCounts === 'object') {
+              var counts = Object.keys(summary.maturityCounts)
+                .filter(function (level) { return Number.isSafeInteger(summary.maturityCounts[level]) && summary.maturityCounts[level] > 0; })
+                .map(function (level) { return summary.maturityCounts[level] + ' ' + level; });
+              maturityEl.textContent = counts.length ? 'Current contract maturity: ' + counts.join(', ') + '.' : 'Current maturity counts are unavailable.';
+            } else if (maturityEl) {
+              maturityEl.textContent = 'Current maturity counts are unavailable.';
             }
           })
           .catch(function (err) {
-            // Fail silent to the visitor; last hand-synced counts already in
-            // the markup stand. Log only for maintainers checking devtools.
+            var asOfEl = document.getElementById('skillz-live-as-of');
+            var skillCardEl = document.getElementById('skillz-live-skill-card');
+            var familyCardEl = document.getElementById('skillz-live-family-card');
+            var maturityEl = document.getElementById('skillz-live-maturity-summary');
+            if (asOfEl) asOfEl.textContent = 'The current source snapshot could not be loaded.';
+            if (skillCardEl) skillCardEl.textContent = 'Unavailable';
+            if (familyCardEl) familyCardEl.textContent = 'Unavailable';
+            if (maturityEl) maturityEl.textContent = 'Current maturity counts are unavailable.';
             console.warn('[skillz dossier] could not live-sync counts from project-summary.json:', err);
           });
       })();
