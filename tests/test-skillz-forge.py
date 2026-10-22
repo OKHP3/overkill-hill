@@ -15,6 +15,20 @@ SEARCH = runpy.run_path(str(ROOT / 'scripts/build-search-index.py'))
 
 
 class SkillzForgeTests(unittest.TestCase):
+    def test_inventory_has_no_stale_static_counts(self):
+        source = (ROOT / 'site-src/pages/skillz-forge/index.main.html').read_text(encoding='utf-8')
+        script = (ROOT / 'site-src/pages/skillz-forge/index.extras.html').read_text(encoding='utf-8')
+        soup = BeautifulSoup(source, 'html.parser')
+        self.assertEqual(soup.select_one('#skillz-inventory-heading').get_text(strip=True),
+                         'Current public distribution catalog')
+        self.assertEqual(soup.select_one('#skillz-live-skill-card').get_text(strip=True), 'Pending')
+        self.assertEqual(soup.select_one('#skillz-live-family-card').get_text(strip=True), 'Pending')
+        self.assertIsNotNone(soup.select_one('#skillz-live-maturity-summary'))
+        self.assertNotIn('data-fallback=', source)
+        self.assertIn('https://okhp3.github.io/skillz/data/project-summary.json', script)
+        self.assertIn("throw new Error('Invalid catalog inventory')", script)
+        self.assertIn("skillCardEl.textContent = 'Unavailable'", script)
+
     def test_project_menu_features_both_pages_as_peers(self):
         from public_page_boundary import iter_public_html_files
         for path in iter_public_html_files(ROOT):

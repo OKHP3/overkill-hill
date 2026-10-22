@@ -1993,7 +1993,7 @@
         "A discovery workbench, not a marketplace",
         "Skillz Shield",
         "How a prompt becomes a portable capability",
-        "148 public distribution skills across 16 active families",
+        "Current public distribution catalog",
         "Verified application capabilities",
         "Skills in action: four recurring scenarios",
         "How skill maturity and evidence work",
@@ -2081,11 +2081,11 @@
     },
     {
       "url": "/skillz-forge/#inventory",
-      "title": "148 public distribution skills across 16 active families — Skillz Forge | OverKill Hill P³™",
+      "title": "Current public distribution catalog — Skillz Forge | OverKill Hill P³™",
       "category": "Project",
-      "description": "Current Inventory 148 public distribution skills across 16 active families Source-derived count from the live generated catalog ( project-summary.json ) as of 2026-08-20 .",
+      "description": "Current Inventory Current public distribution catalog The inventory below loads from the live generated catalog ( project-summary.json ). Checking the current source snapshot.",
       "headings": [],
-      "body": "Current Inventory 148 public distribution skills across 16 active families Source-derived count from the live generated catalog ( project-summary.json ) as of 2026-08-20 . This page fetches that file at load time and updates the numbers above automatically; if the fetch fails (e.g. offline), the last-synced values shown here remain. A prior July 29, 2026 audit reported 75 skills across 12 families; the count grew as new packages were added and audited. Abrahamic Agent Foundry AskJamie Community Context Extraction Glee-fully Knowledge Operations LifeTrkr Mermaid Notion Outcome Modeling Process Capture ReFolDec Replit Social Posting Universal 148 public distribution skills 16 active families Forge currently lists 119 draftable, 24 skeleton, and 5 usable contracts; no contract carries…",
+      "body": "Current Inventory Current public distribution catalog The inventory below loads from the live generated catalog ( project-summary.json ). Checking the current source snapshot. If it is unavailable, use the live Forge catalog for current counts and families. Pending public distribution skills Pending active families Maturity counts are loading from the current catalog. Maturity describes the contract's completeness; it is tracked separately from evidence status , which describes what proof exists for the current version. See how maturity and evidence work below. This page does not maintain a live family directory. The SPA is the authoritative exploration surface: family breakdowns, maturity filters, and per-skill detail are all available there.",
       "parent": "/skillz-forge/"
     },
     {
