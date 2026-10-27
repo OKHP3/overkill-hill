@@ -138,7 +138,7 @@ test("interactive diagrams expose their named group and each named link", async 
     await page.setContent('<div class="mermaid" role="group" aria-label="Linked diagram"><svg role="group"><a href="#one" aria-label="First destination"><text>One</text></a><a href="#two" aria-label="Second destination"><text>Two</text></a></svg></div>');
     assert.deepEqual(await checkMermaidDiagrams(page), []);
     await page.locator("svg a").nth(1).evaluate((node) => node.setAttribute("aria-hidden", "true"));
-    assert.deepEqual(await checkMermaidDiagrams(page), ["Mermaid diagram 1 link 2: expected its own accessible link in the group"]);
+    assert.deepEqual(await checkMermaidDiagrams(page), ["Mermaid diagram 1 link 2: expected its own accessible link in the diagram"]);
   } finally { await page.close(); }
 });
 
@@ -156,7 +156,7 @@ test("an interactive standalone SVG can expose graphics-document semantics", asy
     await page.setContent('<svg data-diagram-label="Standalone diagram" role="graphics-document document" aria-label="Linked diagram"><a href="#one" aria-label="First destination"><text>One</text></a></svg>');
     assert.deepEqual(await checkMermaidDiagrams(page), []);
     await page.locator("svg a").evaluate((node) => node.setAttribute("aria-hidden", "true"));
-    assert.deepEqual(await checkMermaidDiagrams(page), ["Mermaid diagram 1 link 1: expected its own accessible link in the group"]);
+    assert.deepEqual(await checkMermaidDiagrams(page), ["Mermaid diagram 1 link 1: expected its own accessible link in the diagram"]);
   } finally { await page.close(); }
 });
 

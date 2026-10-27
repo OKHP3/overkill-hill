@@ -155,7 +155,7 @@ export async function checkMermaidDiagrams(page) {
           return;
         }
         const links = matchingNode(backendId, "link").filter((link) => children.has(link.nodeId));
-        if (links.length !== 1) failures.push(`${linkLabel}: expected its own accessible link in the group`);
+        if (links.length !== 1) failures.push(`${linkLabel}: expected its own accessible link in the diagram`);
         else if (!(links[0].name?.value || "").trim()) failures.push(`${linkLabel}: accessible link has no name`);
       });
     });
