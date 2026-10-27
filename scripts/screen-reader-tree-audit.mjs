@@ -26,6 +26,8 @@
  */
 
 import { chromium } from "playwright";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:5000";
 const baseArg = process.argv.find((arg) => arg.startsWith("--base-url="));
@@ -57,10 +59,43 @@ async function getAxNodes(page) {
     }));
 }
 
+// The first-visit announcement owns focus and hides the underlying page from
+// the accessibility tree. Dismiss it as a visitor would before auditing that
+// tree and the search dialog, while retaining a failure for an unnamed modal.
+export async function dismissTransitionAnnouncement(page, failures) {
+  const announcement = page.locator("#capability-transition-dialog[open]");
+  if (!await announcement.count()) return true;
+
+  const namedAnnouncement = announcement.and(page.getByRole("dialog", { name: /\S/ }));
+  if (!await namedAnnouncement.count()) {
+    failures.push("transition announcement has no accessible dialog name");
+  }
+
+  await announcement.evaluate((dialog) => {
+    dialog.__auditCloseObserved = false;
+    dialog.addEventListener("close", () => { dialog.__auditCloseObserved = true; }, { once: true });
+  });
+  await page.keyboard.press("Escape");
+  try {
+    await page.waitForFunction(() => {
+      const dialog = document.getElementById("capability-transition-dialog");
+      return dialog && !dialog.open && dialog.__auditCloseObserved === true;
+    }, undefined, { timeout: 5000 });
+  } catch {
+    failures.push("transition announcement did not close after Escape");
+    return false;
+  }
+  return true;
+}
+
 async function auditPage(page, def) {
   const failures = [];
   await page.goto(`${baseUrl}${def.path}`, { waitUntil: "networkidle", timeout: 30000 });
   await page.waitForTimeout(200);
+
+  if (!await dismissTransitionAnnouncement(page, failures)) {
+    return { failures, nodeCount: 0, landmarks: [] };
+  }
 
   // Mermaid diagrams below the fold render lazily via IntersectionObserver,
   // mirroring what happens as a screen-reader user scrolls/tabs down the
@@ -171,7 +206,9 @@ async function main() {
   console.log(`\nScreen-reader accessibility-tree audit passed for ${PAGES.length} pages.`);
 }
 
-main().catch((error) => {
-  console.error(`Screen-reader tree audit could not run: ${error.stack || error.message}`);
-  process.exit(1);
-});
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  main().catch((error) => {
+    console.error(`Screen-reader tree audit could not run: ${error.stack || error.message}`);
+    process.exit(1);
+  });
+}

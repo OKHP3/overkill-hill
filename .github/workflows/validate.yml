@@ -389,6 +389,7 @@ jobs:
           curl --silent --fail http://127.0.0.1:5000/ >/dev/null
           npm run test:accessibility
           node tests/test-capability-transition.mjs
+          node --test tests/screen-reader-tree-audit.test.mjs
 
       - name: Run route-wide CSP browser QA
         run: |
