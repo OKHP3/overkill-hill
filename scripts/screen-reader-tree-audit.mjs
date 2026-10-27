@@ -2,20 +2,12 @@
 /**
  * Screen-reader accessibility-tree audit.
  *
- * This environment is a headless Linux sandbox with no audio device, no
- * desktop session, and no installed screen reader (no NVDA/JAWS on Windows,
- * no VoiceOver on macOS, no Orca on Linux — Orca requires a graphical
- * session and speech-dispatcher, neither of which exist here). A literal
- * "turn on a screen reader and listen" session is not possible in this
- * sandbox.
+ * This audit uses headless Chromium and does not run a screen reader.
  *
- * The closest rigorous substitute available here is Chromium's accessibility
- * tree via Playwright's `page.accessibility.snapshot()`. Screen readers
- * consume this same platform accessibility tree (via UIA/AT-SPI/AX APIs), so
- * inspecting it verifies exactly what would be announced: computed roles,
- * accessible names/descriptions, landmark structure, table semantics, and
- * live-region/dialog exposure. It does NOT verify a specific screen reader's
- * verbosity, rendering quirks, or browser-specific AT interop bugs — see
+ * This audit inspects Chromium's computed accessibility tree through CDP,
+ * including roles, names, landmarks, table semantics, and dialog exposure.
+ * It does not record actual screen-reader output or verify a specific screen
+ * reader's verbosity, rendering quirks, or browser-specific AT interop bugs. See
  * README.md "Accessibility QA coverage" for that limitation and the
  * recommendation to pair this with a real NVDA+Chrome / VoiceOver+Safari
  * session before a major release.
@@ -57,6 +49,120 @@ async function getAxNodes(page) {
       role: n.role?.value,
       name: n.name?.value || "",
     }));
+}
+
+function domAttributes(node) {
+  const attributes = node.attributes || [];
+  const result = {};
+  for (let i = 0; i < attributes.length; i += 2) result[attributes[i]] = attributes[i + 1];
+  return result;
+}
+
+// Read one carrier per diagram, including standalone SVGs but not an SVG
+// already contained by a Mermaid carrier. The existing data-diagram-label
+// authoring marker survives a missing role or accessible name. An unmarked
+// standalone SVG is discoverable only while its legacy role and name remain.
+function collectDiagramCarriers(root) {
+  const diagrams = [];
+  function visit(node, diagram = null, inSvg = false) {
+    const tag = (node.nodeName || "").toLowerCase();
+    const attrs = domAttributes(node);
+    const classes = (attrs.class || "").split(/\s+/);
+    const isStandaloneDiagram = tag === "svg" && (
+      Object.hasOwn(attrs, "data-diagram-label") ||
+      (attrs.role === "img" && (attrs["aria-label"] || "").startsWith("Diagram "))
+    );
+    if (!diagram && (classes.includes("mermaid") || isStandaloneDiagram)) {
+      diagram = { backendId: node.backendNodeId, svgCarrier: tag === "svg", hasSvg: false, links: [] };
+      diagrams.push(diagram);
+    }
+    const insideSvg = inSvg || tag === "svg";
+    if (diagram && tag === "svg") diagram.hasSvg = true;
+    if (diagram && insideSvg && tag === "a" && (attrs.href || attrs["xlink:href"])) {
+      diagram.links.push(node.backendNodeId);
+    }
+    for (const child of node.children || []) visit(child, diagram, insideSvg);
+  }
+  visit(root);
+  return diagrams;
+}
+
+// The prior global image count could let unrelated images hide an unnamed
+// diagram. Bind each carrier and interactive link to its own Chromium AX node.
+export async function checkMermaidDiagrams(page) {
+  const client = await page.context().newCDPSession(page);
+  try {
+    await client.send("Accessibility.enable");
+    let diagrams;
+    let axNodes;
+    let stable = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const before = await client.send("DOM.getDocument", { depth: -1 });
+      diagrams = collectDiagramCarriers(before.root);
+      ({ nodes: axNodes } = await client.send("Accessibility.getFullAXTree"));
+      const after = await client.send("DOM.getDocument", { depth: -1 });
+      if (JSON.stringify(diagrams) === JSON.stringify(collectDiagramCarriers(after.root))) {
+        stable = true;
+        break;
+      }
+    }
+    if (!stable) return ["Mermaid diagram identities changed during accessibility inspection"];
+
+    const failures = [];
+    const nodesById = new Map(axNodes.map((node) => [node.nodeId, node]));
+    const matchingNode = (backendId, role) => axNodes.filter((node) =>
+      !node.ignored && node.backendDOMNodeId === backendId && node.role?.value === role);
+    function descendants(node) {
+      const found = new Set();
+      const pending = [...(node.childIds || [])];
+      while (pending.length) {
+        const id = pending.pop();
+        if (found.has(id)) continue;
+        found.add(id);
+        pending.push(...(nodesById.get(id)?.childIds || []));
+      }
+      return found;
+    }
+
+    diagrams.forEach((diagram, index) => {
+      const label = `Mermaid diagram ${index + 1}`;
+      if (!Number.isInteger(diagram.backendId)) {
+        failures.push(`${label}: missing DOM backend identity`);
+        return;
+      }
+      if (!diagram.hasSvg) {
+        failures.push(`${label}: no rendered SVG found`);
+        return;
+      }
+      const roles = diagram.links.length
+        ? (diagram.svgCarrier ? ["group", "graphics-document"] : ["group"])
+        : ["image"];
+      const carriers = roles.flatMap((role) => matchingNode(diagram.backendId, role));
+      const role = roles.join(" or ");
+      if (carriers.length !== 1) {
+        failures.push(`${label}: expected its own accessible ${role}, found ${carriers.length}`);
+        return;
+      }
+      const carrier = carriers[0];
+      if ((carrier.name?.value || "").trim().length < 8) {
+        failures.push(`${label}: accessible ${role} needs a name of at least 8 characters`);
+      }
+      const children = descendants(carrier);
+      diagram.links.forEach((backendId, linkIndex) => {
+        const linkLabel = `${label} link ${linkIndex + 1}`;
+        if (!Number.isInteger(backendId)) {
+          failures.push(`${linkLabel}: missing DOM backend identity`);
+          return;
+        }
+        const links = matchingNode(backendId, "link").filter((link) => children.has(link.nodeId));
+        if (links.length !== 1) failures.push(`${linkLabel}: expected its own accessible link in the group`);
+        else if (!(links[0].name?.value || "").trim()) failures.push(`${linkLabel}: accessible link has no name`);
+      });
+    });
+    return failures;
+  } finally {
+    await client.detach().catch(() => {});
+  }
 }
 
 // The first-visit announcement owns focus and hides the underlying page from
@@ -107,6 +213,15 @@ async function auditPage(page, def) {
     await handle.scrollIntoViewIfNeeded().catch(() => {});
     await page.waitForTimeout(120);
   }
+  try {
+    await page.waitForFunction(
+      () => [...document.querySelectorAll(".mermaid")].every((diagram) => diagram.querySelector("svg")),
+      undefined,
+      { timeout: 8000 },
+    );
+  } catch {
+    // Inspect the actual DOM below so an unrendered carrier is reported.
+  }
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(100);
 
@@ -120,22 +235,7 @@ async function auditPage(page, def) {
     }
   }
 
-  // Mermaid diagrams: role "img" with a non-trivial accessible name.
-  const domDiagramCount = await page.evaluate(
-    () => document.querySelectorAll(".mermaid, svg[role='img'][aria-label^='Diagram ']").length,
-  );
-  // Chromium's CDP Accessibility tree reports the ARIA "img" role as
-  // "image" (not "img") in its role value.
-  const imgNodes = nodes.filter((n) => n.role === "image");
-  if (domDiagramCount > 0) {
-    const labeledDiagrams = imgNodes.filter((n) => (n.name || "").trim().length >= 8);
-    if (labeledDiagrams.length < domDiagramCount) {
-      failures.push(
-        `expected ${domDiagramCount} Mermaid diagram(s) exposed as role="img" with a real name, ` +
-        `found ${labeledDiagrams.length} in the a11y tree`,
-      );
-    }
-  }
+  failures.push(...await checkMermaidDiagrams(page));
 
   // Tables: role "table" with either a name or a row/column structure a
   // screen reader can navigate (rows exposed as children).
