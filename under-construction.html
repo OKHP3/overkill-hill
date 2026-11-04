@@ -198,60 +198,69 @@
 
 
 
-<!-- HERO: OverKill Hill under‑construction message  -->
-<section aria-labelledby="hero-title" class="under-construction-hero">
-<!-- OverKill Hill industrial stripes drift behind the content -->
-<div aria-hidden="true" class="brand-stripes brand-stripes--okh"></div>
-<div class="container reveal-on-scroll">
-<div class="under-construction-hero-grid">
-<div class="under-construction-hero-visual">
-<img alt="Mechanical bird illustration representing work in progress" class="lazyload" fetchpriority="high" height="640" loading="lazy" src="assets/img/murderbird-v2-under-construction-960.png" width="960"/>
-</div>
-<div class="under-construction-hero-copy">
-<h1 id="hero-title">This part of the forge is under construction.</h1>
-<p class="hero-subtitle">
-                We’re still assembling the pages, protocols and examples that will live here.
-              </p>
-<p class="hero-tagline">
-                In the meantime, our other projects and resources are fully available.
-              </p>
-<div class="hero-actions">
-<a class="btn btn-quiet" href="/#forge">Back to the forge</a>
-<a class="btn btn-primary" href="projects/">Explore projects</a>
-</div>
-</div>
-</div>
-</div>
+<!-- Under-construction route: shared header, footer and CSP come from build-site.py. -->
+<section class="hero forge-masthead" aria-labelledby="hero-title">
+  <div class="brand-stripes brand-stripes--okh" aria-hidden="true"></div>
+  <div class="hero-blueprint-bg" aria-hidden="true"></div>
+  <div class="container hero-inner">
+    <div class="hero-grid">
+      <div>
+        <p class="hero-eyebrow">OverKill Hill P³™ · Active forge bay</p>
+        <h1 id="hero-title">Under construction. Still forging.</h1>
+        <p class="hero-subline">This workstation is being rebuilt.</p>
+        <p class="hero-tagline">The forge is open, but this part of the Hill is still on the anvil. We’re shaping the pages, project evidence and working guides before opening this bay to visitors.</p>
+        <aside class="site-status" aria-label="Construction status">
+          <p class="site-status-eyebrow">⚠ Work in progress</p>
+          <p class="site-status-body">You haven’t reached a dead end. The route is being fitted, tested and finished. The rest of OverKill Hill is ready to explore.</p>
+        </aside>
+        <nav class="hero-actions" aria-label="Continue exploring OverKill Hill">
+          <a class="btn btn-primary" href="/#forge">Back to the Forge</a>
+          <a class="btn btn-quiet" href="/projects/">Explore projects</a>
+          <a class="btn btn-quiet" href="/contact/">Contact the forge</a>
+        </nav>
+      </div>
+      <div class="hero-side">
+        <figure class="hero-visual">
+          <picture>
+            <source media="(max-width: 700px)" srcset="/assets/img/webp/murderbird-v2-under-construction-480.webp" type="image/webp"/>
+            <source srcset="/assets/img/over-kill-hill-p3-bird-patrol-comp-left-under-construction-wide-1536.webp" type="image/webp"/>
+            <img class="hero-illustration" fetchpriority="high" loading="eager" decoding="async" width="1536" height="1024" src="/assets/img/over-kill-hill-p3-bird-patrol-comp-left-under-construction-wide-1536.png" alt="The mechanical MurderBird at a forge workbench while construction continues."/>
+          </picture>
+          <figcaption>Still on the anvil. Not abandoned.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
 </section>
-<!-- Simple body content so the page isn’t just a hero -->
-<section class="content-section container reveal-on-scroll">
-<header class="section-header">
-<h2>What’s being built here?</h2>
-<p class="note">
-            Think of this page as the construction gate for everything still in flux:
-            deeper docs, playbooks and connective tissue across the OverKill Hill P³™ universe.
-          </p>
-</header>
-<div class="grid grid-3">
-<article class="card">
-<h3>System documentation</h3>
-<p>
-              Clear walkthroughs for our systems and protocols: what each piece does, how to prompt it, and where it fits in your stack.
-            </p>
-</article>
-<article class="card">
-<h3>Conversation patterns</h3>
-<p>
-              Saved flows, diagrams and example scripts that show how our systems handle ambiguity, tradeoffs and long‑running decisions.
-            </p>
-</article>
-<article class="card">
-<h3>System maps</h3>
-<p>
-              Visual maps of how OverKill Hill P³™, Glee‑fully and our other projects fit together so you can see the whole ecosystem at a glance.
-            </p>
-</article>
-</div>
+<section class="content-section container" aria-labelledby="uc-next-heading">
+  <header class="section-header">
+    <h2 id="uc-next-heading">While this station takes shape</h2>
+    <p>Find the work that is already on display, the thinking behind it, or a way to get in touch.</p>
+  </header>
+  <div class="grid grid-3">
+    <article class="card project-card">
+      <h3>Projects from the forge</h3>
+      <p>See the tools, experiments and project records already published.</p>
+      <p><a href="/projects/">Browse our projects →</a></p>
+    </article>
+    <article class="card project-card">
+      <h3>The Manifesto</h3>
+      <p>Learn the principles behind precision, protocol and promptcraft.</p>
+      <p><a href="/manifesto/">Read the manifesto →</a></p>
+    </article>
+    <article class="card project-card">
+      <h3>Contact the Hill</h3>
+      <p>Have a question about this route or a project? Reach the forge directly.</p>
+      <p><a href="/contact/">Get in touch →</a></p>
+    </article>
+  </div>
+  <details class="card">
+    <summary>View the forge floor before the MurderBird arrives</summary>
+    <figure>
+      <img loading="lazy" decoding="async" width="1536" height="1024" src="/assets/img/library/over-kill-hill-p3-bird-patrol-comp-left-under-construction-background-wide-1536.webp" alt="Industrial forge floor with tools, piping and mechanical equipment."/>
+      <figcaption>Every finished system begins with an unfinished workbench.</figcaption>
+    </figure>
+  </details>
 </section>
 
   </main>
