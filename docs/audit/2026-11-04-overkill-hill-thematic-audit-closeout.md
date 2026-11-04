@@ -91,3 +91,10 @@ All repository files live on the **review branch** until protected-main review a
 **Next action:** Review the documentation PR and its checks; if approved, merge through the protected-main process. Then, if the original chat must be archived, use ChatGPT's chat-list/archive control on **this exact conversation**, not a sibling thread. An archive operation cannot be requested or verified from the current tool surface, and the exact platform thread identifier was not exposed. Do not claim archived; do not delete files, branches, worktrees, or recovery copies.
 
 **Idempotency:** On replay, inspect this record and `audit/site-theme-2026-11-04` first; refresh evidence if `main` moved. Do not create duplicate historical archives, PRs or issue entries. This is a **compact closeout**; it is not a lossless conversation transcript or a replacement for current source verification.
+
+## 2026-11-04 PR confirmation addendum
+
+- **PR established:** [#253 — Reconcile the OverKill Hill thematic audit](https://github.com/OKHP3/overkill-hill/pull/253), owner `OKHP3`, head `audit/site-theme-2026-11-04`, base protected `main`. This is the receiving review surface; neither merge nor approval is claimed.
+- **Remote diff checked:** comparison against `main` at `f0cc88d77bdf3102308f9b203edc7499e904f650` showed **exactly three new Markdown files**, five commits at the pre-addendum head, zero behind. No public site HTML/CSS/JS assets or sibling repositories were changed by this thread.
+- **Workflow observed:** PR-specific Site Validation, Runtime Compatibility and i18n Page Sync jobs were running when inspected; no all-green claim is made. The present addendum changes the PR head and will require checking the final revision's runs instead of reusing the earlier snapshot.
+- **Archive remains administrative:** No ChatGPT conversation archive action was available through the connected tool surface; browser-tab inspection required an originating browser extension context and could not resolve the platform thread ID. User must archive this exact chat manually after reviewing the receipt and outstanding PR decision. No archival request has been executed.
