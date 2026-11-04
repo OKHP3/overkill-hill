@@ -2623,6 +2623,36 @@ body:not(.askjamie-main):not(.glee-main) .mermaid foreignObject .edgeLabel :is(p
 }
 .p3-meaning-card p { font-size: 0.88rem; color: var(--color-fg, #e5e7eb); margin: 0; line-height: 1.6; }
 
+/* Manifesto text accents use the theme's readable amber on both surfaces. */
+body:has(#murderbird-genesis) :is(
+  .gen-version,
+  .prompt-iteration-label,
+  .cross-link-callout .callout-label,
+  .p3-meaning-card h4,
+  .principle-number,
+  .toc-manifesto a.toc-active
+) {
+  color: var(--color-amber-text);
+}
+body:has(#murderbird-genesis) .prompt-snippet-okh::before {
+  color: var(--okh-amber);
+}
+body:has(#murderbird-genesis) .toc-section-label {
+  color: var(--color-muted);
+}
+html[data-theme="light"] #living-divider .manifesto-divider-inner {
+  background: var(--color-surface-soft);
+  border-color: var(--color-border-subtle);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+}
+/* The footer keeps its dark surface in light mode. */
+html[data-theme="light"] body:has(#murderbird-genesis) :is(.footer-built-with, .footer-copyright) {
+  color: var(--okh-gray);
+}
+html[data-theme="light"] body:has(#murderbird-genesis) .footer-built-with a {
+  color: var(--okh-amber);
+}
+
 /* OKH universe map – Mermaid diagram shell (used in universe/index.html) */
 .okh-mermaid-shell {
   margin: 0;
