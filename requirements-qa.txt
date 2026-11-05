@@ -4,6 +4,6 @@
 # Primary GitHub CI uses Python 3.15.0. The compatibility matrix also retains
 # Python 3.11 and 3.14 coverage with these same dependency pins.
 beautifulsoup4==4.15.0
-soupsieve==2.10
+soupsieve==3.0.4
 typing-extensions==4.16.0
 Pillow==12.3.0
