@@ -6,4 +6,4 @@
 beautifulsoup4==4.15.0
 soupsieve==2.10
 typing-extensions==4.16.0
-Pillow==12.3.0
+Pillow==13.0.0
