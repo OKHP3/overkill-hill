@@ -1,0 +1,56 @@
+{
+  "language_pair": "en-US -> es-MX",
+  "source_locale": "en-US",
+  "target_locale": "es-MX",
+  "direction": "one-way",
+  "source_register": "plainspoken",
+  "artifact_type": "html",
+  "route": "/projects/",
+  "source_base_revision": "edea51922be56934e8bb69cd4bb40e40db3f356c",
+  "source_path": "projects/index.html",
+  "source_sha256": "482896cbfed6d0bbf645f9829103645490767c150f82f606f8f0356fb34546cd",
+  "source_normalized_sha256": "5fa21a29847f4ff12992190cd97582d2dddfa561fa6abe5b64c3a931280cf86e",
+  "target_path": "es-mx/projects/index.html",
+  "target_sha256": "b5a5373cc218bb1be3e377f439a664704b0d3a8cc139491ebd1f95cb95174b00",
+  "voice_profile": "i18n/pilot/es-mx/voice-profile.en-us.json@1.0.0",
+  "dictionary": "i18n/pilot/es-mx/dictionary.en-us-es-mx.json@0.1.0",
+  "dictionary_version": "0.1.0",
+  "status": "machine-drafted",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-11-13",
+  "review": {
+    "method": "Bounded AI editorial review using the exact en-US-to-es-MX skill, existing pair dictionary and project overrides, provisional voice profile, and exact /projects/ route.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "scope": "Only the /projects/ MurderBird: Uncaged status unit: the visible status brief, the project-status summary text, its source-record link destination, and its review date. All other /projects/ content is preserved byte for byte.",
+  "source_unit": {
+    "status_brief": "Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Exhibit observed live November 13, 2026; later operation unverified.",
+    "status_text": "Availability: Creative production journal. Maturity: Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Evidence: Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given. Delivery: unknown.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md",
+    "source_link_text": "Source record",
+    "review_date_text": "(reviewed 2026-11-13)"
+  },
+  "target_unit": {
+    "status_brief": "Completo como estudio (v1.0, noviembre de 2026); semejanza final del personaje en pausa, no se da por lograda. Exhibición observada en línea el 13 de noviembre de 2026; funcionamiento posterior sin verificar.",
+    "status_text": "Disponibilidad: Diario de producción creativa. Madurez: Completo como estudio (v1.0, noviembre de 2026); semejanza final del personaje en pausa, no se da por lograda. Evidencia: Relato del creador, registro de la versión V37 y registros de producción conservados; se autorizó el despliegue, pero el creador no aceptó la semejanza. Entrega: desconocida.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md",
+    "source_link_text": "Registro de la fuente (en inglés)",
+    "review_date_text": "(fuente revisada el 2026-11-13)"
+  },
+  "assumptions": [
+    "Existing project wording is reused: 'Owner account' stays 'Relato del creador', 'likeness' stays 'semejanza', 'exhibit' stays 'exhibición', and 'unverified' follows the catalog's 'sin verificar' pattern. 'Observed live' uses 'en línea', as in the localized release notice.",
+    "'Parked, not claimed' is rendered as 'en pausa, no se da por lograda' to keep the claim boundary explicit. MurderBird, v1.0, V37, and the source URL are protected tokens; the English-source link keeps its '(en inglés)' notice.",
+    "The voice profile remains provisional and its dictionary remains seed-status; no owner approval or native certification is claimed."
+  ],
+  "regeneration_authority": {
+    "path": "i18n/pilot/es-mx/reviewed/projects-index.html",
+    "sha256": "603e0e631196e69b388e708e7613eb4b0296b31c7efc605b28aa831044854029",
+    "aligned_on": "2026-11-13",
+    "scope": "The same reviewed MurderBird status unit; build_es_mx output for this unit was verified identical to the committed es-mx/projects/index.html unit. All other reviewed source content is preserved."
+  },
+  "unresolved_terms": []
+}
