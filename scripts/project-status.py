@@ -100,6 +100,9 @@ def visitor_summary(record):
         # The deep link opened in a browser; the source registry does not
         # certify the rest of the tutorial or future deployments.
         return text + ' Step 3 observed September 29, 2026; full tutorial acceptance unverified.'
+    if record['id'] == 'murderbird-uncaged':
+        # Closed at v1.0. One live observation is not a delivery certificate.
+        return text + ' Exhibit observed live November 13, 2026; later operation unverified.'
     software = record['availability'] in ('Published project', 'Published catalog project', 'Noindex concept page')
     label = 'Operation unverified.' if software else 'Delivery unverified.'
     return text + ' ' + label

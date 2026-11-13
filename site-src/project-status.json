@@ -389,17 +389,17 @@
       "route": "/projects/murderbird-uncaged/",
       "kind": "detail",
       "availability": "Creative production journal",
-      "maturity": "Art, motion, and music; 3D likeness under assessment",
-      "reviewed": "2026-09-27",
+      "maturity": "Complete as a study (v1.0, November 2026); final character likeness parked, not claimed",
+      "reviewed": "2026-11-13",
       "shelf": true,
       "shelf_exception": null,
       "evidence": {
         "tier": "source-described",
-        "summary": "Owner account and preserved production records; exhibit artistic acceptance pending.",
+        "summary": "Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given.",
         "source": "site-src/pages/projects/murderbird-uncaged/index.main.html",
         "delivery": "unknown",
-        "revision": "4b1c726f5d9bbd1ba1048f89049a5b422001c506",
-        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/4b1c726f5d9bbd1ba1048f89049a5b422001c506/README.md"
+        "revision": "914956e32b5496600652ed2406b8a80e0eb1f857",
+        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md"
       }
     }
   ]
