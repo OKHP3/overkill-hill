@@ -2,6 +2,17 @@
 
 All notable changes to the **OverKill Hill P³™** public repository should be recorded here.
 
+## 2026-11-13: MurderBird: Uncaged project page closeout
+
+- Record the owner's v1.0 closeout on `/projects/murderbird-uncaged/`: complete
+  as a study, V37 exhibit live, final character likeness parked and not claimed.
+- Add a dated "Since September" account sourced from the exhibit repository's
+  V37 release record and CG assessment closeout, plus a lead-model credit.
+- Give the page its own share card: a byte-identical copy of the exhibit's
+  published `og-image.png`, with a provenance record beside it.
+- Refresh the status registry, structured data, sitemap date, search index,
+  and the CSP hashes that follow from the changed JSON-LD.
+
 ## 2026-09-20: Skillz Forge address and Skillz Shield companion
 
 - Move the existing Skillz Forge page to `/skillz-forge/`, preserving its

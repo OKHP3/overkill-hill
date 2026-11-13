@@ -1,0 +1,20 @@
+{
+  "artifact": "murderbird-uncaged-exhibit-share-1200x630.png",
+  "purpose": "Open Graph and Twitter share card for /projects/murderbird-uncaged/",
+  "source": {
+    "repository": "https://github.com/OKHP3/murderbird-uncaged",
+    "path": "public/og-image.png",
+    "revision": "914956e32b5496600652ed2406b8a80e0eb1f857",
+    "published_url": "https://okhp3.github.io/murderbird-uncaged/og-image.png",
+    "sha256": "bdeb8dae5034609a502d737afaf6e648bf6e95d95f3121b031b657c6595b84ef",
+    "dimensions": [1200, 630],
+    "mode": "RGBA"
+  },
+  "derivative": {
+    "sha256": "bdeb8dae5034609a502d737afaf6e648bf6e95d95f3121b031b657c6595b84ef",
+    "dimensions": [1200, 630],
+    "mode": "RGBA",
+    "transformation": "none (byte-identical copy)"
+  },
+  "scope": "Byte-identical delivery copy of the exhibit's published share card, retrieved 2026-11-13. The creative original belongs to OKHP3/murderbird-uncaged; this copy only serves the website's social metadata, which must point at a local production asset."
+}

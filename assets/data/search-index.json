@@ -1823,9 +1823,10 @@
         "Give it a sound",
         "Make it explorable",
         "The prompt became a set of decisions.",
-        "Listen to Iron Verdict"
+        "Listen to Iron Verdict",
+        "Since September"
       ],
-      "body": "Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown. overkillhill.com / projects / murderbird-uncaged MurderBird: Uncaged It started with better pictures. Then the bird needed to move. Art, motion, and music; 3D likeness under assessment. Delivery unverified. Status and source Availability: Creative production journal. Maturity: Art, motion, and music; 3D likeness under assessment. Evidence: Owner account and preserved production records; exhibit artistic acceptance pending. Delivery: unknown."
+      "body": "Availability: Creative production journal. Maturity: Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Evidence: Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given. Delivery: unknown. overkillhill.com / projects / murderbird-uncaged MurderBird: Uncaged It started with better pictures. Then the bird needed to move. Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Exhibit observed live November 13, 2026; later operation unverified. Status and source Availability: Creative production journal."
     },
     {
       "url": "/projects/murderbird-uncaged/#motion",
@@ -1876,9 +1877,9 @@
       "url": "/projects/murderbird-uncaged/#tools",
       "title": "Which tool did which job? — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
       "category": "Project",
-      "description": "The working methods Which tool did which job? Tool or method Its place in the work OpenAI image generation Many of the second-generation images: new generations, repainting, and targeted rework.",
+      "description": "The working methods Which tool did which job? Tool or method Its place in the work Astra GPT-6, then gpt-6.1-sol Lead model for the production work: Astra GPT-6 (gpt-6-astra) through September 2026, then gpt-6.1-sol…",
       "headings": [],
-      "body": "The working methods Which tool did which job? Tool or method Its place in the work OpenAI image generation Many of the second-generation images: new generations, repainting, and targeted rework. The exact image-model version is not recorded. Reference images + revision prompts Separate visual identity from anatomy, materials, and composition; name what must survive the next edit. Adobe Firefly + GPT-5.6 SOL Video creation in Firefly, with GPT-5.6 SOL assisting the workflow. Pilot review focused on contact, timing, and mechanical cause; the exact video-model selection is not recorded. Apple Music favorites Source material for identifying my musical preferences and writing the sound brief.",
+      "body": "The working methods Which tool did which job? Tool or method Its place in the work Astra GPT-6, then gpt-6.1-sol Lead model for the production work: Astra GPT-6 (gpt-6-astra) through September 2026, then gpt-6.1-sol from October. OpenAI image generation Many of the second-generation images: new generations, repainting, and targeted rework. The exact image-model version is not recorded. Reference images + revision prompts Separate visual identity from anatomy, materials, and composition; name what must survive the next edit. Adobe Firefly + GPT-5.6 SOL Video creation in Firefly, with GPT-5.6 SOL assisting the workflow. Pilot review focused on contact, timing, and mechanical cause; the exact video-model selection is not recorded.",
       "parent": "/projects/murderbird-uncaged/"
     },
     {
@@ -1887,7 +1888,7 @@
       "category": "Project",
       "description": "What carried forward The useful part was learning to direct the next attempt. Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight.",
       "headings": [],
-      "body": "What carried forward The useful part was learning to direct the next attempt. Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight. Music required arrangement and phrasing. A 3D display required parts that could move and still belong to the same body. The skills growing through this project are practical: writing better visual briefs, maintaining continuity, diagnosing a failed generation, composing and arranging with AI, and carrying an idea between tools without losing its identity. There is still work to do. The next measure of progress is how closely the model and its movement match the character I have been directing all along.",
+      "body": "What carried forward The useful part was learning to direct the next attempt. Each stage demanded a more precise vocabulary. Images required anatomy, materials, and lighting. Video required timing and weight. Music required arrangement and phrasing. A 3D display required parts that could move and still belong to the same body. The skills growing through this project are practical: writing better visual briefs, maintaining continuity, diagnosing a failed generation, composing and arranging with AI, and carrying an idea between tools without losing its identity. The likeness is the part I did not finish. The model and its movement never fully matched the character I had been directing all along, and I parked that work at v1.0 rather than claim a match I had not reached.",
       "parent": "/projects/murderbird-uncaged/"
     },
     {

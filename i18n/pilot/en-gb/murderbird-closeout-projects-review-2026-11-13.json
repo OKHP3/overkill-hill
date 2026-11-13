@@ -1,0 +1,51 @@
+{
+  "language_pair": "en-US -> en-GB",
+  "source_locale": "en-US",
+  "target_locale": "en-GB",
+  "direction": "one-way",
+  "source_register": "plainspoken",
+  "artifact_type": "html",
+  "route": "/projects/",
+  "source_base_revision": "edea51922be56934e8bb69cd4bb40e40db3f356c",
+  "source_path": "projects/index.html",
+  "source_sha256": "482896cbfed6d0bbf645f9829103645490767c150f82f606f8f0356fb34546cd",
+  "source_normalized_sha256": "5fa21a29847f4ff12992190cd97582d2dddfa561fa6abe5b64c3a931280cf86e",
+  "target_path": "en-gb/projects/index.html",
+  "target_sha256": "5476b7434696b103ce9f4d5b630b86ba1cc45ea7e601ee3d1d9bec6fb57f09eb",
+  "voice_profile": "i18n/pilot/en-gb/voice-profile.en-us.json@1.0.0",
+  "dictionary": "i18n/pilot/en-gb/dictionary.en-us-en-uk.json@0.1.0",
+  "dictionary_version": "0.1.0",
+  "status": "machine-drafted",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-11-13",
+  "review": {
+    "method": "Bounded AI editorial review using the exact en-US-to-en-GB skill, existing pair dictionary, provisional voice profile, and exact /projects/ route.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "scope": "Only the /projects/ MurderBird: Uncaged status unit: the visible status brief, the project-status summary text, its source-record link destination, and its review date. All other /projects/ content is preserved byte for byte.",
+  "source_unit": {
+    "status_brief": "Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Exhibit observed live November 13, 2026; later operation unverified.",
+    "status_text": "Availability: Creative production journal. Maturity: Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Evidence: Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given. Delivery: unknown.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md",
+    "source_link_text": "Source record",
+    "review_date_text": "(reviewed 2026-11-13)"
+  },
+  "target_unit": {
+    "status_brief": "Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Exhibit observed live 13 November 2026; later operation unverified.",
+    "status_text": "Availability: Creative production journal. Maturity: Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Evidence: Owner account, V37 release record, and preserved production records; deployment was authorised, but owner likeness acceptance was not given. Delivery: unknown.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md",
+    "source_link_text": "Source record",
+    "review_date_text": "(reviewed 2026-11-13)"
+  },
+  "assumptions": [
+    "Two regional adaptations only: the observation date uses the British 'D Month YYYY' form (13 November 2026), matching the existing en-GB Diagram Truth status brief, and 'authorized' becomes 'authorised' under the declared standard British spelling system.",
+    "The ISO review date (2026-11-13) and 'November 2026' are locale-neutral and kept, as in the prior en-GB MurderBird unit. MurderBird, v1.0, V37, and the source URL are protected tokens.",
+    "The target was edited at unit level, as in the W03 precedent. scripts/build-locale-drafts.py --locale en-gb would emit the US date and spelling for this unit and would also rewrite unrelated, separately maintained en-GB shell content, so a full regeneration was not run for this change.",
+    "The provisional voice profile remains provisional; no owner approval or native certification is claimed."
+  ],
+  "unresolved_terms": []
+}
