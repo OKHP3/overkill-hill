@@ -1,0 +1,58 @@
+{
+  "language_pair": "en-US -> es-MX",
+  "source_locale": "en-US",
+  "target_locale": "es-MX",
+  "direction": "one-way",
+  "source_register": "plainspoken",
+  "artifact_type": "html",
+  "route": "/projects/",
+  "source_base_revision": "94e6e6d88ef2a670e364d576152a4a83fa62fb74",
+  "source_path": "projects/index.html",
+  "source_sha256": "e46291180de8c12271000f5c7e24187b5af0516d7806d4901cbe870f980a3d98",
+  "source_normalized_sha256": "2bf5d8b81b13de8cb897c3b4b19010682a7efcaf029a655ef34a7cc58d84c87d",
+  "target_path": "es-mx/projects/index.html",
+  "target_sha256": "05966d0f8e5323326fd2623464d6567d75b3985c5d70d0062c3e7ea466deeafe",
+  "voice_profile": "i18n/pilot/es-mx/voice-profile.en-us.json@1.0.0",
+  "dictionary": "i18n/pilot/es-mx/dictionary.en-us-es-mx.json@0.1.0",
+  "dictionary_version": "0.1.0",
+  "status": "machine-drafted",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-11-15",
+  "review": {
+    "method": "Bounded AI editorial review of the exact en-US to es-MX status unit, using the pair dictionary, provisional voice profile, prior unit and current generated English page.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "scope": "Only the existing MurderBird: Uncaged status unit on /projects/: visible brief, status description, source link destination and review date. All other target content and its noindex draft state are preserved.",
+  "source_unit": {
+    "status_brief": "Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked. Exhibit observed live November 13, 2026; later operation unverified.",
+    "status_text": "Availability: Creative production journal. Maturity: Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked. Evidence: The v1.0 study is closed and the v1.1 Living Plates release presents reference art through depth and camera effects; neither establishes final model likeness. Delivery: unknown.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/bda1ae31d8579b189511dcbfee3464a2e8ac594f/goal.md",
+    "source_link_text": "Source record",
+    "review_date_text": "(reviewed 2026-11-15)"
+  },
+  "target_unit": {
+    "status_brief": "El estudio original concluyó con la v1.0. Living Plates se incorporó en la v1.1 (noviembre de 2026). La semejanza final del modelo quedó en pausa. Exhibición observada en línea el 13 de noviembre de 2026. Funcionamiento posterior sin verificar.",
+    "status_text": "Disponibilidad: Diario de producción creativa. Madurez: El estudio original concluyó con la v1.0. Living Plates se incorporó en la v1.1 (noviembre de 2026). La semejanza final del modelo quedó en pausa. Evidencia: El estudio de la v1.0 está cerrado. Living Plates, que salió en la v1.1, presenta el arte de referencia con efectos de profundidad y cámara. Ninguno establece la semejanza final del modelo. Entrega: desconocida.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/bda1ae31d8579b189511dcbfee3464a2e8ac594f/goal.md",
+    "source_link_text": "Registro de la fuente (en inglés)",
+    "review_date_text": "(fuente revisada el 2026-11-15)"
+  },
+  "assumptions": [
+    "Source base revision identifies the website snapshot before this update. The source SHA-256 identifies the generated English page used for review.",
+    "Living Plates, MurderBird, version numbers and the immutable source URL are protected. The original exhibit observation date is separate from the updated source review date.",
+    "Scope is the draft card status only. No native or owner language approval was obtained.",
+    "Keeps the earlier en línea, semejanza and sin verificar wording and the notice that the source link is in English."
+  ],
+  "regeneration_authority": {
+    "path": "i18n/pilot/es-mx/reviewed/projects-index.html",
+    "sha256": "75004f1f2f92b2bc525b2aaa61522735a925fa964553494a55ae97b7e73d0fe4",
+    "aligned_on": "2026-11-15",
+    "scope": "The same reviewed status unit. A fresh in-memory es-MX render reproduced the target unit."
+  },
+  "unresolved_terms": [],
+  "prior_incremental_review": "i18n/pilot/es-mx/murderbird-closeout-projects-review-2026-11-13.json"
+}
