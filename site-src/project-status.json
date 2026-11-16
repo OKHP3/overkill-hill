@@ -81,7 +81,7 @@
     },
     {
       "id": "found-ry",
-      "title": "Found\u2011R\u1d67",
+      "title": "Found‑Rᵧ",
       "route": "/projects/found-ry/",
       "kind": "detail",
       "availability": "Published project",
@@ -119,7 +119,7 @@
     },
     {
       "id": "hometools",
-      "title": "Homestead\u2011R",
+      "title": "Homestead‑R",
       "route": "/projects/hometools/",
       "kind": "detail",
       "availability": "Noindex concept page",
@@ -214,7 +214,7 @@
     },
     {
       "id": "pathscrib-r",
-      "title": "PathScrib\u2011R",
+      "title": "PathScrib‑R",
       "route": "/projects/pathscrib-r/",
       "kind": "detail",
       "availability": "Noindex concept page",
@@ -271,7 +271,7 @@
     },
     {
       "id": "un-nocked-truth",
-      "title": "Un\u2011NOCKed Truth",
+      "title": "Un‑NOCKed Truth",
       "route": "/projects/un-nocked-truth/",
       "kind": "detail",
       "availability": "Noindex concept page",
@@ -389,17 +389,17 @@
       "route": "/projects/murderbird-uncaged/",
       "kind": "detail",
       "availability": "Creative production journal",
-      "maturity": "Complete as a study (v1.0, November 2026); final character likeness parked, not claimed",
-      "reviewed": "2026-11-13",
+      "maturity": "Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked",
+      "reviewed": "2026-11-15",
       "shelf": true,
       "shelf_exception": null,
       "evidence": {
         "tier": "source-described",
-        "summary": "Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given.",
+        "summary": "The v1.0 study is closed and the v1.1 Living Plates release presents reference art through depth and camera effects; neither establishes final model likeness.",
         "source": "site-src/pages/projects/murderbird-uncaged/index.main.html",
         "delivery": "unknown",
-        "revision": "914956e32b5496600652ed2406b8a80e0eb1f857",
-        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/914956e32b5496600652ed2406b8a80e0eb1f857/docs/production-v37.md"
+        "revision": "bda1ae31d8579b189511dcbfee3464a2e8ac594f",
+        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/bda1ae31d8579b189511dcbfee3464a2e8ac594f/goal.md"
       }
     }
   ]

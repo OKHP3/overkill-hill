@@ -2,6 +2,13 @@
 
 All notable changes to the **OverKill Hill P³™** public repository should be recorded here.
 
+## 2026-11-15: Connect MurderBird pages to Living Plates
+
+- Add the v1.1 Living Plates entry point, interaction description, release links, and preserved v1.0 model-likeness limits to the project page.
+- Connect the story and manifesto to the interactive reference art without changing their existing prose or media.
+- Refresh generated HTML, search and universe data, project status, and the two regional draft project-card summaries.
+
+
 ## 2026-11-13: MurderBird: Uncaged project page closeout
 
 - Record the owner's v1.0 closeout on `/projects/murderbird-uncaged/`: complete

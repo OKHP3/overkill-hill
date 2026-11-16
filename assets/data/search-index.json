@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 183,
+  "count": 184,
   "entries": [
     {
       "url": "/",
@@ -312,7 +312,7 @@
         "The mind",
         "The first choice"
       ],
-      "body": "Writings from the Hill · Speculative fiction The MurderBird What the Water Kept An ancient body. An industrial resurrection. A heart and mind of its own. The fictional origin of the OverKill Hill P³™ sentinel, told through three eras and the scars that survived them. About 21–27 minutes Read the story Explore the imagery Iron Verdict The MurderBird theme song · 2:28 Your browser does not support audio playback. Listen to Iron Verdict . Read the lyrics · Enter MurderBird: Uncaged Era I · Bronze Age Mesopotamia · The body The Maker The first thing recorded about the bird was that it broke a hammer."
+      "body": "Writings from the Hill · Speculative fiction The MurderBird What the Water Kept An ancient body. An industrial resurrection. A heart and mind of its own. The fictional origin of the OverKill Hill P³™ sentinel, told through three eras and the scars that survived them. About 21–27 minutes Read the story Explore the imagery Open Living Plates Iron Verdict The MurderBird theme song · 2:28 Your browser does not support audio playback. Listen to Iron Verdict . Read the lyrics · Enter MurderBird: Uncaged Era I · Bronze Age Mesopotamia · The body The Maker The first thing recorded about the bird was that it broke a hammer."
     },
     {
       "url": "/writings/first-diagram-is-a-liar/",
@@ -1807,9 +1807,10 @@
       "url": "/projects/murderbird-uncaged/",
       "title": "MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
       "category": "Project",
-      "description": "From second-generation artwork to motion studies, an AI-sung theme, and a science-fair-inspired 3D exhibit. Follow the creative progression of MurderBird.",
+      "description": "Explore MurderBird through Living Plates, an AI-sung theme, motion studies, and the original 3D exhibit. Follow the art and the limits of its interpretation.",
       "headings": [
         "One experiment kept opening the next door.",
+        "Living Plates: start with the art that already holds the character.",
         "Art → motion → music → encounter",
         "The same character. A more demanding brief.",
         "A convincing still has nowhere to hide when it moves.",
@@ -1826,7 +1827,16 @@
         "Listen to Iron Verdict",
         "Since September"
       ],
-      "body": "Availability: Creative production journal. Maturity: Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Evidence: Owner account, V37 release record, and preserved production records; deployment was authorized, but owner likeness acceptance was not given. Delivery: unknown. overkillhill.com / projects / murderbird-uncaged MurderBird: Uncaged It started with better pictures. Then the bird needed to move. Complete as a study (v1.0, November 2026); final character likeness parked, not claimed. Exhibit observed live November 13, 2026; later operation unverified. Status and source Availability: Creative production journal."
+      "body": "Availability: Creative production journal. Maturity: Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked. Evidence: The v1.0 study is closed and the v1.1 Living Plates release presents reference art through depth and camera effects; neither establishes final model likeness. Delivery: unknown. overkillhill.com / projects / murderbird-uncaged MurderBird: Uncaged It started with better pictures. Then the bird needed to move. Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked. Exhibit observed live November 13, 2026; later operation unverified."
+    },
+    {
+      "url": "/projects/murderbird-uncaged/#living-plates",
+      "title": "Living Plates: start with the art that already holds the character. — MurderBird: Uncaged | Art, Motion, Music & Making | OverKill Hill P³™",
+      "category": "Project",
+      "description": "Current release / v1.1 Living Plates: start with the art that already holds the character. Released November 15, 2026, Living Plates gives the original reference images a small range of depth and response.",
+      "headings": [],
+      "body": "Current release / v1.1 Living Plates: start with the art that already holds the character. Released November 15, 2026, Living Plates gives the original reference images a small range of depth and response. Choose the canon bird or the Maker, Mechanic, and Advanced scenes. Drag to shift the viewpoint, switch on the depth survey, or tap the plate to provoke a brief reaction. Iron Verdict starts only when you choose to play it. The reference artwork remains the image you see at rest. Layers and camera movement create the depth effect. The response shifts the view and plays a short sound. On the canon and Advanced plates, the optic also flares. Reduced-motion mode keeps the response without the camera movement. The original exhibit remains available for three-era inspection and disassembly.",
+      "parent": "/projects/murderbird-uncaged/"
     },
     {
       "url": "/projects/murderbird-uncaged/#motion",
