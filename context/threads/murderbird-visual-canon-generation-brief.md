@@ -15,12 +15,15 @@ source_independence: "pass"
 generated_at: "2026-07-30T00:00:00Z"
 schema_version: "2.0"
 artifact_type: visual-canon-brief
+status: "historical; superseded for authority 2026-11-18"
 related_artifacts:
   - "murderbird-sigil-material-canon-and-prompt-lineage.md"
   - "bronze-patina-behavior-for-murderbird-metal-finish.md"
 ---
 
 # MurderBird Visual Canon and Generation Brief
+
+> **Status, 2026-11-18: historical.** Current authority is [`docs/murderbird-unified-direction.md`](../../docs/murderbird-unified-direction.md) and, for the 3D production, the v1.0 closeout recorded in the `murderbird-uncaged` repository (`goal.md`, 2026-11-13: frozen at v1.0, likeness parked, not accepted). The published origin story, "What the Water Kept", fixes the canon chronology: a human Bronze Age Maker, an 1853 excavation and 1873 Mechanic repair, and a 2025 Builder awakening. Read this brief for the measured asset audit, the patina reconciliation and the correction history. Do not use its 2026-07-30 canon revision or its open-decision list as current direction.
 
 > **No image was generated in this pass.** This artifact accumulates and reconciles the context required to generate images at higher fidelity while staying faithful to the original vision. It is the input to a generation pass, not the output of one.
 
@@ -288,6 +291,8 @@ The user's premise for this overhaul is that models have improved substantially 
 
 ## Canon revision, 2026-07-30: xeno origin and automaton kinematics
 
+> **Superseded, 2026-11-18.** The xeno-origin chronology below (a non-human maker, a roughly two-century loss, a near-future reawakening around the 2070s) was not adopted. The published story keeps a human Maker and a 2025 Builder. The automaton kinematics rules (pinned plates, rub-wear polish, legible joints, asymmetric weighted pose, no motion effects) and the differential-aging idea remain useful rendering guidance and are not contradicted by the story.
+
 Supplied directly by the user during this session. This **supersedes** the three-epoch fabrication stack in the section above, which it strengthens rather than contradicts. Claim class: `stated` for the narrative, `proposal` for the rendering consequences derived below.
 
 ### Revised provenance
@@ -388,6 +393,8 @@ steampunk cosplay.
 ```
 
 ## Open decisions before generation
+
+> **Resolved or retired, 2026-11-18.** These questions were overtaken by the unified direction brief, the September story and exhibit work, and the November 13 v1.0 closeout. They are kept as history, not as a pending checklist.
 
 These are the user's calls. Generation should not begin until at least the first three are answered.
 
