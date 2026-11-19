@@ -41,7 +41,7 @@ class LineageTests(unittest.TestCase):
                 self.assertNotIn('frontal-alternate', text)
 
     def test_production_links_distinguish_website_from_source_repository(self):
-        source = 'https://github.com/OKHP3/murderbird-uncaged/blob/main/assets/murderbird/production/audio/iron-verdict/production-notes.md'
+        source = 'https://github.com/OKHP3/murderbird-uncaged/blob/archive/pre-flatten-2026-11-19/assets/murderbird/production/audio/iron-verdict/production-notes.md'
         self.assertEqual(local_production_references(f'<a href="{source}">Notes</a>', 'projects/murderbird-uncaged/index.html'), [])
         for url in ('/assets/murderbird/production/file.wav',
                     '../../assets/murderbird/production/file.wav',
