@@ -288,6 +288,8 @@ The user's premise for this overhaul is that models have improved substantially 
 
 ## Canon revision, 2026-07-30: xeno origin and automaton kinematics
 
+> **Superseded, recorded 2026-11-20.** The xeno-origin, four-era timeline in this section was not adopted. The published story ([`writings/murderbird/`](../../writings/murderbird/)) and [`docs/murderbird-unified-direction.md`](../../docs/murderbird-unified-direction.md) govern: a handmade ancient bronze body by a human Maker, a 1853 recovery and 1873-onward Mechanic, and a 2025 heart and mind, in three eras. The unified direction states that older seamless alien-shell and four-era briefs remain historical source records only. The automaton-kinematics rules below are unaffected and remain useful rendering guidance. The project closed at v1.0 on 2026-11-13 with final model likeness parked; see [`projects/murderbird-uncaged/`](../../projects/murderbird-uncaged/).
+
 Supplied directly by the user during this session. This **supersedes** the three-epoch fabrication stack in the section above, which it strengthens rather than contradicts. Claim class: `stated` for the narrative, `proposal` for the rendering consequences derived below.
 
 ### Revised provenance
