@@ -392,6 +392,16 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
     # manifest values are intentionally absent instead of shipping literal
     # template placeholders into the generated document.
     rendered_head = BeautifulSoup(head, "html.parser")
+    if page["route"] == "/":
+        stylesheet = "assets/css/overkill-hill-blueprint-home.css"
+        fingerprint = runpy.run_path(str(SCRIPT_DIR / "cache-bust.py"))["file_hash"](ROOT / stylesheet)
+        if fingerprint is None:
+            raise FileNotFoundError(stylesheet)
+        blueprint_style = rendered_head.new_tag(
+            "link", rel="stylesheet", href=f"/{stylesheet}?v={fingerprint}"
+        )
+        rendered_head.head.append(blueprint_style)
+        rendered_head.head.append("\n")
     if str(page.get("lang", "")).strip().casefold() not in {"en", "en-us"}:
         for link in rendered_head.find_all(
             "link", attrs={"type": "application/atom+xml"}
