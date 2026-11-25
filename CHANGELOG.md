@@ -2,6 +2,12 @@
 
 All notable changes to the **OverKill Hill P³™** public repository should be recorded here.
 
+## 2026-11-25: Mac Studio workbench upgrade skill
+
+- Add a November 2026 section to `/projects/mac-studio-local-ai-workbench/` announcing `okhp3-local-ai-stack-upgrade`, the stack upgrade routine published as a downloadable Agent Skill in OKHP3/skillz, with links to its Skillz Forge catalog page, `.skill` bundle, install guide and source folder.
+- Add a matching status-board row, an On This Page entry and a Build Your Own card, and the related page keywords. Refresh generated HTML and the search index.
+
+
 ## 2026-11-15: Connect MurderBird pages to Living Plates
 
 - Add the v1.1 Living Plates entry point, interaction description, release links, and preserved v1.0 model-likeness limits to the project page.

@@ -1,7 +1,7 @@
 {
   "site": "https://overkillhill.com",
   "generated": "static",
-  "count": 184,
+  "count": 185,
   "entries": [
     {
       "url": "/",
@@ -1519,6 +1519,7 @@
       "description": "May 2026 Mac Studio local AI build journal, with dated benchmark records and an explicit boundary between deployed components and unverified RAG integration.",
       "headings": [
         "About this build journal",
+        "The Upgrade Routine Is Now a Skill",
         "What This Is Worth",
         "Status Board",
         "Timeline",
@@ -1579,9 +1580,9 @@
       "url": "/projects/mac-studio-local-ai-workbench/#links",
       "title": "Build Your Own — Mac Studio Local AI Workbench | OverKill Hill P³™",
       "category": "Project",
-      "description": "Build Your Own Build Your Own Everything you need to replicate this stack. 🐙 GitHub Repository Docs, scripts, manifests, and BYOLAI guide 🖥️ Apple Mac Studio Compare models: the hardware foundation 🦙 Ollama Local model…",
+      "description": "Build Your Own Build Your Own Everything you need to replicate this stack. 🐙 GitHub Repository Docs, scripts, manifests, and BYOLAI guide 🧰 Stack Upgrade Skill Keep the stack current with backups and rollback 🖥️ Apple…",
       "headings": [],
-      "body": "Build Your Own Build Your Own Everything you need to replicate this stack. 🐙 GitHub Repository Docs, scripts, manifests, and BYOLAI guide 🖥️ Apple Mac Studio Compare models: the hardware foundation 🦙 Ollama Local model inference server: start here 💬 Open WebUI Browser-based chat interface over Ollama 🦞 OpenClaw Autonomous local AI agent runtime 🎛️ LM Studio Desktop model workspace and GUI",
+      "body": "Build Your Own Build Your Own Everything you need to replicate this stack. 🐙 GitHub Repository Docs, scripts, manifests, and BYOLAI guide 🧰 Stack Upgrade Skill Keep the stack current with backups and rollback 🖥️ Apple Mac Studio Compare models: the hardware foundation 🦙 Ollama Local model inference server: start here 💬 Open WebUI Browser-based chat interface over Ollama 🦞 OpenClaw Autonomous local AI agent runtime 🎛️ LM Studio Desktop model workspace and GUI",
       "parent": "/projects/mac-studio-local-ai-workbench/"
     },
     {
@@ -1609,6 +1610,15 @@
       "description": "Environment Blueprint Core Toolchain Homebrew 5.1.8 Git (Homebrew) 2.54.0 Python 3.14.4 Node.js / npm 26.0.0 / 11.12.1 GitHub CLI 2.92.0 Docker Desktop 4.72.0 mlx-lm 0.31.3 AI Runtimes Ollama 0.23.1 · MLX + Flash…",
       "headings": [],
       "body": "Environment Blueprint Core Toolchain Homebrew 5.1.8 Git (Homebrew) 2.54.0 Python 3.14.4 Node.js / npm 26.0.0 / 11.12.1 GitHub CLI 2.92.0 Docker Desktop 4.72.0 mlx-lm 0.31.3 AI Runtimes Ollama 0.23.1 · MLX + Flash Attention + q8_0 KV cache LM Studio 0.4.12 · MLX v1.6.0 backend · server port 1234 Open WebUI Docker · localhost:3000 · updated 2026-05-13 mlx-lm 0.31.3 · 139 tok/s on Phi-4 mini Storage Architecture Ollama models /Volumes/OKH-Local/07_Local_LLMs/ollama/models LM Studio models /Volumes/OKH-Local/07_Local_LLMs/lm-studio/models HuggingFace cache /Volumes/OKH-Local/07_Local_LLMs/huggingface-cache",
+      "parent": "/projects/mac-studio-local-ai-workbench/"
+    },
+    {
+      "url": "/projects/mac-studio-local-ai-workbench/#upgrade-skill",
+      "title": "The Upgrade Routine Is Now a Skill — Mac Studio Local AI Workbench | OverKill Hill P³™",
+      "category": "Project",
+      "description": "New in November 2026 The Upgrade Routine Is Now a Skill 🧰 Between November 2 and November 25, 2026, this workbench took Open WebUI from v0.11.4 to v0.13.5 across six upgrades, including one release that rewrote the…",
+      "headings": [],
+      "body": "New in November 2026 The Upgrade Routine Is Now a Skill 🧰 Between November 2 and November 25, 2026, this workbench took Open WebUI from v0.11.4 to v0.13.5 across six upgrades, including one release that rewrote the entire chat history into a new storage format, plus rounds of Qdrant, SearXNG, Ollama, LM Studio and Tailscale updates. Every one followed the same routine: confirm the release through the API, read the notes, copy the database, keep the old container as a stopped rollback, wait for health, and roll back on its own when the new version fails. That routine is now okhp3-local-ai-stack-upgrade , a portable Agent Skill with nothing about this machine left in it.",
       "parent": "/projects/mac-studio-local-ai-workbench/"
     },
     {
