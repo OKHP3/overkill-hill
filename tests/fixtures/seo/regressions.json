@@ -15,7 +15,7 @@
       "id": "type",
       "route": "/",
       "field": "meta:og:image:type",
-      "value": "image/jpeg"
+      "value": "image/webp"
     }
   ],
 

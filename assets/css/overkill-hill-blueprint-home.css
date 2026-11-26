@@ -1,0 +1,15 @@
+/* Keep this grid on the OverKill Hill home page. The shared theme also serves sibling brands. */
+html body main .stripe-bg,
+html[data-theme="light"] body main .stripe-bg {
+  --blueprint-grid-line: rgb(148 163 184 / 0.09);
+  background-color: #020617;
+  background-image:
+    linear-gradient(to right, var(--blueprint-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--blueprint-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+html[data-theme="light"] body main .stripe-bg {
+  --blueprint-grid-line: rgb(28 58 52 / 0.09);
+  background-color: transparent;
+}

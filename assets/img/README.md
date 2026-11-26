@@ -1,16 +1,28 @@
-# Image Asset Guidelines
+# OverKill Hill P³ website images
 
-This directory contains all image assets used across the OverKill Hill P³ site.
+## Website icons and previews
 
-## Sizes & Formats
+- The web manifest uses the 192 × 192 and 512 × 512 MurderBird v2 PNGs in [favicons](favicons/), with separate maskable variants. The header uses [the 96 × 96 nav mark](murderbird-v2-icon-nav-96.png).
+- The browser icon links use MurderBird v2 PNG and ICO versions. The root [favicon.svg](../../favicon.svg) contains the legacy OverKill Hill vector mark. It is a separate design from the v2 MurderBird raster icons.
 
-- **Logo icon**: Provide square PNGs at 512px and 192px for Android / PWA icons and an SVG for the favicon. The `OverKill Hill P³ Square Icon.png` file is used for the header and favicon fallback.
-- **Banner image**: Use a high‑resolution image (~2400×1350) to ensure crispness on large screens. The file `OverKill Hill P³ Banner.png` is used on the home hero.
-- **Square feature image**: Use a 1200×1200 PNG for cards and previews (`OverKill Hill P³ Square.png`).
-- **Social previews**: When creating Open Graph cards, target 1200×630 JPG dimensions.
-- **Blueprint background**: Rather than embedding an image, the blueprint grid is rendered via CSS using the `.stripe-bg` class and background gradients. If pattern artwork is needed, create an SVG or PNG at 800×800 and tile it with 8–12% opacity.
-- **Alt text**: Each image must include a concise, descriptive `alt` attribute. For decorative images, leave alt empty (`alt=""`) and specify role="presentation".
+## Blueprint Edition
 
-## Usage
+| File | Dimensions | Usage |
+| --- | --- | --- |
+| [Blueprint banner](overkill-hill-blueprint-hero-2400.png) | 2400 × 1350 PNG | Alternate homepage hero art. The responsive MurderBird v2 picture remains the default for homepage editions. |
+| [Blueprint feature](overkill-hill-blueprint-feature-1200.png) | 1200 × 1200 PNG | Perched MurderBird artwork for feature cards and previews. |
+| [Blueprint foreground](overkill-hill-blueprint-foreground.png) | 1536 × 1024 RGBA PNG | Two separated subjects on transparent pixels for placement over a background. |
+| [Blueprint social preview](og/overkill-hill-blueprint-share-1200x630.jpg) | 1200 × 630 JPEG | Open Graph and Twitter image for the US English homepage. |
 
-Images are referenced relative to `assets/img/` from HTML files. Keep file names descriptive. Avoid embedding text within images; instead use HTML/CSS for live, accessible text.
+The banner and social crop use the CRT-left stalking composition, based on
+the title-stenciled wide artwork in [the image library](library/). The square
+is a title-removal edit of the perched square in that library. The transparent
+foreground retains the original branch illustration, with the bird on the
+left. The delivery images carry no embedded title.
+
+For an informative banner, use “A mechanical MurderBird stalks a green CRT
+across a striped blueprint.” For the square, use “A riveted MurderBird perches
+on a green CRT.” For the foreground, use “A mechanical bird raises one talon
+as it approaches a CRT computer.” If the illustration is decorative in
+context, use `alt="" role="presentation"`. Keep visible typography in HTML.
+The US homepage `.stripe-bg` grid uses CSS gradients.
