@@ -102,7 +102,7 @@ def visitor_summary(record):
         return text + ' Step 3 observed September 29, 2026; full tutorial acceptance unverified.'
     if record['id'] == 'murderbird-uncaged':
         # Closed at v1.0. One live observation is not a delivery certificate.
-        return text + ' Exhibit observed live November 13, 2026; later operation unverified.'
+        return text + ' Exhibit observed live November 27, 2026 in a browser without WebGL; 3D operation unverified.'
     software = record['availability'] in ('Published project', 'Published catalog project', 'Noindex concept page')
     label = 'Operation unverified.' if software else 'Delivery unverified.'
     return text + ' ' + label

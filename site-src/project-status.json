@@ -389,17 +389,17 @@
       "route": "/projects/murderbird-uncaged/",
       "kind": "detail",
       "availability": "Creative production journal",
-      "maturity": "Original study complete at v1.0; Living Plates added in v1.1 (November 2026); final model likeness parked",
-      "reviewed": "2026-11-15",
+      "maturity": "Final at v1.1 (November 27, 2026): original study complete at v1.0, Living Plates added in v1.1; final model likeness parked",
+      "reviewed": "2026-11-27",
       "shelf": true,
       "shelf_exception": null,
       "evidence": {
         "tier": "source-described",
-        "summary": "The v1.0 study is closed and the v1.1 Living Plates release presents reference art through depth and camera effects; neither establishes final model likeness.",
+        "summary": "The v1.0 study is closed, the v1.1 Living Plates release presents reference art through depth and camera effects, and the owner kept v1.1 final with the First Choice candidate published as a separate study; none of these establishes final model likeness.",
         "source": "site-src/pages/projects/murderbird-uncaged/index.main.html",
         "delivery": "unknown",
-        "revision": "bda1ae31d8579b189511dcbfee3464a2e8ac594f",
-        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/bda1ae31d8579b189511dcbfee3464a2e8ac594f/goal.md"
+        "revision": "9cac873c60fa67d6f268ebb861d0365eb659cce7",
+        "url": "https://github.com/OKHP3/murderbird-uncaged/blob/9cac873c60fa67d6f268ebb861d0365eb659cce7/goal.md"
       }
     }
   ]

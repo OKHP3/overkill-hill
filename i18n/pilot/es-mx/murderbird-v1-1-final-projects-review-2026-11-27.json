@@ -1,0 +1,59 @@
+{
+  "language_pair": "en-US -> es-MX",
+  "source_locale": "en-US",
+  "target_locale": "es-MX",
+  "direction": "one-way",
+  "source_register": "plainspoken",
+  "artifact_type": "html",
+  "route": "/projects/",
+  "source_base_revision": "484c97157d59c9534458ee354c51ed773f1c5d95",
+  "source_path": "projects/index.html",
+  "source_sha256": "1ad560a0f5b9264949a9da2b8f114d5cebd8b4a656b98c5df32a24aac4cffb41",
+  "source_normalized_sha256": "f08ea637dabe1567cf1a80ca7a41d4f8800eedd62d1ce091f72913a19b8db666",
+  "target_path": "es-mx/projects/index.html",
+  "target_sha256": "53e1975b5fe9a6f8ac38f240f8ed9873ac42fcded8f7a7cd61d3d5fff9a22633",
+  "voice_profile": "i18n/pilot/es-mx/voice-profile.en-us.json@1.0.0",
+  "dictionary": "i18n/pilot/es-mx/dictionary.en-us-es-mx.json@0.1.0",
+  "dictionary_version": "0.1.0",
+  "status": "machine-drafted",
+  "review_status": "ai-reviewed",
+  "reviewed_on": "2026-11-27",
+  "review": {
+    "method": "Bounded AI editorial review of the exact en-US to es-MX status unit, using the pair dictionary, provisional voice profile, prior unit and current generated English page.",
+    "complete": true,
+    "native_or_human": false,
+    "release_accepted": false
+  },
+  "native_or_human_approval": false,
+  "release_accepted": false,
+  "scope": "Only the existing MurderBird: Uncaged status unit on /projects/: visible brief, status description, source link destination and review date. All other target content and its noindex draft state are preserved.",
+  "source_unit": {
+    "status_brief": "Final at v1.1 (November 27, 2026): original study complete at v1.0, Living Plates added in v1.1; final model likeness parked. Exhibit observed live November 27, 2026 in a browser without WebGL; 3D operation unverified.",
+    "status_text": "Availability: Creative production journal. Maturity: Final at v1.1 (November 27, 2026): original study complete at v1.0, Living Plates added in v1.1; final model likeness parked. Evidence: The v1.0 study is closed, the v1.1 Living Plates release presents reference art through depth and camera effects, and the owner kept v1.1 final with the First Choice candidate published as a separate study; none of these establishes final model likeness. Delivery: unknown.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/9cac873c60fa67d6f268ebb861d0365eb659cce7/goal.md",
+    "source_link_text": "Source record",
+    "review_date_text": "(reviewed 2026-11-27)"
+  },
+  "target_unit": {
+    "status_brief": "Versión final en la v1.1 (27 de noviembre de 2026). El estudio original concluyó con la v1.0 y Living Plates se incorporó en la v1.1. La semejanza final del modelo quedó en pausa. Exhibición observada en línea el 27 de noviembre de 2026 en un navegador sin WebGL. Funcionamiento en 3D sin verificar.",
+    "status_text": "Disponibilidad: Diario de producción creativa. Madurez: Versión final en la v1.1 (27 de noviembre de 2026). El estudio original concluyó con la v1.0 y Living Plates se incorporó en la v1.1. La semejanza final del modelo quedó en pausa. Evidencia: El estudio de la v1.0 está cerrado. Living Plates, que salió en la v1.1, presenta el arte de referencia con efectos de profundidad y cámara. El propietario mantuvo la v1.1 como versión final y publicó la candidata First Choice como un estudio aparte. Ninguno de ellos establece la semejanza final del modelo. Entrega: desconocida.",
+    "source_link_href": "https://github.com/OKHP3/murderbird-uncaged/blob/9cac873c60fa67d6f268ebb861d0365eb659cce7/goal.md",
+    "source_link_text": "Registro de la fuente (en inglés)",
+    "review_date_text": "(fuente revisada el 2026-11-27)"
+  },
+  "assumptions": [
+    "Source base revision identifies the website snapshot before this update. The source SHA-256 identifies the generated English page used for review.",
+    "Living Plates, MurderBird, version numbers and the immutable source URL are protected. The original exhibit observation date is separate from the updated source review date.",
+    "Scope is the draft card status only. No native or owner language approval was obtained.",
+    "Keeps the earlier en línea, semejanza and sin verificar wording and the notice that the source link is in English.",
+    "First Choice is a protected project name. The observation and source review dates are both November 27, 2026."
+  ],
+  "regeneration_authority": {
+    "path": "i18n/pilot/es-mx/reviewed/projects-index.html",
+    "sha256": "75004f1f2f92b2bc525b2aaa61522735a925fa964553494a55ae97b7e73d0fe4",
+    "aligned_on": "2026-11-15",
+    "scope": "The same reviewed status unit. A fresh in-memory es-MX render reproduced the target unit."
+  },
+  "unresolved_terms": [],
+  "prior_incremental_review": "i18n/pilot/es-mx/murderbird-living-plates-projects-review-2026-11-15.json"
+}
