@@ -1,0 +1,11 @@
+{
+  "base_record": "i18n/pilot/source-hashes-murderbird-stills-2026-09-06.json",
+  "base_revision": "git:08fdc3c3170a97576e19bfcab3b522937aa34eeb",
+  "route": "/",
+  "previous_normalized_sha256": "5db04e9af39ab92681689a150ec65f4324ddeb54c57bfabe2f73af4d8da3c813",
+  "normalized_sha256": "eacd0ccac1cd855aab261b662acefd66d45fc0092b00d0f3be1d83d683ab6d7d",
+  "scope": "Remove the capability-transition dialog from the homepage. The inline notice and transition page remain. Existing reviewed locale artifacts are retained; regional outputs remain noindex drafts.",
+  "review_status": "source-change-reviewed",
+  "human_native_approved": false,
+  "release_accepted": false
+}

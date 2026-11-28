@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,6 +43,8 @@ class LocaleDraftBuilderTests(unittest.TestCase):
                 )
                 current = (ROOT / locale / "index.html").read_text(encoding="utf-8")
                 self.assertEqual(feature_units(rendered), feature_units(current))
+                self.assertNotIn('id="capability-transition-dialog"', rendered)
+                self.assertIn('class="capability-transition-notice container"', rendered)
 
     def test_es_mx_uses_reviewed_input_and_keeps_the_reviewed_file_untouched(self):
         canonical = (ROOT / "index.html").read_text(encoding="utf-8")
@@ -126,6 +129,25 @@ class LocaleDraftBuilderTests(unittest.TestCase):
 
             self.assertEqual(MODULE.canonical_text_hash(source), MODULE.canonical_text_hash(generated))
             self.assertNotEqual(MODULE.canonical_text_hash(source), MODULE.canonical_text_hash(changed))
+
+    def test_homepage_source_update_is_bound_to_the_retained_baseline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = root / MODULE._provenance.BASE_RECORD
+            update = root / MODULE._provenance.HOMEPAGE_UPDATE
+            base.parent.mkdir(parents=True, exist_ok=True)
+            base.write_text(json.dumps({"current_release_shell": {
+                "release": "v1.0", "normalized_routes": {"/": "a" * 64, "/about/": "b" * 64}
+            }}), encoding="utf-8")
+            payload = {"base_record": MODULE._provenance.BASE_RECORD, "route": "/",
+                       "previous_normalized_sha256": "a" * 64, "normalized_sha256": "c" * 64}
+            update.write_text(json.dumps(payload), encoding="utf-8")
+            shell = MODULE._provenance.load_release_shell(root)
+            self.assertEqual(shell["normalized_routes"], {"/": "c" * 64, "/about/": "b" * 64})
+            payload["previous_normalized_sha256"] = "d" * 64
+            update.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "invalid regional homepage source provenance"):
+                MODULE._provenance.load_release_shell(root)
 
 
 if __name__ == "__main__":

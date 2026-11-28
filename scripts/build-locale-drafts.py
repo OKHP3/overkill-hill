@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 from html import escape
 import json
 import re
@@ -22,6 +23,11 @@ ROUTES = {"/": "index.html", "/about/": "about/index.html", "/projects/": "proje
 REVIEWED_ES_MX = {"index.html": "index.html", "about/index.html": "about-index.html", "projects/index.html": "projects-index.html", "contact/index.html": "contact-index.html"}
 BASE = "https://overkillhill.com"
 SOURCE_HASHES = ROOT / 'i18n' / 'pilot' / 'source-hashes-murderbird-stills-2026-09-06.json'
+_provenance_spec = importlib.util.spec_from_file_location(
+    'regional_source_provenance', Path(__file__).with_name('regional-source-provenance.py')
+)
+_provenance = importlib.util.module_from_spec(_provenance_spec)
+_provenance_spec.loader.exec_module(_provenance)
 PAIR_CONTRACTS = {
     'en-gb': ('dictionary.en-us-en-uk.json', 'voice-profile.en-us.json'),
     'es-mx': ('dictionary.en-us-es-mx.json', 'voice-profile.en-us.json'),
@@ -153,11 +159,12 @@ def canonical_text_hash(path: Path) -> str:
 
 def verify_sources() -> dict:
     expected = json.loads(SOURCE_HASHES.read_text(encoding='utf-8'))
+    release_shell = _provenance.load_release_shell(ROOT)
     actual = {}
     for route, rel in ROUTES.items():
         source_path = ROOT / rel
         actual[route] = canonical_text_hash(source_path)
-        release_hash = expected.get("current_release_shell", {}).get("normalized_routes", {}).get(route)
+        release_hash = release_shell.get("normalized_routes", {}).get(route)
         if not release_hash:
             raise SystemExit(f'Missing durable normalized release hash for {route}')
         if actual[route] != release_hash:
@@ -398,6 +405,13 @@ def build_es_mx(source: str, canonical: str, route: str, dictionary: dict) -> st
     if not dictionary.get('entries'):
         raise SystemExit('es-MX dictionary has no reviewed vocabulary entries')
     page = sync_hub_masthead(route_links(source, "es", "es-mx"))
+    if route == '/' and 'id="capability-transition-dialog"' not in canonical:
+        page, removed = re.subn(
+            r'<dialog\b(?=[^>]*\bid="capability-transition-dialog")[^>]*>.*?</dialog>',
+            '', page, flags=re.S,
+        )
+        if removed != 1:
+            raise SystemExit('Expected one retained capability-transition dialog in the reviewed es-MX homepage')
     page = sync_asset_fingerprints(page, canonical)
     page = page.replace('<html lang="es">', '<html lang="es-MX">', 1)
     page = page.replace('https://overkillhill.com/es' + route, BASE + '/es-mx' + route)
