@@ -361,8 +361,6 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
             + qualifier + '</p><a href="/capability-transition/">Read the transition plan →</a></aside>\n'
             + main
         )
-    if page["route"] == "/":
-        main += "\n" + (PARTIALS / "capability-transition-dialog.html").read_text(encoding="utf-8")
     main = PROJECT_STATUS["render"](main, page["route"], PROJECT_STATUS["load_registry"](ROOT))
     extras = stem.with_suffix(".extras.html").read_text(encoding="utf-8")
     head = (PARTIALS / "head.html").read_text(encoding="utf-8")

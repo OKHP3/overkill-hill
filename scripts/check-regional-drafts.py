@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import json
 import hashlib
+import importlib.util
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_provenance_spec = importlib.util.spec_from_file_location(
+    "regional_source_provenance", Path(__file__).with_name("regional-source-provenance.py")
+)
+_provenance = importlib.util.module_from_spec(_provenance_spec)
+_provenance_spec.loader.exec_module(_provenance)
 ROUTES = ("/", "/about/", "/projects/", "/contact/")
 FAILURES: list[str] = []
 CSP_META_RE = re.compile(
@@ -37,8 +43,7 @@ def main() -> int:
         fail("builder must not use the Spain Spanish tree as an input")
     if "source_path = ROOT / rel" not in builder:
         fail("builder must open canonical en-US paths for both pairs")
-    source_hashes = json.loads((ROOT / "i18n/pilot/source-hashes-murderbird-stills-2026-09-06.json").read_text(encoding="utf-8"))
-    shell_release = source_hashes.get("current_release_shell", {})
+    shell_release = _provenance.load_release_shell(ROOT)
     current_release = shell_release.get("release")
     current_release_hashes = shell_release.get("normalized_routes", {})
     article_source = (ROOT / "site-src/pages/writings/first-diagram-is-a-liar/index.main.html").read_text(encoding="utf-8")
