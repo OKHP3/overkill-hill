@@ -5,31 +5,10 @@ const base = process.env.TRANSITION_TEST_BASE || 'http://127.0.0.1:5000';
 const launchOptions = { headless: true };
 if (process.env.CHROMIUM_PATH) launchOptions.executablePath = process.env.CHROMIUM_PATH;
 const browser = await chromium.launch(launchOptions);
-const dismissalKey = 'okh-capability-transition-2026-09-29';
-
-async function assertSkipLinkFallback(page, label) {
-  const focus = await page.evaluate(() => {
-    const active = document.activeElement;
-    const style = active ? getComputedStyle(active) : null;
-    return {
-      isSkipLink: active?.matches('.okh-skip-link') || false,
-      visible: Boolean(active && active.getClientRects().length && style.visibility !== 'hidden'),
-      focusVisible: active?.matches(':focus-visible') || false,
-      outline: style?.outlineStyle || '',
-      outlineWidth: style?.outlineWidth || '',
-    };
-  });
-  assert.equal(focus.isSkipLink, true, `${label}: focus falls back to the page skip link`);
-  assert.equal(focus.visible, true, `${label}: fallback focus is visible`);
-  assert.equal(focus.focusVisible, true, `${label}: fallback uses keyboard-visible focus`);
-  assert.notEqual(focus.outline, 'none', `${label}: fallback has a visible outline`);
-  assert.notEqual(focus.outlineWidth, '0px', `${label}: fallback outline has width`);
-}
-
 try {
-  for (const width of [1440, 320]) {
-    for (const blockedStorage of [false, true]) {
-      for (const action of ['continue', 'close', 'escape']) {
+  for (const route of ['/', '/en-gb/', '/es-mx/']) {
+    for (const width of [1440, 320]) {
+      for (const blockedStorage of [false, true]) {
         const context = await browser.newContext({ viewport: { width, height: 900 } });
         if (blockedStorage) {
           await context.addInitScript(() => {
@@ -41,126 +20,73 @@ try {
         const page = await context.newPage();
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.goto(base + '/');
-        const dialog = page.locator('#capability-transition-dialog');
-        const label = `${action}, ${width}px, ${blockedStorage ? 'blocked' : 'normal'} storage`;
-        assert.equal(await dialog.evaluate(el => el.open), true, `${label}: first homepage visit announces transition`);
-        assert.equal(
-          await page.evaluate(() => document.activeElement.getAttribute('aria-label')),
-          'Close transition announcement',
-          `${label}: dialog receives initial focus`,
-        );
-        if (width === 320) {
-          assert.equal(
-            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-            true,
-            `${label}: no mobile overflow`,
-          );
-        }
-
-        // Native close notification is queued independently of dialog.open.
-        // Observe that event before checking the existing focus contract.
-        await dialog.evaluate(el => {
-          el.__testCloseObserved = false;
-          el.addEventListener('close', () => { el.__testCloseObserved = true; }, { once: true });
-        });
-        await page.keyboard.press('Shift+Tab');
-        assert.equal(
-          await page.evaluate(() => document.activeElement.textContent.trim()),
-          'Continue exploring',
-          `${label}: keyboard focus wraps within the dialog`,
-        );
-        if (action === 'continue') {
-          await page.keyboard.press('Enter');
-        } else if (action === 'close') {
-          await page.keyboard.press('Tab');
-          assert.equal(
-            await page.evaluate(() => document.activeElement.getAttribute('aria-label')),
-            'Close transition announcement',
-            `${label}: forward Tab wraps to Close`,
-          );
-          await page.keyboard.press('Enter');
-        } else {
-          await page.keyboard.press('Escape');
-        }
-
-        assert.equal(await dialog.evaluate(el => el.open), false, `${label}: dialog closes`);
-        await page.waitForFunction(() =>
-          document.getElementById('capability-transition-dialog').__testCloseObserved === true);
-        if (blockedStorage) {
-          assert.equal(
-            await page.evaluate(() => {
-              try {
-                sessionStorage.getItem('okh-capability-transition-2026-09-29');
-                return false;
-              } catch (error) {
-                return error.name === 'SecurityError';
-              }
-            }),
-            true,
-            `${label}: storage remains blocked`,
-          );
-        } else {
-          await page.waitForFunction(key => sessionStorage.getItem(key) === 'dismissed', dismissalKey);
-        }
-        await assertSkipLinkFallback(page, label);
-        await page.keyboard.press('Tab');
-        const nextFocus = await page.evaluate(() => ({
-          inHeader: Boolean(document.activeElement?.closest('header')),
-          ariaLabel: document.activeElement?.getAttribute('aria-label') || '',
-          focusVisible: document.activeElement?.matches(':focus-visible') || false,
-        }));
-        assert.equal(nextFocus.inHeader, true, `${label}: next Tab proceeds into the header`);
-        assert.equal(nextFocus.ariaLabel, 'OverKill Hill P³ home', `${label}: next Tab reaches the header home control`);
-        assert.equal(nextFocus.focusVisible, true, `${label}: header focus remains visible`);
-
-        if (width === 1440 && !blockedStorage && action === 'escape') {
-          await page.reload();
-          assert.equal(await dialog.evaluate(el => el.open), false, 'Dismissal survives same-tab reload');
-          await page.getByRole('link', { name: 'Read the transition plan →', exact: true }).click();
-          assert.equal(new URL(page.url()).pathname, '/capability-transition/');
-          assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'The era of Custom GPTs is ending. The work continues.');
-          assert.equal(await page.locator('#transition-acknowledgment').textContent(), "I'm aware of the change, and I'm working on it.");
-          assert.doesNotMatch(await page.locator('main').innerText(), /\u00e2\u20ac|\u00c2\u00b7/, 'Transition copy has no garbled punctuation');
-          for (const route of ['bfs-framing-intelligent-futures', 'found-ry', 'hometools', 'pathscrib-r', 'un-nocked-truth']) {
-            await page.goto(base + '/projects/' + route + '/');
-            assert.equal(await page.locator('.capability-transition-notice').count(), 1, route + ' carries notice');
-            assert.equal(await page.locator('dialog').count(), 0, 'Project visits are not interrupted by a modal');
-          }
-          await page.goto(base + '/projects/abrahamic-reference-engine/');
-          assert.equal(await page.locator('.capability-transition-notice').count(), 0, 'GPT provenance does not imply retiring application');
-        }
-        assert.deepEqual(errors, []);
+        await page.goto(base + route);
+        const label = `${route}, ${width}px, ${blockedStorage ? 'blocked' : 'normal'} storage`;
+        assert.equal(await page.locator('#capability-transition-dialog').count(), 0, `${label}: no transition modal`);
+        assert.equal(await page.locator('.capability-transition-notice').isVisible(), true, `${label}: transition notice remains visible`);
+        assert.equal(await page.locator('dialog[open]').count(), 0, `${label}: no open dialog`);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${label}: no horizontal overflow`);
+        await page.reload();
+        assert.equal(await page.locator('#capability-transition-dialog').count(), 0, `${label}: modal stays absent after reload`);
+        assert.deepEqual(errors, [], `${label}: no page errors`);
         await context.close();
       }
     }
   }
 
-  const priorControlContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await priorControlContext.addInitScript(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelector('header a[aria-label="OverKill Hill P³ home"]')?.focus();
-    }, { once: true });
-  });
-  const priorControlPage = await priorControlContext.newPage();
-  await priorControlPage.goto(base + '/');
-  await priorControlPage.waitForFunction(() => document.getElementById('capability-transition-dialog')?.open);
-  await priorControlPage.keyboard.press('Enter');
-  await priorControlPage.waitForFunction(key => sessionStorage.getItem(key) === 'dismissed', dismissalKey);
-  const restoredPriorControl = await priorControlPage.evaluate(() => ({
-    isHeaderControl: document.activeElement?.matches('header a[aria-label="OverKill Hill P³ home"]') || false,
-    isSkipLink: document.activeElement?.matches('.okh-skip-link') || false,
-    focusVisible: document.activeElement?.matches(':focus-visible') || false,
-  }));
-  assert.equal(restoredPriorControl.isHeaderControl, true, 'A valid pre-dialog page control is restored');
-  assert.equal(restoredPriorControl.isSkipLink, false, 'A valid prior control is not replaced by the skip link');
-  assert.equal(restoredPriorControl.focusVisible, true, 'Restored prior control has visible keyboard focus');
-  await priorControlContext.close();
+  for (const width of [1440, 320]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(base + '/');
+    const skip = page.locator('.okh-skip-link');
+    const initial = await skip.evaluate(el => ({
+      focused: el === document.activeElement,
+      clipped: getComputedStyle(el).clip !== 'auto',
+    }));
+    assert.deepEqual(initial, { focused: false, clipped: true }, `${width}px: skip link starts visually hidden`);
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => {
+      const link = document.querySelector('.okh-skip-link');
+      return link === document.activeElement && getComputedStyle(link).clip === 'auto'
+        && link.getBoundingClientRect().top >= 0;
+    });
+    assert.equal(await skip.evaluate(el => el.matches(':focus-visible')), true, `${width}px: keyboard focus is visible`);
+    await page.keyboard.press('Enter');
+    assert.equal(new URL(page.url()).hash, '#main', `${width}px: skip link targets main content`);
+    assert.equal(await page.evaluate(() => document.activeElement === document.getElementById('main')), true,
+      `${width}px: activation moves focus to main content`);
+    await page.goto(base + '/about/');
+    await page.goto(base + '/');
+    const returned = await skip.evaluate(el => ({
+      focused: el === document.activeElement,
+      clipped: getComputedStyle(el).clip !== 'auto',
+    }));
+    assert.deepEqual(returned, { focused: false, clipped: true }, `${width}px: normal navigation does not focus the skip link`);
+    await context.close();
+  }
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(base + '/');
+  await page.getByRole('link', { name: 'Read the transition plan →', exact: true }).click();
+  assert.equal(new URL(page.url()).pathname, '/capability-transition/');
+  assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'The era of Custom GPTs is ending. The work continues.');
+  assert.equal(await page.locator('#transition-acknowledgment').textContent(), "I'm aware of the change, and I'm working on it.");
+  assert.doesNotMatch(await page.locator('main').innerText(), /\u00e2\u20ac|\u00c2\u00b7/, 'Transition copy has no garbled punctuation');
+  for (const route of ['bfs-framing-intelligent-futures', 'found-ry', 'hometools', 'pathscrib-r', 'un-nocked-truth']) {
+    await page.goto(base + '/projects/' + route + '/');
+    assert.equal(await page.locator('.capability-transition-notice').count(), 1, route + ' carries notice');
+    assert.equal(await page.locator('dialog').count(), 0, 'Project visits are not interrupted by a modal');
+  }
+  await page.goto(base + '/projects/abrahamic-reference-engine/');
+  assert.equal(await page.locator('.capability-transition-notice').count(), 0, 'GPT provenance does not imply retiring application');
+  await context.close();
 
   const noScript = await browser.newContext({ javaScriptEnabled: false });
-  const page = await noScript.newPage();
-  await page.goto(base + '/');
-  assert.equal(await page.locator('.capability-transition-notice').isVisible(), true, 'Announcement remains readable without JavaScript');
+  const noScriptPage = await noScript.newPage();
+  await noScriptPage.goto(base + '/');
+  assert.equal(await noScriptPage.locator('.capability-transition-notice').isVisible(), true, 'Announcement remains readable without JavaScript');
+  assert.equal(await noScriptPage.locator('#capability-transition-dialog').count(), 0, 'Modal remains absent without JavaScript');
   await noScript.close();
   // CSS-only fixture for the existing Glee native-dialog contract. Real sibling
   // runtime acceptance is separate; this prevents future stylesheet regression.
