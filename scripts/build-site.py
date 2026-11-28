@@ -211,7 +211,7 @@ def write_source(path: Path, soup: BeautifulSoup) -> dict[str, str]:
         if child.name == "script" and APP_RE.search(child.get("src", "")):
             continue
         extras.append(str(child))
-    for script in soup.head.find_all("script", {"type": "application/ld+json"}):
+    for script in soup.head.select('script[type="application/ld+json"], script[data-page-redirect]'):
         extras.append(str(script))
     (stem.with_suffix(".extras.html")).write_text("\n".join(extras), encoding="utf-8")
 
@@ -397,6 +397,14 @@ def render_page(page: dict[str, str], csp_policies: dict[str, str], classify) ->
             if "alternate" in (link.get("rel") or []):
                 link.decompose()
     if page.get("redirect_to"):
+        alias_extras = BeautifulSoup(extras, "html.parser")
+        redirects = alias_extras.select("script[data-page-redirect]:not([src])")
+        if len(redirects) != 1:
+            raise ValueError(f"{rel}: expected one inline page redirect script")
+        # Run the redirect before rendering the alias body. Otherwise the
+        # shared shell can start font loads that navigation immediately aborts.
+        rendered_head.head.append(redirects[0].extract())
+        extras = str(alias_extras).lstrip("\n")
         refresh = rendered_head.new_tag("meta")
         refresh["http-equiv"] = "refresh"
         refresh["content"] = "0; url=" + page["redirect_to"]

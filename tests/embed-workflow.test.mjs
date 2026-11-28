@@ -15,6 +15,7 @@ function contentTypeFor(pathname) {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
+    ".woff2": "font/woff2",
   }[extname(pathname).toLowerCase()] || "text/plain; charset=utf-8";
 }
 
@@ -102,22 +103,51 @@ test("reload observation waits for delayed navigation and rejects a broken butto
   }
 });
 
-test("legacy Skillz links preserve the destination section and query", async () => {
+test("legacy project redirects preserve bookmarks without starting fonts on the alias", async () => {
+  const redirects = [
+    ["/projects/skillz/", "/skillz-forge/", "#install-guide"],
+    ["/projects/first-diagram-is-a-liar/", "/projects/diagram-truth/", "#main"],
+  ];
+  const aliasPaths = new Set(redirects.flatMap(([alias]) => [alias, `${alias}index.html`]));
+  const fromAlias = (request) => aliasPaths.has(new URL(request.frame().url()).pathname);
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
     await page.route("https://**", (route) => route.abort());
-    for (const legacy of ["/projects/skillz/", "/projects/skillz/index.html"]) {
-      await page.goto(`${baseUrl}${legacy}?ref=bookmark#install-guide`);
-      await page.waitForURL(`${baseUrl}/skillz-forge/?ref=bookmark#install-guide`);
-      assert.equal(await page.locator("h1").innerText(), "Skillz Forge");
-      assert.equal(await page.locator("#install-guide").count(), 1);
+    await page.route(/\/assets\/js\/app\.js(?:\?|$)/, async (route) => {
+      // Give the old alias shell time to render while its blocking bundle loads.
+      if (fromAlias(route.request())) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+      }
+      await route.continue();
+    });
+    const aliasFontRequests = [];
+    page.on("request", (request) => {
+      if (request.resourceType() === "font" && fromAlias(request)) {
+        aliasFontRequests.push(request.url());
+      }
+    });
+    for (const [alias, destination, fragment] of redirects) {
+      for (const legacy of [alias, `${alias}index.html`]) {
+        const suffix = `?ref=bookmark%20test&mode=reader${fragment}`;
+        await page.goto(`${baseUrl}${legacy}${suffix}`, { waitUntil: "commit" });
+        await page.waitForURL(`${baseUrl}${destination}${suffix}`, { waitUntil: "domcontentloaded" });
+        assert.equal(await page.locator(fragment).count(), 1);
+        assert.deepEqual(aliasFontRequests, [], `${legacy} started font requests before redirecting`);
+        assert.equal(await page.evaluate(async () => {
+          const faces = await document.fonts.load('16px "DM Sans"');
+          return faces.some((face) => face.status === "loaded");
+        }), true, `${destination} loads the shared body font`);
+      }
     }
     const offline = await browser.newContext({ javaScriptEnabled: false });
+    await offline.route("https://**", (route) => route.abort());
     const plain = await offline.newPage();
-    await plain.goto(`${baseUrl}/projects/skillz/`);
-    await plain.waitForURL(`${baseUrl}/skillz-forge/`);
-    assert.equal(await plain.locator("h1").innerText(), "Skillz Forge");
+    for (const [alias, destination] of redirects) {
+      await plain.goto(`${baseUrl}${alias}`);
+      await plain.waitForURL(`${baseUrl}${destination}`);
+      assert.equal(await plain.locator("main h1").count(), 1);
+    }
     await offline.close();
   } finally {
     await browser.close();
