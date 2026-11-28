@@ -51,8 +51,8 @@ NPM_PACKAGE_MANAGER = "npm@11.19.1"
 
 # Exact pins, matching docs/dependency-policy.md in the reference repo.
 NPM_REQUIRED = {
-    "playwright": "1.64.1",
-    "lighthouse": "13.5.0",
+    "playwright": "1.65.1",
+    "lighthouse": "13.6.0",
 }
 
 NPM_FORBIDDEN = ("puppeteer", "puppeteer-core")
